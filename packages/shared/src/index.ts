@@ -1,1 +1,4 @@
 export const SIDECAR_NAME = 'developer-sidecar'
+export * from './events'
+export * from './scene'
+export * from './step'
