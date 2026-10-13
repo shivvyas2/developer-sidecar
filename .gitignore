@@ -1,6 +1,5 @@
 node_modules/
 dist/
-!plugin/dist/
 .DS_Store
 *.log
 .env
@@ -8,4 +7,3 @@ dist/
 coverage/
 playwright-report/
 test-results/
-.turbo/
