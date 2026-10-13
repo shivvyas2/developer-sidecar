@@ -14,3 +14,15 @@ A companion for vibecoders. Developer Sidecar is a Claude Code plugin that turns
 ## License
 
 MIT
+
+## Try it locally (development)
+
+Requires Node 22.13+ and pnpm.
+
+```bash
+pnpm install
+pnpm build
+claude --plugin-dir ./plugin
+```
+
+Then open http://localhost:7377. Data lives in `~/.developer-sidecar/` (override with `SIDECAR_HOME`).

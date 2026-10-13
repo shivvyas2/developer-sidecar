@@ -1,0 +1,14 @@
+{
+  "name": "developer-sidecar",
+  "description": "Developer Sidecar: watch what Claude Code is doing, in plain English.",
+  "owner": {
+    "name": "Shiv Vyas"
+  },
+  "plugins": [
+    {
+      "name": "developer-sidecar",
+      "source": "./plugin",
+      "description": "See what Claude Code is doing as live, plain-English steps."
+    }
+  ]
+}

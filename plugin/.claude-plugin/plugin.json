@@ -1,0 +1,9 @@
+{
+  "name": "developer-sidecar",
+  "version": "0.1.0",
+  "description": "See what Claude Code is doing as live, plain-English steps (animations coming next).",
+  "author": { "name": "Shiv Vyas" },
+  "homepage": "https://github.com/shivvyas2/developer-sidecar",
+  "repository": "https://github.com/shivvyas2/developer-sidecar",
+  "license": "MIT"
+}

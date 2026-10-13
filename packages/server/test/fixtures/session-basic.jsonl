@@ -1,0 +1,9 @@
+{"session_id":"smoke-1","cwd":"/tmp/demo","hook_event_name":"SessionStart","source":"startup"}
+{"session_id":"smoke-1","cwd":"/tmp/demo","hook_event_name":"UserPromptSubmit","prompt":"Build a Next.js app that takes Stripe payments"}
+{"session_id":"smoke-1","cwd":"/tmp/demo","hook_event_name":"PreToolUse","tool_name":"Bash","tool_use_id":"t1","tool_input":{"command":"npm install stripe"}}
+{"session_id":"smoke-1","cwd":"/tmp/demo","hook_event_name":"PostToolUse","tool_name":"Bash","tool_use_id":"t1","tool_input":{"command":"npm install stripe"},"tool_response":{"stdout":"added 1 package"}}
+{"session_id":"smoke-1","cwd":"/tmp/demo","hook_event_name":"PreToolUse","tool_name":"Write","tool_use_id":"t2","tool_input":{"file_path":"/tmp/demo/app/api/checkout/route.ts","content":"const key = 'sk-live-abcdefghijklmnopqrstuvwx'"}}
+{"session_id":"smoke-1","cwd":"/tmp/demo","hook_event_name":"PostToolUse","tool_name":"Write","tool_use_id":"t2","tool_input":{"file_path":"/tmp/demo/app/api/checkout/route.ts"},"tool_response":{"success":true}}
+{"session_id":"smoke-1","cwd":"/tmp/demo","hook_event_name":"PreToolUse","tool_name":"Bash","tool_use_id":"t3","tool_input":{"command":"npm test"}}
+{"session_id":"smoke-1","cwd":"/tmp/demo","hook_event_name":"PostToolUse","tool_name":"Bash","tool_use_id":"t3","tool_input":{"command":"npm test"},"tool_response":{"is_error":true,"stdout":"1 failed"}}
+{"session_id":"smoke-1","cwd":"/tmp/demo","hook_event_name":"Stop"}
