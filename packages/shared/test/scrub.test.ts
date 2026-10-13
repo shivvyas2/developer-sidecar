@@ -75,3 +75,31 @@ describe('scrubEvent', () => {
     expect(e.prompt).toBe(`my key is ${REDACTED}`)
   })
 })
+
+describe('scrubText — env-var and credential forms', () => {
+  test.each([
+    ['prefixed password', 'export DB_PASSWORD=hunter2hunter2', 'hunter2hunter2'],
+    ['quoted api key', 'export ANTHROPIC_API_KEY="abcdef123456789"', 'abcdef123456789'],
+    ['secret key', 'export STRIPE_SECRET_KEY=rk_live_abcdef123456', 'rk_live_abcdef123456'],
+    ['inline token', 'MY_TOKEN=tok_9f8e7d6c5b node app.js', 'tok_9f8e7d6c5b'],
+    ['json auth header', '{"Authorization":"Bearer abc.def.ghi"}', 'abc.def.ghi'],
+    ['url credentials', 'psql postgres://admin:pa55word@db.example.com/app', 'pa55word'],
+    ['curl -u', 'curl -u alice:s3cretpass https://api.example.com', 's3cretpass'],
+  ])('redacts %s', (_n, input, secret) => {
+    const out = scrubText(input)
+    expect(out).not.toContain(secret)
+    expect(out).toContain(REDACTED)
+  })
+  test('keeps the variable name and command readable', () => {
+    expect(scrubText('MY_TOKEN=tok_9f8e7d6c5b node app.js')).toBe(`MY_TOKEN=${REDACTED} node app.js`)
+    expect(scrubText('psql postgres://admin:pa55word@db/app')).toBe(`psql postgres://admin:${REDACTED}@db/app`)
+  })
+})
+
+describe('scrubEvent — prompt size', () => {
+  test('very long prompts are truncated, not dropped', () => {
+    const e = scrubEvent({ id: 'e', sessionId: 's', ts: 1, cwd: '/', kind: 'prompt', prompt: 'p'.repeat(300 * 1024) })
+    expect(e.prompt!.length).toBeLessThanOrEqual(4200)
+    expect(e.prompt).toContain('[truncated')
+  })
+})

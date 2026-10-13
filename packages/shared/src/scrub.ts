@@ -12,8 +12,14 @@ const TOKEN_PATTERNS: RegExp[] = [
   /xox[abposr]-[A-Za-z0-9-]{10,}/g,
   /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g,
 ]
-const HEADER_PATTERN = /\b(authorization|cookie|set-cookie)(\s*:\s*)[^\n"']+/gi
-const PAIR_PATTERN = /\b(password|passwd|pwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token)(\s*[=:]\s*)(["']?)[^\s"'&,;]+/gi
+// `"?` lets the header match JSON-shaped headers like {"Authorization":"Bearer …"}
+const HEADER_PATTERN = /\b(authorization|cookie|set-cookie)(["']?\s*:\s*["']?)[^\n"']+/gi
+// the lookbehind (not \b) also matches after an underscore, e.g. DB_PASSWORD=
+const PAIR_PATTERN = /(?<![A-Za-z0-9])(password|passwd|pwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token)(\s*[=:]\s*)(["']?)[^\s"'&,;]+/gi
+// shell-style env assignments whose name says it holds a credential: MY_TOKEN=…, STRIPE_SECRET_KEY=…
+const ENV_ASSIGN_PATTERN = /\b([A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|PASS|PWD|CREDENTIALS?))(\s*=\s*)(["']?)[^\s"']+/g
+const URL_CREDENTIALS_PATTERN = /\b([a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:)[^\s@/]+@/gi
+const CURL_USER_PATTERN = /(\s(?:-u|--user)\s+[^\s:]+:)\S+/g
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -26,7 +32,10 @@ export function scrubText(s: string, extra: string[] = []): string {
   }
   for (const re of TOKEN_PATTERNS) out = out.replace(re, REDACTED)
   out = out.replace(HEADER_PATTERN, `$1$2${REDACTED}`)
+  out = out.replace(ENV_ASSIGN_PATTERN, `$1$2$3${REDACTED}`)
   out = out.replace(PAIR_PATTERN, `$1$2$3${REDACTED}`)
+  out = out.replace(URL_CREDENTIALS_PATTERN, `$1${REDACTED}@`)
+  out = out.replace(CURL_USER_PATTERN, `$1${REDACTED}`)
   return out
 }
 
@@ -42,6 +51,7 @@ export function scrubDeep<T>(v: T, extra: string[] = []): T {
 }
 
 const MAX_STRING = 1000
+const MAX_PROMPT = 4000
 
 function truncateStrings(v: unknown): unknown {
   if (typeof v === 'string') {
@@ -70,7 +80,10 @@ export function scrubEvent(e: SidecarEvent, extra: string[] = []): SidecarEvent 
     out.tool = { ...e.tool, input: limitSize(scrubDeep(e.tool.input, extra)) }
     if (e.tool.output !== undefined) out.tool.output = limitSize(scrubDeep(e.tool.output, extra))
   }
-  if (e.prompt !== undefined) out.prompt = scrubText(e.prompt, extra)
+  if (e.prompt !== undefined) {
+    const p = scrubText(e.prompt, extra)
+    out.prompt = p.length > MAX_PROMPT ? `${p.slice(0, MAX_PROMPT)}…[truncated ${p.length - MAX_PROMPT} chars]` : p
+  }
   if (e.raw !== undefined) out.raw = limitSize(scrubDeep(e.raw, extra))
   return out
 }
