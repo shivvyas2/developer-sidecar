@@ -18,6 +18,8 @@ const toSession = (r: SessionRow): SessionSummary =>
 
 export function openStore(path: string): Store {
   const db = new DatabaseSync(path)
+  // several sidecar processes may race to create the database on first run
+  db.exec('PRAGMA busy_timeout = 5000')
   db.exec(`
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS events (

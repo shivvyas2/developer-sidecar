@@ -1,8 +1,9 @@
 import type { Server } from 'node:http'
 import { join } from 'node:path'
 import { createAdaptorServer } from '@hono/node-server'
+import { SIDECAR_NAME } from '@sidecar/shared'
 import {
-  DEFAULT_PORT, acquireLock, ensureHome, ensureToken, logLine, releaseLock, writePort,
+  DEFAULT_PORT, acquireLock, ensureHome, ensureToken, forceLock, logLine, readPort, releaseLock, writePort,
 } from '@sidecar/shared/home'
 import { createApp } from './app'
 import { Hub } from './hub'
@@ -23,6 +24,8 @@ export interface StartOptions {
   idleMs?: number
   sweepMs?: number
   version?: string
+  /** How long to wait for a lock holder to answer /health before treating the lock as stale. */
+  lockWaitMs?: number
 }
 
 function listen(server: Server, port: number): Promise<boolean> {
@@ -42,12 +45,42 @@ function listen(server: Server, port: number): Promise<boolean> {
   })
 }
 
+async function sidecarAnswers(home: string): Promise<boolean> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${readPort(home)}/health`, { signal: AbortSignal.timeout(300) })
+    return ((await res.json()) as { name?: string }).name === SIDECAR_NAME
+  } catch {
+    return false
+  }
+}
+
+/** Takes the lock, or throws 'already running' when a live sidecar holds it. */
+async function takeLock(home: string, waitMs: number): Promise<void> {
+  const deadline = Date.now() + waitMs
+  while (!acquireLock(home)) {
+    if (await sidecarAnswers(home)) throw new Error('already running')
+    if (Date.now() >= deadline) {
+      // the holder is alive but never answered: a recycled pid or a hung process
+      forceLock(home)
+      return
+    }
+    await new Promise((r) => setTimeout(r, 100))
+  }
+}
+
 export async function startServer(o: StartOptions): Promise<RunningServer> {
   ensureHome(o.home)
-  if (!acquireLock(o.home)) throw new Error('already running')
+  await takeLock(o.home, o.lockWaitMs ?? 3000)
 
-  const token = ensureToken(o.home)
-  const store = openStore(join(o.home, 'sidecar.db'))
+  let store: ReturnType<typeof openStore>
+  let token: string
+  try {
+    token = ensureToken(o.home)
+    store = openStore(join(o.home, 'sidecar.db'))
+  } catch (err) {
+    releaseLock(o.home)
+    throw err
+  }
   const hub = new Hub()
   const pipeline = createPipeline({ store, hub })
   let port = o.preferredPort ?? DEFAULT_PORT

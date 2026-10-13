@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { beforeEach, describe, expect, test } from 'vitest'
 import {
   DEFAULT_PORT, acquireLock, ensureHome, ensureToken, logLine, readPort, readToken,
-  releaseLock, sidecarHome, writePort,
+  forceLock, releaseLock, sidecarHome, writePort,
 } from '@sidecar/shared/home'
 
 let home: string
@@ -48,5 +48,24 @@ describe('home', () => {
     logLine(home, 'emit.log', 'hello')
     expect(readFileSync(join(home, 'logs', 'emit.log'), 'utf8')).toMatch(/hello\n$/)
     expect(() => logLine('/nonexistent/\0bad', 'x.log', 'y')).not.toThrow()
+  })
+})
+
+describe('lock hardening', () => {
+  test('lock file is created exclusively (second acquire by another live pid fails)', () => {
+    expect(acquireLock(home, process.pid)).toBe(true)
+    expect(acquireLock(home, process.ppid)).toBe(false)
+  })
+  test('releaseLock only removes the lock it owns', () => {
+    writeFileSync(join(home, 'server.pid'), String(process.ppid))
+    releaseLock(home, process.pid)
+    expect(readFileSync(join(home, 'server.pid'), 'utf8')).toBe(String(process.ppid))
+    releaseLock(home, process.ppid)
+    expect(() => readFileSync(join(home, 'server.pid'))).toThrow()
+  })
+  test('forceLock replaces a held lock', () => {
+    writeFileSync(join(home, 'server.pid'), '1')
+    forceLock(home, process.pid)
+    expect(readFileSync(join(home, 'server.pid'), 'utf8')).toBe(String(process.pid))
   })
 })

@@ -11,7 +11,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc -p .",
     "build": "node scripts/build.mjs",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs && node scripts/smoke-concurrent.mjs 3"
   },
   "devDependencies": {
     "@sidecar/shared": "workspace:*",

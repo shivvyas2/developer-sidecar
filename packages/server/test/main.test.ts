@@ -100,3 +100,24 @@ describe('startServer', () => {
     await start({ home: h, preferredPort: basePort() })
   })
 })
+
+describe('single instance hardening', () => {
+  test('two concurrent starts on one home → exactly one server', async () => {
+    const h = home(); const p = basePort()
+    const results = await Promise.allSettled([startServer({ home: h, preferredPort: p }), startServer({ home: h, preferredPort: p })])
+    const ok = results.filter((r): r is PromiseFulfilledResult<RunningServer> => r.status === 'fulfilled')
+    ok.forEach((r) => running.push(r.value))
+    expect(ok).toHaveLength(1)
+    expect(results.find((r) => r.status === 'rejected')).toMatchObject({ reason: { message: 'already running' } })
+  })
+  test('lock held by a live non-sidecar pid (recycled pid) does not block startup', async () => {
+    const h = home()
+    const { ensureHome } = await import('@sidecar/shared/home')
+    ensureHome(h)
+    const { writeFileSync } = await import('node:fs')
+    writeFileSync(join(h, 'server.pid'), '1')
+    const s = await start({ home: h, preferredPort: basePort(), lockWaitMs: 200 })
+    expect(readFileSync(join(h, 'server.pid'), 'utf8')).toBe(String(process.pid))
+    expect(s.port).toBeGreaterThan(0)
+  })
+})

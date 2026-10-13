@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -52,16 +52,41 @@ function isAlive(pid: number): boolean {
   }
 }
 
-export function acquireLock(home: string, pid: number = process.pid): boolean {
-  const file = join(home, 'server.pid')
-  const held = Number(readTrim(file))
-  if (Number.isInteger(held) && held > 0 && isAlive(held)) return false
-  writeFileSync(file, String(pid))
-  return true
+export function readLockPid(home: string): number | null {
+  const n = Number(readTrim(join(home, 'server.pid')))
+  return Number.isInteger(n) && n > 0 ? n : null
 }
 
-export function releaseLock(home: string): void {
-  rmSync(join(home, 'server.pid'), { force: true })
+function createExclusive(file: string, pid: number): boolean {
+  try {
+    const fd = openSync(file, 'wx')
+    writeFileSync(fd, String(pid))
+    closeSync(fd)
+    return true
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'EEXIST') return false
+    throw err
+  }
+}
+
+/** Atomically takes the server lock. A lock whose holder process is gone is reclaimed. */
+export function acquireLock(home: string, pid: number = process.pid): boolean {
+  const file = join(home, 'server.pid')
+  if (createExclusive(file, pid)) return true
+  const held = readLockPid(home)
+  if (held !== null && isAlive(held)) return false
+  rmSync(file, { force: true })
+  return createExclusive(file, pid)
+}
+
+/** Takes the lock even though it is held; for a holder that is alive but is not a sidecar (a recycled pid). */
+export function forceLock(home: string, pid: number = process.pid): void {
+  writeFileSync(join(home, 'server.pid'), String(pid))
+}
+
+/** Removes the lock only if `pid` owns it. */
+export function releaseLock(home: string, pid: number = process.pid): void {
+  if (readLockPid(home) === pid) rmSync(join(home, 'server.pid'), { force: true })
 }
 
 export function logLine(home: string, file: string, msg: string): void {
