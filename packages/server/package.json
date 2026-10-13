@@ -5,6 +5,10 @@
   "type": "module",
   "exports": { ".": "./src/main.ts" },
   "dependencies": {
-    "@sidecar/shared": "workspace:*"
-  }
+    "@hono/node-server": "^2.1.5",
+    "@sidecar/shared": "workspace:*",
+    "hono": "^4.13.13",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": { "@types/ws": "^8.18.2" }
 }
