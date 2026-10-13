@@ -39,9 +39,18 @@ export class StepTracker {
   }
 
   sweep(now: number, maxAgeMs = 600_000): Step[] {
+    return this.interrupt(now, (step) => now - step.startedAt > maxAgeMs)
+  }
+
+  /** Closes every step still open in a session, e.g. when its turn ends (a denied tool never gets an end event). */
+  closeSession(sessionId: string, now: number): Step[] {
+    return this.interrupt(now, (step) => step.sessionId === sessionId)
+  }
+
+  private interrupt(now: number, shouldClose: (step: Step) => boolean): Step[] {
     const out: Step[] = []
     for (const [id, step] of this.open) {
-      if (now - step.startedAt > maxAgeMs) {
+      if (shouldClose(step)) {
         this.open.delete(id)
         for (const [k, q] of this.fifo) this.fifo.set(k, q.filter((x) => x !== id))
         out.push({ ...step, status: 'interrupted', endedAt: now })

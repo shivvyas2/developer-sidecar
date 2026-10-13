@@ -55,3 +55,20 @@ describe('pipeline', () => {
     expect(p.lastActivity()).toBe(42)
   })
 })
+
+describe('closing open steps', () => {
+  test('turn_end closes the session’s running steps as interrupted', () => {
+    const { store, p } = setup()
+    p.ingest(ev('a', 'tool_start', { tool: { name: 'Bash', useId: 'denied', input: { command: 'rm -rf build' } } }))
+    p.ingest(ev('b', 'turn_end'))
+    expect(store.stepsForSession('s1').map((s) => [s.id, s.status])).toEqual([['denied', 'interrupted']])
+  })
+  test('a new prompt closes leftovers but other sessions are untouched', () => {
+    const { store, p } = setup()
+    p.ingest(ev('a', 'tool_start', { tool: { name: 'Bash', useId: 'x', input: {} } }))
+    p.ingest(ev('b', 'tool_start', { sessionId: 's2', tool: { name: 'Bash', useId: 'y', input: {} } }))
+    p.ingest(ev('c', 'prompt', { prompt: 'next' }))
+    expect(store.stepsForSession('s1').find((s) => s.id === 'x')?.status).toBe('interrupted')
+    expect(store.stepsForSession('s2')[0]?.status).toBe('running')
+  })
+})

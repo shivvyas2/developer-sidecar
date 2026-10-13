@@ -12,6 +12,9 @@
     "PostToolUse": [
       { "matcher": "*", "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/emit.cjs\"", "timeout": 5 }] }
     ],
+    "PostToolUseFailure": [
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/emit.cjs\"", "timeout": 5 }] }
+    ],
     "SubagentStop": [
       { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/emit.cjs\"", "timeout": 5 }] }
     ],

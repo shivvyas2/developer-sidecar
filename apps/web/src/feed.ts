@@ -36,8 +36,14 @@ export function feedReducer(state: FeedState, action: FeedAction): FeedState {
       return { ...state, steps: { ...state.steps, [s.sessionId]: next }, lastSeq }
     }
     case 'steps': {
+      // merge, don't replace: live steps may have arrived while this snapshot was in flight
+      const merged = new Map((state.steps[action.sessionId] ?? []).map((s) => [s.id, s]))
+      for (const s of action.steps) {
+        const existing = merged.get(s.id)
+        if (!existing || existing.seq < s.seq) merged.set(s.id, s)
+      }
       const lastSeq = action.steps.reduce((m, s) => Math.max(m, s.seq), state.lastSeq)
-      return { ...state, steps: { ...state.steps, [action.sessionId]: [...action.steps].sort(byStart) }, lastSeq }
+      return { ...state, steps: { ...state.steps, [action.sessionId]: [...merged.values()].sort(byStart) }, lastSeq }
     }
     case 'select':
       return { ...state, selected: action.id }

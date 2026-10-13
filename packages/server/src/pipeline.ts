@@ -21,6 +21,15 @@ export function createPipeline(o: { store: Store; tracker?: StepTracker; hub: Hu
     o.hub.publish({ type: 'step', step: feedStep })
   }
 
+  const publishInterrupted = (steps: Step[]) => {
+    for (const step of steps) {
+      const seq = o.store.insertEvent({
+        id: `interrupted:${step.id}`, sessionId: step.sessionId, ts: now(), cwd: '', kind: 'notice', raw: { interrupted: step.id },
+      })
+      if (seq !== null) publishStep(step, seq)
+    }
+  }
+
   return {
     ingest(raw) {
       last = now()
@@ -28,18 +37,14 @@ export function createPipeline(o: { store: Store; tracker?: StepTracker; hub: Hu
       const seq = o.store.insertEvent(e)
       if (seq === null) return { seq: null }
       o.hub.publish({ type: 'session', session: o.store.touchSession(e.sessionId, e.cwd, e.ts) })
+      if (e.kind === 'turn_end' || e.kind === 'prompt') publishInterrupted(tracker.closeSession(e.sessionId, e.ts))
       const step = tracker.apply(e)
       if (step) publishStep(step, seq)
       return { seq }
     },
     sweep() {
       const swept = tracker.sweep(now())
-      for (const step of swept) {
-        const seq = o.store.insertEvent({
-          id: `interrupted:${step.id}`, sessionId: step.sessionId, ts: now(), cwd: '', kind: 'notice', raw: { interrupted: step.id },
-        })
-        if (seq !== null) publishStep(step, seq)
-      }
+      publishInterrupted(swept)
       return swept.length
     },
     lastActivity: () => last,

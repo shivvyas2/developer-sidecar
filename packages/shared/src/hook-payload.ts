@@ -1,6 +1,6 @@
 import type { EventKind, SidecarEvent } from './events'
 
-const KIND_BY_HOOK: Record<string, EventKind> = {
+export const KIND_BY_HOOK: Record<string, EventKind> = {
   SessionStart: 'session_start',
   UserPromptSubmit: 'prompt',
   PreToolUse: 'tool_start',

@@ -28,10 +28,12 @@ describe('feedReducer', () => {
     expect(s.steps.s1![0]!.status).toBe('failed')
     expect(s.lastSeq).toBe(5)
   })
-  test('bulk load of steps replaces that session and raises lastSeq', () => {
-    const s = feedReducer(initialFeed, { type: 'steps', sessionId: 's1', steps: [step('a', 7, 1), step('b', 4, 2)] })
-    expect(s.steps.s1!.map((x) => x.id)).toEqual(['a', 'b'])
-    expect(s.lastSeq).toBe(7)
+  test('bulk load merges with live steps, keeping the newer copy of each', () => {
+    let s = feedReducer(initialFeed, { type: 'step', step: { ...step('a', 9, 1), status: 'failed' } })
+    s = feedReducer(s, { type: 'step', step: step('live', 10, 5) })
+    s = feedReducer(s, { type: 'steps', sessionId: 's1', steps: [{ ...step('a', 3, 1), status: 'running' }, step('b', 4, 2)] })
+    expect(s.steps.s1!.map((x) => [x.id, x.status])).toEqual([['a', 'failed'], ['b', 'ok'], ['live', 'ok']])
+    expect(s.lastSeq).toBe(10)
   })
   test('select switches session', () => {
     expect(feedReducer(initialFeed, { type: 'select', id: 'z' }).selected).toBe('z')
