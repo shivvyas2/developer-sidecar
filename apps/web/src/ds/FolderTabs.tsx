@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from 'react'
+import { useId, type KeyboardEvent } from 'react'
 import { focusSibling, rovingIndex } from './util'
 
 export interface FolderTab { id: string; label: string }
@@ -10,6 +10,8 @@ export function FolderTabs({ tabs, active, onSelect, label = 'Sections' }: {
   onSelect: (id: string) => void
   label?: string
 }) {
+  const base = useId()
+  const hasActive = tabs.some((t) => t.id === active)
   const onKey = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
     const next = rovingIndex(e, i, tabs.length)
     const tab = next === null ? undefined : tabs[next]
@@ -26,9 +28,9 @@ export function FolderTabs({ tabs, active, onSelect, label = 'Sections' }: {
             key={t.id}
             type="button"
             role="tab"
-            id={`ds-tab-${t.id}`}
+            id={`${base}-${i}`}
             aria-selected={on}
-            tabIndex={on ? 0 : -1}
+            tabIndex={on || (!hasActive && i === 0) ? 0 : -1}
             className="ds-tab"
             onClick={() => onSelect(t.id)}
             onKeyDown={(e) => onKey(e, i)}

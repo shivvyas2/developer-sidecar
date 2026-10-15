@@ -3,8 +3,8 @@ import type { ReactNode } from 'react'
 /** A drawer of step cards: a scrolling stack above the drawer front and its label. */
 export function StepDrawer({ children, count, label = 'Steps' }: { children: ReactNode; count: number; label?: string }) {
   return (
-    <section className="ds-drawer" aria-label={label}>
-      <div className="ds-drawer__scroll" tabIndex={0}>{children}</div>
+    <section className="ds-drawer">
+      <div className="ds-drawer__scroll" role="region" aria-label={label} tabIndex={0}>{children}</div>
       <DrawerFront>{count} {count === 1 ? 'STEP' : 'STEPS'}</DrawerFront>
     </section>
   )

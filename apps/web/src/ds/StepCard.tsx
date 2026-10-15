@@ -32,7 +32,7 @@ export function StepCard({ num, title, caption, status, selected, onSelect }: {
       </span>
       <span className="ds-step__card">
         <span className="ds-step__head">
-          <span className="ds-step__title">{title}</span>
+          <span className="ds-step__title" title={title}>{title}</span>
           <span className="ds-step__mark" aria-hidden>{mark.glyph}</span>
           <span className="ds-sr">, {mark.say}</span>
         </span>
