@@ -53,5 +53,7 @@ export function feedReducer(state: FeedState, action: FeedAction): FeedState {
     }
     case 'select':
       return { ...state, selected: action.id }
+    default:
+      return state // temporary: Task 8 adds real handling for the explainer actions
   }
 }

@@ -1,3 +1,4 @@
+import type { DecisionEntry, ExplainerState, GlossaryEntry, StepExplanation } from './explain'
 import type { SceneSpec } from './scene'
 
 export type StepStatus = 'running' | 'ok' | 'failed' | 'interrupted'
@@ -24,7 +25,7 @@ export interface Translation {
   scene: SceneSpec
 }
 
-export type FeedStep = Step & Translation & { seq: number }
+export type FeedStep = Step & Translation & { seq: number; explanation?: StepExplanation }
 
 export interface SessionSummary {
   id: string
@@ -36,3 +37,9 @@ export interface SessionSummary {
 export type ServerMessage =
   | { type: 'step'; step: FeedStep }
   | { type: 'session'; session: SessionSummary }
+  | { type: 'explanation'; sessionId: string; stepId: string; explanation: StepExplanation }
+  | { type: 'decision'; decision: DecisionEntry }
+  | { type: 'concept'; concept: GlossaryEntry }
+  | { type: 'explainer'; state: ExplainerState }
+  | { type: 'session_deleted'; id: string }
+  | { type: 'reset' }
