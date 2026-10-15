@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import type { ServerMessage } from '@sidecar/shared'
-import { fetchSessions, fetchSteps, token } from './api'
+import { fetchDecisions, fetchExplainer, fetchGlossary, fetchSessions, fetchSteps, token } from './api'
 import { feedReducer, initialFeed } from './feed'
 
 export type Connection = 'connecting' | 'live' | 'offline'
@@ -13,12 +13,15 @@ export function useFeed() {
 
   useEffect(() => {
     fetchSessions().then((sessions) => dispatch({ type: 'sessions', sessions })).catch(() => setConnection('offline'))
+    fetchExplainer().then((state) => dispatch({ type: 'explainer', state })).catch(() => undefined)
   }, [])
 
   useEffect(() => {
     if (!state.selected) return
     const id = state.selected
     fetchSteps(id).then((steps) => dispatch({ type: 'steps', sessionId: id, steps })).catch(() => undefined)
+    fetchDecisions(id).then((decisions) => dispatch({ type: 'decisions', sessionId: id, decisions })).catch(() => undefined)
+    fetchGlossary(id).then((entries) => dispatch({ type: 'glossary', sessionId: id, entries })).catch(() => undefined)
   }, [state.selected])
 
   useEffect(() => {
