@@ -1,56 +1,25 @@
 import { useEffect, useState } from 'react'
-import { isExplained, type FeedStep, type StepExplanation } from '@sidecar/shared'
 import { saveSettings } from './api'
 import { DecisionsView } from './DecisionsView'
+import { FolderTabs, StatusStrip, ThemeToggle, type FolderTab } from './ds'
 import { formatTokens } from './format'
 import { GlossaryView } from './GlossaryView'
-import { stepIcon } from './icon'
 import { Kit } from './Kit'
-import { isPendingExplanation } from './pending'
 import { SettingsView } from './SettingsView'
-import { Stage } from './StageView'
+import { StageTab } from './StageView'
+import { applyTheme, initialTheme, safeStorage, writeTheme, type ThemePref } from './theme'
 import { useFeed } from './useFeed'
 
-const STATUS: Record<FeedStep['status'], string> = { running: '…', ok: '✓', failed: '✗', interrupted: '⏸' }
-
-function StepRow({ step, explanation, pending }: { step: FeedStep; explanation?: StepExplanation; pending: boolean }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <li className={`step step--${step.status}`}>
-      <span className="step__icon" aria-hidden>{stepIcon(step)}</span>
-      <div className="step__body">
-        <p className="step__caption">{step.caption}</p>
-        {isExplained(explanation) ? (
-          <div className="step__explain">
-            <p className="step__plain">{explanation.plain}</p>
-            <p className="step__why"><strong>Why it matters:</strong> {explanation.why}</p>
-            {explanation.concept && <p className="step__concept"><span className="chip">{explanation.concept.term}</span> {explanation.concept.definition}</p>}
-          </div>
-        ) : explanation ? (
-          <p className="step__unavailable">No explanation: {explanation.unavailable}</p>
-        ) : pending ? (
-          <p className="step__pending">Explaining…</p>
-        ) : null}
-        <button className="step__toggle" onClick={() => setOpen(!open)} aria-expanded={open}>
-          {open ? 'Hide technical' : 'Show technical'}
-        </button>
-        {open && (
-          <pre className="step__tech">
-            {step.techLabel}
-            {step.output !== undefined ? `\n\n${JSON.stringify(step.output, null, 2)}` : ''}
-          </pre>
-        )}
-      </div>
-      <span className="step__status" title={step.status}>{STATUS[step.status]}</span>
-    </li>
-  )
-}
-
 type Tab = 'stage' | 'decisions' | 'glossary' | 'whiteboard' | 'settings'
-const TABS: Array<[Tab, string]> = [
-  ['stage', 'Stage'], ['decisions', 'Decisions'], ['glossary', 'Glossary'], ['whiteboard', 'Whiteboard'], ['settings', 'Settings'],
+const TABS: FolderTab[] = [
+  { id: 'stage', label: 'Stage' },
+  { id: 'decisions', label: 'Decisions' },
+  { id: 'glossary', label: 'Glossary' },
+  { id: 'whiteboard', label: 'Whiteboard' },
+  { id: 'settings', label: 'Settings' },
 ]
 const WHITEBOARD = 'A live diagram of how your app fits together. Coming in v2.'
+const CONNECTION = { connecting: 'CONNECTING', live: 'LIVE', offline: 'OFFLINE' } as const
 
 export function useHash() {
   const [hash, setHash] = useState(location.hash)
@@ -62,64 +31,95 @@ export function useHash() {
   return hash
 }
 
+function useTheme(): [ThemePref, (p: ThemePref) => void] {
+  const [pref, setPref] = useState<ThemePref>(() => initialTheme(location.search, safeStorage()))
+  const change = (p: ThemePref) => {
+    setPref(p)
+    writeTheme(safeStorage(), p)
+    applyTheme(document.documentElement, p)
+  }
+  return [pref, change]
+}
+
+const projectName = (cwd: string, id: string) => cwd.split('/').filter(Boolean).pop() || id
+
 export function App() {
   const hash = useHash()
   const { state, dispatch, connection } = useFeed()
   const [tab, setTab] = useState<Tab>('stage')
+  const [theme, setTheme] = useTheme()
   if (hash === '#/kit') return <Kit />
-  const steps = state.selected ? state.steps[state.selected] ?? [] : []
-  const status = state.explainer?.status ?? null
-  const selectedSession = state.sessions.find((x) => x.id === state.selected) ?? null
+  const sid = state.selected
+  const steps = sid ? state.steps[sid] ?? [] : []
+  const explainer = state.explainer
+  const status = explainer?.status ?? null
+  const selectedSession = state.sessions.find((x) => x.id === sid) ?? null
+  const project = selectedSession ? projectName(selectedSession.cwd, selectedSession.id) : undefined
   const resume = () => {
-    if (!state.explainer) return
-    saveSettings({ explanations: state.explainer.level }).then((r) => dispatch({ type: 'explainer', state: r.explainer })).catch(() => undefined)
+    if (!explainer) return
+    saveSettings({ explanations: explainer.level }).then((r) => dispatch({ type: 'explainer', state: r.explainer })).catch(() => undefined)
   }
   return (
     <div className="app">
-      <header className="bar">
-        <h1>🛰️ Developer Sidecar</h1>
-        <span className={`dot dot--${connection}`}>{connection}</span>
-        <select
-          aria-label="Session"
-          value={state.selected ?? ''}
-          onChange={(e) => dispatch({ type: 'select', id: e.target.value })}
-        >
-          {state.sessions.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.cwd.split('/').pop() || s.id} · {new Date(s.lastAt).toLocaleTimeString()}
-            </option>
-          ))}
-        </select>
-        {state.explainer && state.explainer.level !== 'off' && (
-          <span className="tokens" title="Tokens used for explanations">🧠 {formatTokens(state.explainer.tokens.input + state.explainer.tokens.output)} tokens</span>
-        )}
-        <a className="bar__link" href="#/kit">UI kit</a>
-      </header>
-      {state.explainer?.status === 'paused' && (
-        <div className="banner" role="status">
-          Explanations paused: {state.explainer.reason}
-          <button onClick={resume}>Try again</button>
+      <header className="hdr">
+        <div className="hdr__id">
+          <h1 className="hdr__title">DEVELOPER SIDECAR</h1>
+          <div className="hdr__meta">
+            <span className="hdr__pip" data-state={connection} title={`Connection: ${connection}`}>
+              <span aria-hidden>●</span> {CONNECTION[connection]}
+            </span>
+            {state.sessions.length > 0 ? (
+              <select
+                className="hdr__session"
+                aria-label="Session"
+                value={sid ?? ''}
+                onChange={(e) => dispatch({ type: 'select', id: e.target.value })}
+              >
+                {state.sessions.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {projectName(s.cwd, s.id)} · {new Date(s.lastAt).toLocaleTimeString()}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+          </div>
         </div>
-      )}
-      <nav className="tabs" role="tablist">
-        {TABS.map(([id, name]) => (
-          <button key={id} role="tab" aria-selected={tab === id} className="tabs__tab" onClick={() => setTab(id)}>{name}</button>
-        ))}
-      </nav>
-      <main>
+        <div className="hdr__tools">
+          {explainer && explainer.level !== 'off' ? (
+            <span className="hdr__tokens" title="Tokens used for explanations">
+              <span className="hdr__tokens-k">TOKENS</span>
+              <span className="hdr__tokens-v">{formatTokens(explainer.tokens.input + explainer.tokens.output)}</span>
+            </span>
+          ) : null}
+          <ThemeToggle pref={theme} onChange={setTheme} />
+          <a className="hdr__kit" href="#/kit">KIT</a>
+        </div>
+      </header>
+      <FolderTabs tabs={TABS} active={tab} onSelect={(id) => setTab(id as Tab)} />
+      {status === 'paused' ? (
+        <StatusStrip tag="PAUSED" action={{ label: '↻', title: 'Try again', onPress: resume }}>
+          Explanations paused: {explainer?.reason}
+        </StatusStrip>
+      ) : status === 'unavailable' ? (
+        <StatusStrip tag="OFF" action={{ label: '⚙', title: 'Open settings', onPress: () => setTab('settings') }}>
+          Explanations are not available{explainer?.reason ? `: ${explainer.reason}` : '.'}
+        </StatusStrip>
+      ) : null}
+      <main className="panel" role="tabpanel" aria-label={TABS.find((t) => t.id === tab)?.label ?? 'Stage'}>
         {tab === 'stage' && (
-          <>
-            <Stage sessionId={state.selected} loaded={state.selected ? !!state.loaded[state.selected] : false} steps={steps} />
-            {steps.length === 0 ? (
-              <p className="empty">Waiting for Claude to do something… start a Claude Code session with the plugin enabled.</p>
-            ) : (
-              <ol className="feed">{[...steps].reverse().map((s) => <StepRow key={s.id} step={s} explanation={state.explanations[s.id]} pending={isPendingExplanation(s, state.explanations[s.id], state.explainer, state.readySince)} />)}</ol>
-            )}
-          </>
+          <StageTab
+            sessionId={sid}
+            loaded={sid ? !!state.loaded[sid] : false}
+            steps={steps}
+            explanations={state.explanations}
+            explainer={explainer}
+            readySince={state.readySince}
+            {...(project ? { project } : {})}
+          />
         )}
-        {tab === 'decisions' && <DecisionsView decisions={state.selected ? state.decisions[state.selected] ?? [] : []} status={status} />}
-        {tab === 'glossary' && <GlossaryView entries={state.selected ? state.glossary[state.selected] ?? [] : []} status={status} />}
-        {tab === 'settings' && <SettingsView explainer={state.explainer} selected={selectedSession} onChanged={(s) => dispatch({ type: 'explainer', state: s })} />}
+        {tab === 'decisions' && <div className="panel__narrow"><DecisionsView decisions={sid ? state.decisions[sid] ?? [] : []} status={status} /></div>}
+        {tab === 'glossary' && <div className="panel__narrow"><GlossaryView entries={sid ? state.glossary[sid] ?? [] : []} status={status} /></div>}
+        {tab === 'settings' && <div className="panel__narrow"><SettingsView explainer={explainer} selected={selectedSession} onChanged={(s) => dispatch({ type: 'explainer', state: s })} /></div>}
         {tab === 'whiteboard' && <p className="empty">{WHITEBOARD}</p>}
       </main>
     </div>

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { applyTheme, nextTheme, readTheme, writeTheme, type ThemePref } from '../src/theme'
+import { applyTheme, nextTheme, readTheme, initialTheme, themeFromQuery, writeTheme, type ThemePref } from '../src/theme'
 
 const mem = (init: Record<string, string> = {}) => {
   const m = new Map(Object.entries(init))
@@ -58,4 +58,26 @@ test('nextTheme cycles auto, light, dark', () => {
   let p: ThemePref = 'auto'
   for (let i = 0; i < 4; i++) { seen.push(p); p = nextTheme(p) }
   expect(seen).toEqual(['auto', 'light', 'dark', 'auto'])
+})
+
+describe('themeFromQuery', () => {
+  test('reads light and dark from ?theme=', () => {
+    expect(themeFromQuery('?theme=light')).toBe('light')
+    expect(themeFromQuery('?theme=dark')).toBe('dark')
+    expect(themeFromQuery('?x=1&theme=dark')).toBe('dark')
+  })
+  test('auto is honoured as an explicit choice', () => {
+    expect(themeFromQuery('?theme=auto')).toBe('auto')
+  })
+  test('null when absent or junk, so readTheme stays the default', () => {
+    expect(themeFromQuery('')).toBe(null)
+    expect(themeFromQuery('?other=1')).toBe(null)
+    expect(themeFromQuery('?theme=purple')).toBe(null)
+  })
+})
+
+test('initialTheme prefers the query, then storage', () => {
+  expect(initialTheme('?theme=dark', mem({ 'sidecar-theme': 'light' }))).toBe('dark')
+  expect(initialTheme('', mem({ 'sidecar-theme': 'light' }))).toBe('light')
+  expect(initialTheme('?theme=junk', null)).toBe('auto')
 })

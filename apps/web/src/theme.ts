@@ -26,3 +26,22 @@ export function applyTheme(root: { dataset: DOMStringMap }, pref: ThemePref): vo
 }
 
 export const nextTheme = (p: ThemePref): ThemePref => (p === 'auto' ? 'light' : p === 'light' ? 'dark' : 'auto')
+
+/** A `?theme=` override for screenshots and links; null when absent or not a known preference. */
+export function themeFromQuery(search: string): ThemePref | null {
+  const v = new URLSearchParams(search).get('theme')
+  return v === 'auto' || v === 'light' || v === 'dark' ? v : null
+}
+
+/** The theme at startup: a `?theme=` override when present, else the stored preference. */
+export const initialTheme = (search: string, storage: Pick<Storage, 'getItem'> | null): ThemePref =>
+  themeFromQuery(search) ?? readTheme(storage)
+
+/** localStorage, or null where touching it throws (sandboxed frames, blocked storage). */
+export function safeStorage(): Storage | null {
+  try {
+    return globalThis.localStorage ?? null
+  } catch {
+    return null
+  }
+}
