@@ -49,14 +49,22 @@ describe('svg helpers', () => {
 describe('tokens', () => {
   test('light and dark palettes have the same tokens', () => {
     expect(Object.keys(palette.dark).sort()).toEqual(Object.keys(palette.light).sort())
+    expect(Object.keys(palette.light).sort()).toEqual(
+      ['accent','blockApp','blockAuth','blockData','blockOk','blockService','card','grid','ink','ink2','label','paper'].sort())
   })
-  test('color is a CSS variable with the light value as fallback', () => {
+  test('spec values', () => {
+    expect(palette.light.paper).toBe('#EDECE8'); expect(palette.dark.paper).toBe('#141414')
+    expect(palette.light.accent).toBe('#FF4A1C'); expect(palette.dark.accent).toBe('#FF4A1C')
+  })
+  test('color is a CSS variable with the light fallback', () => {
     expect(color('ink')).toBe(`var(--sk-ink, ${palette.light.ink})`)
   })
-  test('themeCss defines every variable for light and dark', () => {
+  test('themeCss: auto follows the OS; data-theme forces either', () => {
     const css = themeCss()
-    for (const k of Object.keys(palette.light)) expect(css.match(new RegExp(`--sk-${k}:`, 'g'))).toHaveLength(2)
-    expect(css).toContain('prefers-color-scheme: dark')
+    expect(css).toContain(':root {')
+    expect(css).toContain('@media (prefers-color-scheme: dark) { :root:not([data-theme="light"])')
+    expect(css).toContain(':root[data-theme="dark"]')
+    for (const k of Object.keys(palette.light)) expect(css).toContain(`--sk-${k}:`)
   })
   test('every action has a positive duration', () => {
     for (const ms of Object.values(BEAT_MS)) expect(ms).toBeGreaterThan(0)

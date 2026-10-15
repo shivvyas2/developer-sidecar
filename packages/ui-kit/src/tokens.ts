@@ -2,27 +2,34 @@ import type { ActionId } from '@sidecar/shared'
 
 export const palette = {
   light: {
-    ink: '#1d1b16', paper: '#fffdf8', sky: '#e6f0fb', ground: '#efe8d8', wall: '#ffffff',
-    roof: '#5b5bd6', claude: '#d97757', helper: '#5b5bd6', you: '#2f8f5b',
-    accent: '#f2b84b', ok: '#2f8f5b', fail: '#c4442f', smoke: '#8a857a',
+    paper: '#EDECE8', card: '#FFFFFF', ink: '#111111', ink2: '#777777', grid: '#DCDAD4',
+    accent: '#FF4A1C', label: '#F4E7A1',
+    blockApp: '#F4E7A1', blockService: '#A9D4E0', blockData: '#D9D0BF', blockAuth: '#EBA3AE', blockOk: '#C7D9A5',
   },
   dark: {
-    ink: '#f1eee6', paper: '#2b2920', sky: '#18202c', ground: '#24221b', wall: '#34312a',
-    roof: '#7c7cf0', claude: '#e08a6c', helper: '#8b8bf0', you: '#5cc08a',
-    accent: '#f2c46b', ok: '#5cc08a', fail: '#e06a55', smoke: '#a39e92',
+    paper: '#141414', card: '#1C1C1C', ink: '#E8E6E0', ink2: '#8A8A8A', grid: '#222222',
+    accent: '#FF4A1C', label: '#8E8352',
+    blockApp: '#8E8352', blockService: '#4F7F8C', blockData: '#6E6658', blockAuth: '#8C5560', blockOk: '#5E7346',
   },
 } as const
 
 export type ColorToken = keyof typeof palette.light
-
 export const color = (k: ColorToken): string => `var(--sk-${k}, ${palette.light[k]})`
 
 const vars = (mode: 'light' | 'dark') =>
   Object.entries(palette[mode]).map(([k, v]) => `--sk-${k}: ${v};`).join(' ')
 
-/** Stylesheet text that sets every --sk-* variable, following the OS theme. */
+/** Auto follows the OS; <html data-theme="light|dark"> forces one. */
 export const themeCss = (): string =>
-  `:root { ${vars('light')} } @media (prefers-color-scheme: dark) { :root { ${vars('dark')} } }`
+  `:root { ${vars('light')} } `
+  + `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ${vars('dark')} } } `
+  + `:root[data-theme="dark"] { ${vars('dark')} }`
+
+export const FONTS = {
+  mono: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
+  dot: "'DotGothic16', 'JetBrains Mono', ui-monospace, monospace",
+  sans: "'Inter Variable', Inter, system-ui, -apple-system, sans-serif",
+} as const
 
 export const STROKE = 3
 
@@ -32,3 +39,6 @@ export const BEAT_MS: Record<ActionId, number> = {
 }
 export const FX_MS = 700
 export const HOLD_MS = 900
+
+/** @deprecated removed in Task 6 with pieces/ */
+export const legacyColor = (k: string): string => `var(--sk-${k}, #888)`

@@ -5,7 +5,7 @@ import { effect } from './pieces/effects'
 import { place } from './pieces/places'
 import { prop } from './pieces/props'
 import { esc, g } from './svg'
-import { color } from './tokens'
+import { legacyColor } from './tokens'
 import { compile, frameAt, type Timeline } from './timeline'
 import type { Town } from './town'
 
@@ -15,9 +15,9 @@ export interface RenderOptions {
   timeline?: Timeline
 }
 
-const BACKDROP = `<rect width="${VIEW.w}" height="${VIEW.h}" fill="${color('sky')}"/>`
-  + `<rect y="${GROUND_Y}" width="${VIEW.w}" height="${VIEW.h - GROUND_Y}" fill="${color('ground')}"/>`
-  + `<line x1="0" y1="${GROUND_Y}" x2="${VIEW.w}" y2="${GROUND_Y}" stroke="${color('ink')}" stroke-width="3"/>`
+const BACKDROP = `<rect width="${VIEW.w}" height="${VIEW.h}" fill="${legacyColor('sky')}"/>`
+  + `<rect y="${GROUND_Y}" width="${VIEW.w}" height="${VIEW.h - GROUND_Y}" fill="${legacyColor('ground')}"/>`
+  + `<line x1="0" y1="${GROUND_Y}" x2="${VIEW.w}" y2="${GROUND_Y}" stroke="${legacyColor('ink')}" stroke-width="3"/>`
 
 /** Draw `spec` at time `t` (ms) as a standalone SVG string. Pure and deterministic. */
 export function render(spec: SceneSpec, t: number, opts: RenderOptions = {}): string {
