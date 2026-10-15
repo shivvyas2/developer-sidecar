@@ -23,7 +23,7 @@ Thanks for looking. Sidecar is small, but it sits inside other people's Claude C
 
 **Captions come from rules, not from a model.** Every step gets its category, caption and scene from `packages/server/src/rules/` instantly and for free. The explainer only adds to that. A new kind of step is a new rule with a test, not a prompt change.
 
-**Cartoons are composed, not drawn per scene.** Scenes are descriptions built from existing pieces in `packages/ui-kit`. `render(spec, t)` must stay pure and deterministic: no `Math.random`, no `Date`, no DOM outside `react.tsx`, and colours only through `color(token)`. Add a new piece only when no existing one fits.
+**Scenes are composed, not drawn per scene.** A scene is a description, and its animator in `packages/ui-kit/src/scene/animators.ts` moves existing drafting-instrument primitives (iso blocks, the card drawer, dials, the hand) on the sheet. `render(spec, t)` must stay pure and deterministic: no `Math.random`, no `Date`, no DOM outside `react.tsx`, and colours only through `color(token)`. Add a new piece only when no existing one fits.
 
 **Secrets never enter the repo.** Not in code, docs, fixtures or screenshots. Test fixtures that need a key use an obviously fake one. CI runs a secret scan of the full history on every pull request.
 
@@ -40,14 +40,15 @@ pnpm smoke         # Real server, recorded session, end to end
 
 New logic gets a test beside its package (`packages/server/src/store.ts` and `packages/server/test/store.test.ts`). Write the failing test first when you can; it keeps the change small.
 
-The cartoon renderer has snapshot tests. If you change how something looks, update the snapshots with `pnpm vitest run packages/ui-kit -u`, look at the result in the `#/kit` gallery, and say in the commit message that the snapshots changed on purpose.
+The scene renderer and the text renderer have snapshot tests. If you change how something looks, update the snapshots with `pnpm vitest run packages/ui-kit -u`, look at the result in the `#/kit` gallery, and say in the commit message that the snapshots changed on purpose.
 
-## Adding a cartoon scene
+## Adding a scene
 
 1. Add a builder to `scenes` in `packages/ui-kit/src/catalog.ts`. It takes the caption first and returns `{ scene, cast, beats, caption }`.
 2. Add one entry to `SAMPLE_SCENES` in the same file. The catalog test fails until you do.
-3. Use it from a rule in `packages/server/src/rules/index.ts` and add a case to `packages/server/test/rules.test.ts`.
-4. Record its snapshots and check it at `http://localhost:7377/#/kit`.
+3. Give its scene id an animator in `ANIMATORS` in `packages/ui-kit/src/scene/animators.ts`, built from the primitives in `packages/ui-kit/src/primitives/` and the sheet slots in `scene/layout.ts`. The scene test fails until every sample id has one.
+4. Use it from a rule in `packages/server/src/rules/index.ts` and add a case to `packages/server/test/rules.test.ts`.
+5. Record its snapshots and check it, bare and framed, in light and dark, at `http://localhost:7377/#/kit`.
 
 ## Pull requests
 

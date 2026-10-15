@@ -1,7 +1,7 @@
 {
   "name": "developer-sidecar",
   "version": "0.1.0",
-  "description": "A Claude Code plugin that shows what Claude is doing as live cartoon scenes and plain-English explanations.",
+  "description": "A Claude Code plugin that shows what Claude is doing as live technical-drawing scenes and plain-English explanations.",
   "license": "MIT",
   "author": "Shiv Vyas",
   "homepage": "https://github.com/shivvyas2/developer-sidecar#readme",

@@ -8,7 +8,7 @@
     {
       "name": "developer-sidecar",
       "source": "./plugin",
-      "description": "See what Claude Code is doing as live cartoon scenes and plain-English explanations."
+      "description": "See what Claude Code is doing as live technical-drawing scenes and plain-English explanations."
     }
   ]
 }

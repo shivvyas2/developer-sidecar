@@ -12,7 +12,7 @@
 - [ ] `pnpm build` and `pnpm smoke`
 - [ ] Ran Claude Code with `claude --plugin-dir ./plugin` and watched the change in the workstation
 
-<!-- Screenshot or recording for anything visual. For cartoon changes, a before and after from #/kit. -->
+<!-- Screenshot or recording for anything visual. For scene or design-system changes, a before and after from #/kit, in light and dark. -->
 
 ## Checklist
 
