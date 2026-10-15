@@ -18,3 +18,12 @@ export function groupCatalog(entries: GlossaryEntry[]): CatalogGroup[] {
       entries: [...list].sort((x, y) => x.term.localeCompare(y.term, undefined, { sensitivity: 'base' })),
     }))
 }
+
+/**
+ * A DOM id for a glossary term: lowercase, runs of anything but a-z0-9 become one
+ * dash, plus the term's index so "API" and "api" never share an id.
+ */
+export const termSlug = (term: string, index: number): string => {
+  const slug = term.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  return `${slug || 'term'}-${index}`
+}

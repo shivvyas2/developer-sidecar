@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { GlossaryEntry } from '@sidecar/shared'
-import { groupCatalog } from '../src/catalog'
+import { groupCatalog, termSlug } from '../src/catalog'
 
 const e = (term: string): GlossaryEntry => ({ term, definition: `${term} def`, sessionId: 's', stepId: 'x', at: 0 }) as GlossaryEntry
 
@@ -25,5 +25,20 @@ describe('groupCatalog', () => {
   })
   test('empty input gives no groups', () => {
     expect(groupCatalog([])).toEqual([])
+  })
+})
+
+describe('termSlug', () => {
+  test('lowercases, turns runs of non-alphanumerics into one dash and adds the index', () => {
+    expect(termSlug('API', 0)).toBe('api-0')
+    expect(termSlug('Server Actions (Next.js)', 3)).toBe('server-actions-next-js-3')
+    expect(termSlug('  C++ ', 1)).toBe('c-1')
+    expect(termSlug('***', 2)).toBe('term-2')
+  })
+  test('"API" and "api" never collide', () => {
+    expect(termSlug('API', 0)).not.toBe(termSlug('api', 1))
+  })
+  test('ids are valid for aria-controls: no spaces', () => {
+    for (const t of ['a b', 'x\ty', 'é ü']) expect(termSlug(t, 0)).not.toMatch(/\s/)
   })
 })

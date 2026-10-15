@@ -5,12 +5,18 @@ export interface RotaryOption<T extends string> { value: T; label: string }
 
 const SWEEP = 110
 
-/** A dial-styled radio group: options sit around a ticked dial and the knob points at the chosen one. */
-export function RotarySelect<T extends string>({ value, options, onChange, label }: {
+/**
+ * A dial-styled radio group: options sit around a ticked dial and the knob points at the chosen one.
+ * While `disabled` (say, still loading) nothing is checked or changeable, so a placeholder value is
+ * never announced as the choice; `busy` marks the group aria-busy.
+ */
+export function RotarySelect<T extends string>({ value, options, onChange, label, disabled = false, busy = false }: {
   value: T
   options: RotaryOption<T>[]
   onChange: (value: T) => void
   label: string
+  disabled?: boolean
+  busy?: boolean
 }) {
   const n = options.length
   const angle = (i: number) => (n > 1 ? -SWEEP / 2 + (SWEEP * i) / (n - 1) : 0)
@@ -18,27 +24,29 @@ export function RotarySelect<T extends string>({ value, options, onChange, label
   const onKey = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
     const next = rovingIndex(e, i, n)
     const opt = next === null ? undefined : options[next]
-    if (next === null || !opt) return
+    if (next === null || !opt || disabled) return
     onChange(opt.value)
     focusSibling(e, '[role="radio"]', next)
   }
   return (
-    <div className="ds-rotary" role="radiogroup" aria-label={label} data-ds-group>
+    <div className="ds-rotary" role="radiogroup" aria-label={label} data-ds-group
+      {...(disabled ? { 'aria-disabled': true } : {})} {...(busy ? { 'aria-busy': true } : {})}>
       <span className="ds-rotary__dial" aria-hidden>
         <span className="ds-rotary__knob" style={{ '--ds-a': `${angle(sel)}deg` } as CSSProperties} />
       </span>
       {options.map((o, i) => {
-        const on = i === sel
+        const on = !disabled && i === sel
         return (
           <button
             key={o.value}
             type="button"
             role="radio"
             aria-checked={on}
-            tabIndex={on ? 0 : -1}
+            {...(disabled ? { 'aria-disabled': true } : {})}
+            tabIndex={on || (disabled && i === sel) ? 0 : -1}
             className="ds-rotary__opt"
             style={{ '--ds-a': `${angle(i)}deg` } as CSSProperties}
-            onClick={() => onChange(o.value)}
+            onClick={() => { if (!disabled) onChange(o.value) }}
             onKeyDown={(e) => onKey(e, i)}
           >
             {o.label}

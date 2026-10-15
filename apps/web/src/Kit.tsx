@@ -11,17 +11,11 @@ import {
   CardCatalog, Chip, FolderTabs, PulledCard, ReadoutPanel, RotarySelect, RoundButton, SpecCard, StatusStrip,
   StepCard, StepDrawer, ThemeToggle, TickRuler,
 } from './ds'
+import { kitScopeCss } from './kitTheme'
 
 const TOWN: Town = { places: [], labels: {}, appFloors: 2 }
 const THEMES = ['light', 'dark'] as const
 
-/** The nested dark wrapper needs its own variables: themeCss() only targets :root. Built from the palette, never hard-coded. */
-const darkScopeCss = (): string => {
-  const vars = Object.entries(palette.dark).map(([k, v]) => `--sk-${k}: ${v};`).join(' ')
-  return `[data-theme="dark"] { ${vars} --ds-on-accent: var(--sk-paper); --ds-on-label: var(--sk-paper); color-scheme: dark; } `
-    + '[data-theme="dark"] .sk-face-l{filter:brightness(.75)} [data-theme="dark"] .sk-face-r{filter:brightness(.88)} '
-    + '[data-theme="light"] { color-scheme: light; }'
-}
 
 /** Both halves of every section: the same content under a light and a dark wrapper. */
 function Pair({ children }: { children: () => React.ReactNode }) {
@@ -53,6 +47,15 @@ function Spec({ name, children, w, h }: { name: string; children: string; w?: nu
   )
 }
 
+/**
+ * A cell that fits an isoStack of `floors`: the stack reaches 40 left and 52 right of
+ * its origin, 53 below it and 26 + 22 per floor above it (see primitives/stack).
+ */
+const stackCell = (floors: number) => {
+  const top = 26 + 22 * floors + 6
+  return { w: 104, h: top + 59, o: { x: 46, y: top } }
+}
+
 const BLOCKS: BlockTone[] = ['app', 'service', 'data', 'auth', 'ok', 'paper']
 const CARD_STATES = ['rest', 'lifted', 'inserting', 'editing'] as const
 
@@ -61,15 +64,15 @@ function Primitives() {
     <div className="kit__row">
       <Spec name="gridPaper" w={160} h={90}>{gridPaper(160, 90)}</Spec>
       {BLOCKS.map((b) => (
-        <Spec key={b} name={`isoBlock ${b}`} w={120} h={100}>
-          {isoBlock({ x: 60, y: 80 }, { x: 0, y: 0, z: 0, w: 40, d: 40, h: 30 }, b)}
+        <Spec key={b} name={`isoBlock ${b}`} w={120} h={96}>
+          {isoBlock({ x: 60, y: 40 }, { x: 0, y: 0, z: 0, w: 40, d: 40, h: 30 }, b)}
         </Spec>
       ))}
-      <Spec name="isoBlock dashed" w={120} h={100}>
-        {isoBlock({ x: 60, y: 80 }, { x: 0, y: 0, z: 0, w: 40, d: 40, h: 30 }, 'app', { dashed: true })}
+      <Spec name="isoBlock dashed" w={120} h={96}>
+        {isoBlock({ x: 60, y: 40 }, { x: 0, y: 0, z: 0, w: 40, d: 40, h: 30 }, 'app', { dashed: true })}
       </Spec>
-      {[1, 3, 5].map((f) => <Spec key={f} name={`isoStack ${f}`} w={120} h={150}>{isoStack({ x: 60, y: 130 }, f)}</Spec>)}
-      <Spec name="isoStack building" w={120} h={150}>{isoStack({ x: 60, y: 130 }, 3, { building: true })}</Spec>
+      {[1, 3, 5].map((f) => <Spec key={f} name={`isoStack ${f}`} {...stackCell(f)}>{isoStack(stackCell(f).o, f)}</Spec>)}
+      <Spec name="isoStack building" {...stackCell(3)}>{isoStack(stackCell(3).o, 3, { building: true })}</Spec>
       {CARD_STATES.map((s) => (
         <Spec key={s} name={`indexCard ${s}`} w={200} h={80}>
           {indexCard({ x: 10, y: 14 }, { num: '004', title: 'Add checkout', lines: 3, state: s, progress: 0.6 })}
@@ -104,7 +107,7 @@ function Primitives() {
       <Spec name="cloud" w={140} h={90}>{cloud({ x: 70, y: 50 })}</Spec>
       <Spec name="instrumentModule" w={100} h={90}>{instrumentModule({ x: 50, y: 60 })}</Spec>
       <Spec name="magnifier" w={100} h={90}>{magnifier({ x: 50, y: 60 })}</Spec>
-      <Spec name="packageBlock" w={120} h={100}>{packageBlock({ x: 60, y: 70 }, 0.5)}</Spec>
+      <Spec name="packageBlock" w={120} h={80}>{packageBlock({ x: 60, y: 36 }, 0.5)}</Spec>
     </div>
   )
 }
@@ -117,7 +120,9 @@ function Tokens() {
         <ul className="kit__swatches">
           {keys.map((k) => (
             <li key={k}>
-              <span className="kit__chip" style={{ background: `var(--sk-${k})` }} />
+              {k === 'onLabel'
+                ? <span className="kit__chip kit__chip--text" style={{ background: 'var(--sk-label)', color: 'var(--sk-onLabel)' }}>Aa</span>
+                : <span className="kit__chip" style={{ background: `var(--sk-${k})` }} />}
               <code>--sk-{k}</code>
             </li>
           ))}
@@ -236,11 +241,11 @@ function SceneTheme({ theme, children }: { theme: 'light' | 'dark'; children: Re
 }
 
 export function Kit() {
-  const css = useMemo(darkScopeCss, [])
+  const css = useMemo(kitScopeCss, [])
   return (
     <main className="kit">
       <style>{css}</style>
-      <p><a href="#/">← Back to the workstation</a></p>
+      <p><a className="kit__back" href="#/">← Back to the workstation</a></p>
       <h1 className="kit__h1">Kit · drafting instrument</h1>
       <h2>Tokens</h2><Tokens />
       <h2>Type</h2><TypeSamples />

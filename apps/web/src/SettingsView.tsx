@@ -50,7 +50,8 @@ export function SettingsView({ explainer, selected, onChanged }: {
       <h2 className="settings__h">Plain-English explanations</h2>
       <div className="settings__grid">
         <div className={level === null ? 'settings__dial settings__dial--wait' : 'settings__dial'}>
-          <RotarySelect label="Explanation level" value={level ?? 'off'} options={OPTIONS} onChange={(v) => { if (level !== null) choose(v) }} />
+          <RotarySelect label="Explanation level" value={level ?? 'off'} options={OPTIONS}
+            disabled={level === null} busy={level === null} onChange={(v) => { if (level !== null) choose(v) }} />
           <p className="settings__hint">{level ? HINTS[level] : 'Loading...'}</p>
         </div>
         {explainer && (

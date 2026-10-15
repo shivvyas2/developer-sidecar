@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { ExplainerState, GlossaryEntry } from '@sidecar/shared'
-import { groupCatalog } from './catalog'
+import { groupCatalog, termSlug } from './catalog'
 import { CardCatalog } from './ds'
 
 const EMPTY: Record<ExplainerState['status'], string> = {
@@ -12,13 +12,13 @@ const EMPTY: Record<ExplainerState['status'], string> = {
 
 export function GlossaryView({ entries, status, project }: { entries: GlossaryEntry[]; status: ExplainerState['status'] | null; project?: string }) {
   const [open, setOpen] = useState<string | null>(null)
-  const groups = useMemo(
-    () => groupCatalog(entries).map((g) => ({
+  const groups = useMemo(() => {
+    let i = 0
+    return groupCatalog(entries).map((g) => ({
       letter: g.letter,
-      terms: g.entries.map((e) => ({ id: e.term.toLowerCase(), term: e.term, body: e.definition })),
-    })),
-    [entries],
-  )
+      terms: g.entries.map((e) => ({ id: termSlug(e.term, i++), term: e.term, body: e.definition })),
+    }))
+  }, [entries])
   if (entries.length === 0) return <p className="empty">{EMPTY[status ?? 'ready']}</p>
   return <CardCatalog groups={groups} open={open} onOpen={setOpen} label={project ? `${project}'s terms` : 'Terms'} />
 }

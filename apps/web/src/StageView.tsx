@@ -3,7 +3,8 @@ import { isExplained, SceneSpecSchema, type ExplainerState, type FeedStep, type 
 import { townFrom, type Readout } from '@sidecar/ui-kit'
 import { forStatus } from '@sidecar/ui-kit/catalog'
 import { Scene } from '@sidecar/ui-kit/react'
-import { Chip, PulledCard, RoundButton, StepCard, StepDrawer, TickRuler } from './ds'
+import { Chip, PulledCard, ReadoutPanel, RoundButton, StepCard, StepDrawer, TickRuler } from './ds'
+import { readoutFields, useFramed } from './framed'
 import { formatElapsed, stepTitle } from './format'
 import { isPendingExplanation } from './pending'
 import { initialSelection, selectedId, selectionReducer, stepNumber } from './selection'
@@ -59,7 +60,9 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
   const now = shown ? stepTitle(shown) : ''
   const firstAt = steps[0]?.startedAt ?? 0
   const elapsed = shown ? formatElapsed(shown.startedAt - firstAt) : '00:00'
-  const live = !replay
+  // LIVE only while following the newest step; a replay or an older pick reads REPLAY.
+  const live = !replay && selection.follow
+  const framed = useFramed()
   const count = steps.length
   // Built from primitives so the SVG only re-renders when a number on the frame changes.
   const readout = useMemo<Readout>(() => ({
@@ -118,14 +121,17 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
         </StepDrawer>
       </div>
       <div className="stagetab__main">
+        {!framed && shown ? (
+          <ReadoutPanel label="Stage readout" fields={readoutFields(readout)} note={`${live ? 'LIVE' : 'REPLAY'} · ${now}`} />
+        ) : null}
         <section className="stagetab__stage" aria-label="Stage">
           {shown && parsed?.success ? (
             <Scene
               key={`${mode}:${shown.id}`}
               spec={parsed.data}
               town={town}
-              frame
-              readout={readout}
+              frame={framed}
+              {...(framed ? { readout } : {})}
               {...(onDone ? { onDone } : {})}
               {...(still ? { at: END } : {})}
             />
@@ -144,7 +150,7 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
           <span className="replay__pos">{stepNumber(Math.max(0, index))}/{stepNumber(steps.length - 1)}</span>
           <RoundButton label="▶" title={replay ? 'Play' : 'Replay session'} active={!!replay?.playing} onPress={play} />
           <RoundButton label="⏸" title="Pause" onPress={pause} disabled={!!replay && !replay.playing} />
-          <RoundButton label="LIVE" title="Back to live" active={live && selection.follow} onPress={goLive} />
+          <RoundButton label="LIVE" title="Back to live" active={live} onPress={goLive} />
         </div>
         {card ? (
           <StepDetail
