@@ -39,7 +39,24 @@ Everything runs on your machine. The only thing that ever leaves it is the optio
 
 ## Quick start
 
-You need Node.js 22.13 or newer, pnpm, and Claude Code.
+You need Node.js 22.13 or newer and Claude Code. In Claude Code, run:
+
+```
+/plugin marketplace add shivvyas2/developer-sidecar
+/plugin install developer-sidecar@developer-sidecar
+```
+
+On Claude Code 2.1.275 or later, `/plugin install developer-sidecar --marketplace shivvyas2/developer-sidecar` does both in one step. Restart Claude Code, then start working as usual. The first session prints the workstation address, normally:
+
+```
+http://localhost:7377
+```
+
+Open it in a browser and keep it beside your terminal. Inside Claude Code, `/sidecar` opens the pane. The gallery of every token, primitive, component and scene, in light and dark side by side, is at `http://localhost:7377/#/kit`.
+
+To update, run `/plugin marketplace update developer-sidecar`, or turn on auto-update for the marketplace under `/plugin`.
+
+### From source
 
 ```bash
 git clone https://github.com/shivvyas2/developer-sidecar.git
@@ -48,16 +65,6 @@ pnpm install
 pnpm build
 claude --plugin-dir ./plugin
 ```
-
-Start working in Claude Code as usual. The first session prints the workstation address, normally:
-
-```
-http://localhost:7377
-```
-
-Open it in a browser and keep it beside your terminal. The gallery of every token, primitive, component and scene, in light and dark side by side, is at `http://localhost:7377/#/kit`.
-
-> Once the first version is released, install with `/plugin marketplace add shivvyas2/developer-sidecar` and `/plugin install developer-sidecar@developer-sidecar` (on Claude Code 2.1.275 or later, `/plugin install developer-sidecar --marketplace shivvyas2/developer-sidecar` does both). Until then, build from source as above.
 
 ### Explanations
 
