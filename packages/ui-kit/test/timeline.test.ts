@@ -91,3 +91,16 @@ describe('frameAt robustness (Review Focus 3)', () => {
     expect([a.x, a.y]).toEqual([ACTOR_HOME.claude.x, ACTOR_HOME.claude.y])
   })
 })
+
+describe('fx stay on canvas', () => {
+  const failed = [
+    scenes.ship('x', true), scenes.launch('x', true), scenes.launch('x', false), scenes.run('x', true), scenes.inspect('x', true),
+    scenes.toolbox('x', true), scenes.connect('x', 'Stripe', true),
+  ]
+  const specs = [...SAMPLE_SCENES.map((s) => s.spec), ...failed]
+  test.each(specs.map((s, i) => [i, s.scene, s] as const))('scene #%i %s keeps every fx 40px below the top', (_i, _n, spec) => {
+    const tl = compile(spec)
+    const times = [tl.duration, ...tl.beats.filter((b) => 'fx' in b.beat).map((b) => (b.start + b.end) / 2)]
+    for (const t of times) for (const f of frameAt(spec, tl, t).fx) expect(f.y - 40).toBeGreaterThanOrEqual(0)
+  })
+})

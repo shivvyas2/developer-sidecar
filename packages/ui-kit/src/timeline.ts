@@ -79,10 +79,13 @@ function propFor(kind: PropKind, at: Point, target: Point | undefined, places: M
   }
 }
 
+const FX_MIN_Y = 40
+
 function fxPoint(at: string, places: Map<PlaceId, Point>, actors: Map<ActorId, ActorFrame>, town?: Town): Point {
   if (isPlace(at)) {
     const p = places.get(at) ?? PLACE_AT[at]
-    return { x: p.x, y: p.y - placeHeight(at, town?.appFloors ?? 1) - 12 }
+    // Keep the whole effect on canvas: error smoke rises ~38px above its point.
+    return { x: p.x, y: Math.max(FX_MIN_Y, p.y - placeHeight(at, town?.appFloors ?? 1) - 12) }
   }
   const who = isActor(at) ? actors.get(at) ?? ACTOR_HOME[at] : actors.get('claude')
   return who ? { x: who.x, y: who.y - 104 } : { x: VIEW.w / 2, y: VIEW.h / 2 }
