@@ -1,0 +1,518 @@
+/*
+ * Drafting-instrument design system. Colours come only from the --sk-* tokens
+ * that themeCss() emits; the font stacks mirror FONTS in @sidecar/ui-kit.
+ * Outlined shapes are drawn as an ink layer clipped to the shape with a 1px
+ * smaller fill layer (::before) clipped to the same shape on top of it.
+ */
+:root {
+  --ds-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --ds-dot: 'DotGothic16', 'JetBrains Mono', ui-monospace, monospace;
+  --ds-sans: 'Inter Variable', Inter, system-ui, -apple-system, sans-serif;
+  --ds-slant: 6px;
+  --ds-chamfer: 16px;
+  --ds-on-accent: var(--sk-ink);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --ds-on-accent: var(--sk-paper); }
+}
+:root[data-theme="dark"] { --ds-on-accent: var(--sk-paper); }
+
+.ds-sr {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+:where(.ds-tab, .ds-step, .ds-round, .ds-ruler, .ds-link, .ds-cat__term, .ds-rotary__opt, .ds-drawer__scroll):focus-visible {
+  outline: 2px solid var(--sk-ink);
+  outline-offset: 2px;
+}
+
+.ds-kicker {
+  font: 700 9px/1 var(--ds-mono);
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--sk-ink);
+}
+
+/* ---- trapezoid tab shared by cards, catalog and folder tabs ---- */
+.ds-cardtab, .ds-tab {
+  --ds-tab-shape: polygon(0 100%, var(--ds-slant) 0, calc(100% - var(--ds-slant)) 0, 100% 100%);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--sk-ink);
+  color: var(--sk-ink);
+  clip-path: var(--ds-tab-shape);
+  font: 700 9px/1 var(--ds-mono);
+  letter-spacing: 1.2px;
+  white-space: nowrap;
+}
+.ds-cardtab::before, .ds-tab::before {
+  content: '';
+  position: absolute;
+  inset: 1px 1px 0 1px;
+  background: var(--sk-paper);
+  clip-path: var(--ds-tab-shape);
+}
+.ds-cardtab > *, .ds-tab > * { position: relative; }
+.ds-cardtab[data-ink], .ds-tab[aria-selected="true"] { color: var(--sk-paper); }
+.ds-cardtab[data-ink]::before, .ds-tab[aria-selected="true"]::before { background: var(--sk-ink); }
+
+/* ---- FolderTabs ---- */
+.ds-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--sk-ink);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ds-tab {
+  height: 22px;
+  margin-right: -3px;
+  padding: 0 calc(var(--ds-slant) + 10px);
+  border: 0;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+}
+.ds-tab:hover:not([aria-selected="true"])::before { background: var(--sk-card); }
+
+/* ---- StepCard ---- */
+.ds-step {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sk-ink);
+  text-align: left;
+  cursor: pointer;
+}
+.ds-step__tab {
+  align-self: flex-start;
+  min-width: 56px;
+  height: 13px;
+  margin-left: 12px;
+  padding: 0 calc(var(--ds-slant) + 6px);
+  font-size: 8px;
+}
+.ds-step__card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px 9px;
+  background: var(--sk-card);
+  border: 1px solid var(--sk-ink);
+}
+.ds-step[data-selected] .ds-step__card { box-shadow: inset 3px 0 0 var(--sk-ink); }
+.ds-step:hover .ds-step__card { background: var(--sk-paper); }
+.ds-step__head { display: flex; align-items: baseline; gap: 8px; }
+.ds-step__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 700 10px/1.3 var(--ds-mono);
+  letter-spacing: 1.2px;
+}
+.ds-step__mark { font: 700 10px/1 var(--ds-mono); color: var(--sk-ink); }
+.ds-step[data-status="running"] .ds-step__mark,
+.ds-step[data-status="failed"] .ds-step__mark { color: var(--sk-accent); }
+.ds-step[data-status="interrupted"] .ds-step__mark { color: var(--sk-ink2); }
+.ds-step__caption {
+  font: 400 12px/1.35 var(--ds-sans);
+  color: var(--sk-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- StepDrawer and drawer front ---- */
+.ds-drawer { display: flex; flex-direction: column; min-height: 0; }
+.ds-drawer__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 6px 8px;
+}
+.ds-front {
+  --ds-front-shape: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 10px 100%);
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 46px;
+  background: var(--sk-ink);
+  clip-path: var(--ds-front-shape);
+}
+.ds-front::before {
+  content: '';
+  position: absolute;
+  inset: 1px 1px 1px 1px;
+  background: var(--sk-paper);
+  clip-path: var(--ds-front-shape);
+}
+.ds-label {
+  position: relative;
+  padding: 3px 14px;
+  background: var(--sk-label);
+  color: var(--sk-ink);
+  border: 1px solid var(--sk-ink);
+  border-radius: 3px;
+  font: 700 9px/1.2 var(--ds-mono);
+  letter-spacing: 1.2px;
+  white-space: nowrap;
+}
+
+/* ---- PulledCard ---- */
+.ds-pulled { display: flex; flex-direction: column; color: var(--sk-ink); }
+.ds-pulled__tab {
+  align-self: flex-start;
+  min-width: 72px;
+  height: 16px;
+  margin-left: 14px;
+  padding: 0 calc(var(--ds-slant) + 8px);
+}
+.ds-pulled__card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px 16px;
+  background: var(--sk-card);
+  border: 1px solid var(--sk-ink);
+  font: 400 14px/1.5 var(--ds-sans);
+}
+.ds-pulled__card > * { margin: 0; }
+.ds-pulled__title {
+  margin: 0;
+  font: 700 12px/1.3 var(--ds-mono);
+  letter-spacing: 1.6px;
+}
+
+/* ---- Chip ---- */
+.ds-chip {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  height: 20px;
+  padding: 0 10px;
+  border: 1px solid var(--sk-ink);
+  border-radius: 999px;
+  color: var(--sk-ink);
+  font: 600 10px/1 var(--ds-mono);
+  letter-spacing: .4px;
+  white-space: nowrap;
+}
+
+/* ---- RoundButton ---- */
+.ds-round {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--sk-ink);
+  border-radius: 50%;
+  background: var(--sk-card);
+  color: var(--sk-ink);
+  font: 700 9px/1 var(--ds-mono);
+  letter-spacing: .6px;
+  cursor: pointer;
+}
+.ds-round[data-wide] { width: 38px; height: 38px; font-size: 8px; letter-spacing: .4px; }
+.ds-round:hover:not(:disabled) { background: var(--sk-paper); }
+.ds-round[data-active] { background: var(--sk-accent); border-color: var(--sk-accent); color: var(--ds-on-accent); }
+.ds-round:disabled { color: var(--sk-ink2); border-color: var(--sk-ink2); cursor: default; }
+
+/* ---- TickRuler ---- */
+.ds-ruler {
+  --ds-pct: 0%;
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 26px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.ds-ruler::-webkit-slider-runnable-track {
+  height: 26px;
+  background:
+    linear-gradient(var(--sk-accent), var(--sk-accent)) 0 100% / var(--ds-pct) 2px no-repeat,
+    linear-gradient(var(--sk-ink), var(--sk-ink)) 0 100% / 100% 1px no-repeat,
+    repeating-linear-gradient(to right, var(--sk-ink) 0 1px, transparent 1px 40px) 0 100% / 100% 12px no-repeat,
+    repeating-linear-gradient(to right, var(--sk-ink2) 0 1px, transparent 1px 8px) 0 100% / 100% 6px no-repeat;
+}
+.ds-ruler::-moz-range-track {
+  height: 26px;
+  background:
+    linear-gradient(var(--sk-accent), var(--sk-accent)) 0 100% / var(--ds-pct) 2px no-repeat,
+    linear-gradient(var(--sk-ink), var(--sk-ink)) 0 100% / 100% 1px no-repeat,
+    repeating-linear-gradient(to right, var(--sk-ink) 0 1px, transparent 1px 40px) 0 100% / 100% 12px no-repeat,
+    repeating-linear-gradient(to right, var(--sk-ink2) 0 1px, transparent 1px 8px) 0 100% / 100% 6px no-repeat;
+}
+.ds-ruler::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  border: 1px solid var(--sk-ink);
+  border-radius: 50%;
+  background: var(--sk-card);
+  box-shadow: 0 0 0 3px var(--sk-card), 0 0 0 4px var(--sk-ink);
+}
+.ds-ruler::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--sk-ink);
+  border-radius: 50%;
+  background: var(--sk-card);
+  box-shadow: 0 0 0 3px var(--sk-card), 0 0 0 4px var(--sk-ink);
+}
+
+/* ---- ReadoutPanel ---- */
+.ds-readout {
+  --ds-panel-shape: polygon(0 0, calc(100% - var(--ds-chamfer)) 0, 100% var(--ds-chamfer), 100% 100%, 0 100%);
+  position: relative;
+  padding: 12px 16px 10px;
+  background: var(--sk-ink);
+  color: var(--sk-ink);
+  clip-path: var(--ds-panel-shape);
+}
+.ds-readout::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  background: var(--sk-card);
+  clip-path: polygon(0 0, calc(100% - 15.4px) 0, 100% 15.4px, 100% 100%, 0 100%);
+}
+.ds-readout > * { position: relative; }
+.ds-readout__fields { display: flex; gap: 28px; margin: 0; }
+.ds-readout__field { display: flex; flex-direction: column; gap: 6px; }
+.ds-readout dt {
+  font: 700 8px/1 var(--ds-mono);
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+.ds-readout dd {
+  margin: 0;
+  font: 400 26px/1 var(--ds-dot);
+  letter-spacing: -.5px;
+}
+.ds-readout__field:first-child dd { font-size: 32px; }
+.ds-readout__note {
+  margin: 10px 0 0;
+  padding-top: 6px;
+  border-top: 1px dotted var(--sk-ink2);
+  font: 700 8px/1.2 var(--ds-mono);
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- StatusStrip ---- */
+.ds-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  border-top: 1px solid var(--sk-ink);
+  border-bottom: 1px solid var(--sk-ink);
+  color: var(--sk-ink);
+}
+.ds-strip__tag {
+  flex: none;
+  padding: 4px 10px;
+  background: var(--sk-ink);
+  color: var(--sk-paper);
+  font: 700 9px/1.2 var(--ds-mono);
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+}
+.ds-strip__text { flex: 1; min-width: 0; font: 400 13px/1.4 var(--ds-sans); }
+
+/* ---- ThemeToggle ---- */
+.ds-toggle { display: inline-flex; align-items: center; gap: 6px; }
+.ds-toggle .ds-round { font-size: 13px; }
+.ds-toggle__label {
+  min-width: 5ch;
+  font: 700 9px/1 var(--ds-mono);
+  letter-spacing: 1.4px;
+  color: var(--sk-ink);
+}
+
+/* ---- SpecCard ---- */
+.ds-spec { background: var(--sk-card); border: 1px solid var(--sk-ink); color: var(--sk-ink); }
+.ds-spec__band {
+  margin: 0;
+  padding: 7px 12px;
+  background: var(--sk-ink);
+  color: var(--sk-paper);
+  font: 700 10px/1.3 var(--ds-mono);
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+}
+.ds-spec__body { display: flex; flex-direction: column; gap: 10px; padding: 12px; }
+.ds-spec__row { display: grid; grid-template-columns: 84px 1fr; gap: 10px; align-items: baseline; }
+.ds-spec__chose {
+  justify-self: start;
+  padding: 4px 8px;
+  background: var(--sk-ink);
+  color: var(--sk-paper);
+  font: 700 11px/1.3 var(--ds-mono);
+}
+.ds-spec__alts { margin: 0; padding: 0; list-style: none; font: 400 11px/1.3 var(--ds-mono); }
+.ds-spec__alts li { padding: 3px 0; border-bottom: 1px dotted var(--sk-ink2); color: var(--sk-ink2); }
+.ds-spec__reason { margin: 0; font: 400 13px/1.5 var(--ds-sans); }
+.ds-link {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px dashed var(--sk-ink);
+  background: none;
+  color: var(--sk-ink);
+  font: 700 10px/1.4 var(--ds-mono);
+  letter-spacing: 1.2px;
+  cursor: pointer;
+}
+
+/* ---- CardCatalog ---- */
+.ds-cat { display: flex; flex-direction: column; color: var(--sk-ink); }
+.ds-cat__group { display: flex; flex-direction: column; }
+.ds-cat__terms { margin: 0; padding: 0; list-style: none; }
+.ds-cat__row {
+  display: flex;
+  margin: 6px 0 0;
+  padding: 0 0 0 4%;
+  border-bottom: 1px solid var(--sk-ink);
+}
+.ds-cat__row[data-col="1"] { padding-left: 34%; }
+.ds-cat__row[data-col="2"] { padding-left: 62%; }
+.ds-cat__letter {
+  min-width: 180px;
+  height: 20px;
+  padding: 0 calc(var(--ds-slant) + 10px);
+  font-size: 12px;
+  letter-spacing: 2px;
+}
+.ds-cat__letter > span:last-child { font-family: var(--ds-dot); font-weight: 400; font-size: 14px; }
+.ds-cat__term {
+  min-width: 160px;
+  max-width: 36%;
+  height: 20px;
+  padding: 0 calc(var(--ds-slant) + 10px);
+  border: 0;
+  justify-content: flex-start;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+.ds-cat__term > span { overflow: hidden; text-overflow: ellipsis; }
+.ds-cat__term:hover:not([data-ink])::before { background: var(--sk-card); }
+.ds-cat__card {
+  margin: 0 0 4px;
+  padding: 10px 14px;
+  background: var(--sk-card);
+  border: 1px solid var(--sk-ink);
+  border-top: 0;
+  font: 400 13px/1.5 var(--ds-sans);
+}
+.ds-cat__card[hidden] { display: none; }
+.ds-cat .ds-front { margin-top: 14px; }
+
+/* ---- RotarySelect ---- */
+.ds-rotary {
+  --ds-r: 46px;
+  --ds-cy: 124px;
+  position: relative;
+  display: inline-block;
+  width: 260px;
+  height: 184px;
+}
+.ds-rotary__dial {
+  position: absolute;
+  left: 50%;
+  top: var(--ds-cy);
+  width: calc(var(--ds-r) * 2);
+  height: calc(var(--ds-r) * 2);
+  margin: calc(var(--ds-r) * -1) 0 0 calc(var(--ds-r) * -1);
+  border: 1px solid var(--sk-ink);
+  border-radius: 50%;
+  background: var(--sk-card);
+}
+.ds-rotary__dial::before {
+  content: '';
+  position: absolute;
+  inset: -9px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from -1deg, var(--sk-ink) 0 1deg, transparent 1deg 6deg);
+  -webkit-mask: radial-gradient(circle, transparent calc(var(--ds-r) + 2px), var(--sk-ink) calc(var(--ds-r) + 3px));
+  mask: radial-gradient(circle, transparent calc(var(--ds-r) + 2px), var(--sk-ink) calc(var(--ds-r) + 3px));
+}
+.ds-rotary__dial::after {
+  content: '';
+  position: absolute;
+  inset: 12px;
+  border-radius: 50%;
+  border: 1px dashed var(--sk-ink2);
+}
+.ds-rotary__knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: calc(var(--ds-r) - 6px);
+  margin-left: -1px;
+  background: var(--sk-ink);
+  transform-origin: 50% 0;
+  transform: rotate(calc(180deg + var(--ds-a, 0deg)));
+  transition: transform .3s ease-in-out;
+  z-index: 1;
+}
+.ds-rotary__knob::after {
+  content: '';
+  position: absolute;
+  left: -5px;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--sk-ink);
+  background: var(--sk-card);
+}
+.ds-rotary__opt {
+  position: absolute;
+  left: 50%;
+  top: var(--ds-cy);
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--sk-ink2);
+  font: 700 9px/1 var(--ds-mono);
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transform: translate(-50%, -50%) rotate(var(--ds-a)) translateY(calc(var(--ds-r) * -1 - 38px)) rotate(calc(var(--ds-a) * -1));
+}
+.ds-rotary__opt[aria-checked="true"] { color: var(--sk-paper); background: var(--sk-ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-rotary__knob { transition: none; }
+}
