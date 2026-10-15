@@ -100,6 +100,7 @@ export async function startServer(o: StartOptions): Promise<RunningServer> {
     settings = fileSettings(o.home)
     explainer = createExplainer({
       hub, store, settings, provider: given ? o.provider ?? null : null,
+      log: (msg) => logLine(o.home, 'server.log', msg),
       ...(envOff ? { disabledReason: 'Turned off by SIDECAR_EXPLAINER=off.' } : {}),
     })
     pipeline = createPipeline({ store, hub })

@@ -28,14 +28,14 @@ function fakeProvider(behaviour: (ids: string[]) => Promise<unknown> | unknown =
   return { provider, calls }
 }
 
-function setup(provider: Provider | null, level: 'off' | 'haiku' | 'sonnet' = 'haiku') {
+function setup(provider: Provider | null, level: 'off' | 'haiku' | 'sonnet' = 'haiku', extra: { log?: (msg: string) => void } = {}) {
   const hub = new Hub()
   const store = openStore(':memory:')
   store.touchSession('s1', '/work/shop', 1)
   const settings = memorySettings({ explanations: level })
   const got: ServerMessage[] = []
   hub.subscribe((m) => got.push(m))
-  const ex = createExplainer({ hub, store, settings, provider, retryDelayMs: 10 })
+  const ex = createExplainer({ hub, store, settings, provider, retryDelayMs: 10, ...extra })
   const send = (s: FeedStep) => { store.saveStep(s); hub.publish({ type: 'step', step: s }) }
   return { hub, store, settings, got, ex, send }
 }
@@ -273,5 +273,82 @@ describe('explainer', () => {
     await vi.advanceTimersByTimeAsync(QUIET_MS)
     await ex.idle()
     expect(calls).toEqual([])
+  })
+
+  test('switching to off stops batches already chained from calling the provider (final fix 1)', async () => {
+    const { provider, calls } = slow(QUIET_MS)
+    const { ex, send, settings, got } = setup(provider)
+    for (let i = 0; i < 20; i++) send(step(`s${i}`)) // 3 batches: 8 flush at once, 8 at once, 4 after quiet
+    await vi.advanceTimersByTimeAsync(10) // the first call has started; the second batch is chained
+    expect(calls).toHaveLength(1)
+    settings.set({ explanations: 'off' })
+    ex.settingsChanged()
+    await vi.advanceTimersByTimeAsync(QUIET_MS * 10)
+    await ex.idle()
+    expect(calls).toHaveLength(1)
+    expect(got.filter((m) => ['explanation', 'decision', 'concept'].includes(m.type))).toEqual([])
+  })
+
+  test('stop() stops batches already chained from calling the provider (final fix 1)', async () => {
+    const { provider, calls } = slow(QUIET_MS)
+    const { ex, send, got } = setup(provider)
+    for (let i = 0; i < 20; i++) send(step(`s${i}`))
+    await vi.advanceTimersByTimeAsync(10)
+    expect(calls).toHaveLength(1)
+    ex.stop()
+    await vi.advanceTimersByTimeAsync(QUIET_MS * 10)
+    await ex.idle()
+    expect(calls).toHaveLength(1)
+    expect(got.filter((m) => ['explanation', 'decision', 'concept'].includes(m.type))).toEqual([])
+  })
+
+  test('switching to off during the retry wait skips the retry (final fix 1)', async () => {
+    const { provider, calls } = fakeProvider(() => { throw new ExplainError('Anthropic rate limit reached.', true) })
+    const hub = new Hub()
+    const store = openStore(':memory:')
+    store.touchSession('s1', '/work/shop', 1)
+    const settings = memorySettings({ explanations: 'haiku' })
+    const ex = createExplainer({ hub, store, settings, provider, retryDelayMs: 1000 })
+    const s = step('a'); store.saveStep(s); hub.publish({ type: 'step', step: s })
+    await vi.advanceTimersByTimeAsync(QUIET_MS + 10)
+    expect(calls).toHaveLength(1)
+    settings.set({ explanations: 'off' })
+    ex.settingsChanged()
+    await vi.advanceTimersByTimeAsync(2000)
+    await ex.idle()
+    expect(calls).toHaveLength(1)
+    expect(store.hasExplanation('a')).toBe(false)
+  })
+
+  test('usage carried by failed attempts is counted (final fix 2)', async () => {
+    const { provider } = fakeProvider(() => { throw new ExplainError('The explanation came back malformed.', true, { input: 7, output: 3 }) })
+    const { ex, send } = setup(provider)
+    send(step('a'))
+    await vi.advanceTimersByTimeAsync(QUIET_MS + 50)
+    await ex.idle()
+    expect(ex.state().tokens).toEqual({ input: 14, output: 6 }) // both attempts
+  })
+
+  test('a store error releases the batch, is logged, and the chain keeps working (final fix 4)', async () => {
+    const { provider, calls } = fakeProvider()
+    const logs: string[] = []
+    const { ex, send, store } = setup(provider, 'haiku', { log: (m) => logs.push(m) })
+    const save = store.saveExplanation.bind(store)
+    let thrown = false
+    store.saveExplanation = (...args: Parameters<typeof save>) => {
+      if (!thrown) { thrown = true; throw new Error('disk full') }
+      return save(...args)
+    }
+    const a = step('a')
+    send(a)
+    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    await ex.idle()
+    expect(logs.some((l) => l.includes('disk full'))).toBe(true)
+    expect(store.hasExplanation('a')).toBe(false)
+    send(a) // republished: no longer held in flight
+    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    await ex.idle()
+    expect(calls).toEqual([['a'], ['a']])
+    expect(store.hasExplanation('a')).toBe(true)
   })
 })

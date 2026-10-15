@@ -9,7 +9,8 @@ export type ModelLevel = 'haiku' | 'sonnet'
 export const API_MODEL: Record<ModelLevel, string> = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5' }
 
 export class ExplainError extends Error {
-  constructor(message: string, readonly retryable: boolean) {
+  /** `usage` is set when the failed attempt still spent tokens. */
+  constructor(message: string, readonly retryable: boolean, readonly usage?: TokenUsage) {
     super(message)
     this.name = 'ExplainError'
   }
@@ -21,12 +22,18 @@ export interface Provider {
   explain(req: ExplainRequest, level: ModelLevel): Promise<ProviderResult>
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- the SDK's parse() is generic; tests pass a fake
-export type ParseClient = { messages: { parse: (params: any) => Promise<any> } }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- the SDK's create() is heavily overloaded; tests pass a fake
+export type MessagesClient = { messages: { create: (params: any) => Promise<any> } }
+
+interface ApiUsage { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number | null; cache_creation_input_tokens?: number | null }
+interface ApiMessage { stop_reason: string | null; content: Array<{ type: string; text?: string }>; usage: ApiUsage }
+
+const MALFORMED = 'The explanation came back malformed.'
 
 function classify(err: unknown): ExplainError {
   if (err instanceof Anthropic.AuthenticationError) return new ExplainError('The Anthropic API key was rejected.', false)
   if (err instanceof Anthropic.PermissionDeniedError) return new ExplainError('This API key is not allowed to use the model.', false)
+  if (err instanceof Anthropic.NotFoundError) return new ExplainError("This API key can't use the explanation model.", false)
   if (err instanceof Anthropic.BadRequestError) return new ExplainError(`The explanation request was rejected: ${err.message}`, false)
   if (err instanceof Anthropic.RateLimitError) return new ExplainError('Anthropic rate limit reached.', true)
   if (err instanceof Anthropic.APIConnectionError) return new ExplainError('Could not reach Anthropic.', true)
@@ -34,33 +41,37 @@ function classify(err: unknown): ExplainError {
   return new ExplainError(err instanceof Error ? err.message : String(err), true)
 }
 
-export function anthropicProvider(client: ParseClient = new Anthropic({ maxRetries: 0, timeout: 60_000 })): Provider {
+export function anthropicProvider(client: MessagesClient = new Anthropic({ maxRetries: 0, timeout: 60_000 })): Provider {
   return {
     id: 'api',
     async explain(req, level) {
-      let res: {
-        stop_reason: string | null
-        parsed_output: ExplainOutput | null
-        usage: { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number | null; cache_creation_input_tokens?: number | null }
-      }
+      let res: ApiMessage
       try {
-        res = await client.messages.parse({
+        // create(), not parse(): parse() throws on malformed output before we can read stop_reason or usage
+        res = await client.messages.create({
           model: API_MODEL[level],
           max_tokens: 8000,
           output_config: { effort: 'low', format: zodOutputFormat(ExplainOutputSchema) },
-          system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }],
+          system: req.system,
           messages: [{ role: 'user', content: req.user }],
-        })
+        }) as ApiMessage
       } catch (err) {
         throw classify(err)
       }
-      if (res.stop_reason === 'refusal') throw new ExplainError('The model declined to explain these steps.', false)
-      if (res.stop_reason === 'max_tokens' || !res.parsed_output) throw new ExplainError('The explanation came back cut off or malformed.', true)
       const u = res.usage
-      return {
-        output: res.parsed_output,
-        usage: { input: u.input_tokens + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0), output: u.output_tokens },
+      const usage: TokenUsage = { input: u.input_tokens + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0), output: u.output_tokens }
+      if (res.stop_reason === 'refusal') throw new ExplainError('The model declined to explain these steps.', false, usage)
+      if (res.stop_reason === 'max_tokens') throw new ExplainError('The explanation came back cut off.', true, usage)
+      const block = res.content.find((b) => b.type === 'text')
+      let json: unknown
+      try {
+        json = JSON.parse(block?.text ?? '')
+      } catch {
+        throw new ExplainError(MALFORMED, true, usage)
       }
+      const parsed = ExplainOutputSchema.safeParse(json)
+      if (!parsed.success) throw new ExplainError(MALFORMED, true, usage)
+      return { output: parsed.data, usage }
     },
   }
 }
@@ -103,13 +114,19 @@ export function extractJson(text: string): unknown {
 
 const JSON_SHAPE = 'Respond with ONLY one JSON object of the form {"items":[{"stepId":"…","plain":"…","why":"…","concept":{"term":"…","definition":"…"} or null,"decision":{"title":"…","choice":"…","alternatives":["…"],"reason":"…"} or null}]} and nothing else.'
 
+/** Marks the child as Sidecar's own run and drops the markers a nested-session guard would refuse on. */
+export function childEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const { CLAUDECODE: _cc, CLAUDE_CODE_ENTRYPOINT: _entry, ...rest } = env
+  return { ...rest, SIDECAR_INTERNAL: '1' }
+}
+
 export function cliProvider(run: Runner = runClaude, env: NodeJS.ProcessEnv = process.env): Provider {
   return {
     id: 'cli',
     async explain(req, level) {
       let r: Awaited<ReturnType<Runner>>
       try {
-        r = await run(CLI_ARGS(level, req.system), `${JSON_SHAPE}\n\n${req.user}`, { env: { ...env, SIDECAR_INTERNAL: '1' }, timeoutMs: 120_000 })
+        r = await run(CLI_ARGS(level, req.system), `${JSON_SHAPE}\n\n${req.user}`, { env: childEnv(env), timeoutMs: 120_000 })
       } catch (err) {
         const missing = (err as NodeJS.ErrnoException).code === 'ENOENT'
         throw new ExplainError(missing ? 'The claude command is not installed.' : `Could not run claude: ${(err as Error).message}`, !missing)
@@ -136,7 +153,7 @@ export function cliProvider(run: Runner = runClaude, env: NodeJS.ProcessEnv = pr
 
 export const claudeAvailable = (run: Runner = runClaude) => async (): Promise<boolean> => {
   try {
-    return (await run(['--version'], '', { env: { ...process.env, SIDECAR_INTERNAL: '1' }, timeoutMs: 5000 })).code === 0
+    return (await run(['--version'], '', { env: childEnv(process.env), timeoutMs: 5000 })).code === 0
   } catch {
     return false
   }

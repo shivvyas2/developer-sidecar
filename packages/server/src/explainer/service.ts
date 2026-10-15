@@ -34,6 +34,8 @@ export interface ExplainerOptions {
   pauseAfter?: number
   /** When set, explanations are switched off from outside (e.g. an env var) and nothing is ever queued. */
   disabledReason?: string
+  /** Receives unexpected errors from a batch (e.g. a store write failing). */
+  log?: (msg: string) => void
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
@@ -54,6 +56,7 @@ export function createExplainer(o: ExplainerOptions): Explainer {
   let epoch = 0 // bumped on reset
   const sessionEpochs = new Map<string, number>() // bumped on session_deleted
   const inFlight = new Set<string>() // step ids flushed but not finished
+  let stopped = false
 
   const level = () => (o.disabledReason ? 'off' : o.settings.get().explanations)
 
@@ -84,39 +87,50 @@ export function createExplainer(o: ExplainerOptions): Explainer {
     const provider = current
     const stale = () => at.epoch !== epoch || at.session !== (sessionEpochs.get(sessionId) ?? 0)
     const finish = () => { for (const s of steps) inFlight.delete(s.id) }
-    if (!provider || stale()) return finish()
-    if (paused) {
-      for (const s of steps) mark(sessionId, s.id, { unavailable: paused })
-      finish()
-      return
-    }
-    const session = o.store.getSession(sessionId)
-    const req = buildRequest(
-      { project: session?.cwd ? basename(session.cwd) : 'this project', lastPrompt: o.store.lastPrompt(sessionId) },
-      steps.map(toInput),
-    )
-    let result: ProviderResult | null = null
-    let error: ExplainError | null = null
-    for (let attempt = 0; attempt < 2 && !result; attempt++) {
-      try {
-        result = await provider.explain(req, lvl)
-      } catch (err) {
-        error = err instanceof ExplainError ? err : new ExplainError(String(err), true)
-        if (!error.retryable) break
-        if (attempt === 0) await sleep(retryDelayMs)
+    // switched off, stopped, reset or session deleted since this batch was queued: no call, no writes
+    const cancelled = () => stopped || level() === 'off' || stale()
+    try {
+      if (!provider || cancelled()) return
+      if (paused) {
+        for (const s of steps) mark(sessionId, s.id, { unavailable: paused })
+        return
       }
-    }
-    if (result) {
-      // the tokens were spent even if the batch is dropped below
-      o.store.addUsage(result.usage)
-      failures = 0
-    }
-    if (stale() || level() === 'off') { // reset, session deleted or level switched off mid-flight
-      finish()
+      const session = o.store.getSession(sessionId)
+      const req = buildRequest(
+        { project: session?.cwd ? basename(session.cwd) : 'this project', lastPrompt: o.store.lastPrompt(sessionId) },
+        steps.map(toInput),
+      )
+      let result: ProviderResult | null = null
+      let error: ExplainError | null = null
+      for (let attempt = 0; attempt < 2 && !result; attempt++) {
+        if (attempt > 0 && cancelled()) break
+        try {
+          result = await provider.explain(req, lvl)
+        } catch (err) {
+          error = err instanceof ExplainError ? err : new ExplainError(String(err), true)
+          // a failed attempt can still have spent tokens
+          if (error.usage) o.store.addUsage(error.usage)
+          if (!error.retryable) break
+          if (attempt === 0) await sleep(retryDelayMs)
+        }
+      }
+      if (result) {
+        // the tokens were spent even if the batch is dropped below
+        o.store.addUsage(result.usage)
+        failures = 0
+      }
+      if (cancelled()) { // reset, session deleted, stopped or level switched off mid-flight
+        if (!stopped) publishState()
+        return
+      }
+      settle(sessionId, steps, result, error)
       publishState()
-      return
+    } finally {
+      finish()
     }
+  }
 
+  function settle(sessionId: string, steps: FeedStep[], result: ProviderResult | null, error: ExplainError | null): void {
     if (result) {
       const explained = normalize(result.output, steps.map((s) => s.id))
       for (const s of steps) {
@@ -140,8 +154,6 @@ export function createExplainer(o: ExplainerOptions): Explainer {
       failures++
       if (failures >= pauseAfter || (error && !error.retryable)) paused = reason
     }
-    finish()
-    publishState()
   }
 
   const flush = (sessionId: string) => {
@@ -157,7 +169,9 @@ export function createExplainer(o: ExplainerOptions): Explainer {
     for (const s of all) inFlight.add(s.id)
     for (let i = 0; i < all.length; i += maxBatch) {
       const batch = all.slice(i, i + maxBatch)
-      chain = chain.then(() => runBatch(sessionId, batch, lvl, at)).catch(() => undefined)
+      chain = chain.then(() => runBatch(sessionId, batch, lvl, at)).catch((err: unknown) => {
+        o.log?.(`explainer batch failed: ${err instanceof Error ? err.message : String(err)}`)
+      })
     }
   }
 
@@ -196,6 +210,7 @@ export function createExplainer(o: ExplainerOptions): Explainer {
     },
     idle: () => chain,
     stop() {
+      stopped = true
       unsubscribe()
       drop()
     },
