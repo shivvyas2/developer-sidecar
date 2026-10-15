@@ -6,6 +6,8 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-15
+
 ### Changed
 
 - **Lighter polling.** Sidecar inside Claude Code only downloads steps when
