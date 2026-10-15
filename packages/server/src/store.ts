@@ -10,6 +10,8 @@ export interface Store {
   saveStep(s: FeedStep): void
   stepsForSession(sessionId: string): FeedStep[]
   stepsAfter(seq: number): FeedStep[]
+  /** An opaque token that changes whenever what stepsForSession returns may have changed. */
+  revision(sessionId: string): string
   saveExplanation(sessionId: string, stepId: string, e: StepExplanation, at: number): void
   hasExplanation(stepId: string): boolean
   addDecision(d: DecisionEntry): void
@@ -113,6 +115,12 @@ export function openStore(path: string): Store {
   }
   const parseJson = <T>(rows: unknown[]) => rows.map((r) => JSON.parse((r as { json: string }).json) as T)
 
+  // Revisions are only meaningful within one process: the boot stamp keeps a restarted server's numbers from matching.
+  const boot = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+  let epoch = 0
+  const revs = new Map<string, number>()
+  const bump = (sessionId: string) => revs.set(sessionId, (revs.get(sessionId) ?? 0) + 1)
+
   return {
     insertEvent(e) {
       const r = insEvent.run(e.id, e.sessionId, e.ts, e.kind, JSON.stringify(e))
@@ -127,15 +135,20 @@ export function openStore(path: string): Store {
     },
     saveStep(s) {
       upStep.run(s.id, s.sessionId, s.seq, s.startedAt, JSON.stringify(s))
+      bump(s.sessionId)
     },
     stepsForSession(sessionId) {
       return parseSteps(bySession.all(sessionId))
+    },
+    revision(sessionId) {
+      return `${boot}.${epoch}.${revs.get(sessionId) ?? 0}`
     },
     stepsAfter(seq) {
       return parseSteps(afterSeq.all(seq))
     },
     saveExplanation(sessionId, stepId, e, at) {
       upExp.run(stepId, sessionId, at, JSON.stringify(e))
+      bump(sessionId)
     },
     hasExplanation(stepId) {
       return getExp.get(stepId) !== undefined
@@ -174,9 +187,12 @@ export function openStore(path: string): Store {
     },
     deleteSession(id) {
       tx(() => { for (const stmt of delBySession) stmt.run(id) })
+      bump(id)
     },
     deleteAll() {
       tx(() => { for (const t of SESSION_TABLES) db.exec(`DELETE FROM ${t}`) })
+      epoch += 1
+      revs.clear()
     },
     close() {
       db.close()

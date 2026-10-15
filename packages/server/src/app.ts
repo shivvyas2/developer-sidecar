@@ -88,7 +88,13 @@ export function createApp(o: AppOptions): Hono {
   })
 
   app.get('/api/sessions', (c) => c.json(o.store.listSessions()))
-  app.get('/api/sessions/:id/steps', (c) => c.json(o.store.stepsForSession(c.req.param('id'))))
+  app.get('/api/sessions/:id/steps', (c) => {
+    const id = c.req.param('id')
+    const rev = o.store.revision(id)
+    c.header('x-sidecar-rev', rev)
+    if (c.req.query('rev') === rev) return c.body(null, 304)
+    return c.json(o.store.stepsForSession(id))
+  })
 
   app.get('/api/settings', (c) => c.json(o.settings.get()))
   app.put('/api/settings', async (c) => {

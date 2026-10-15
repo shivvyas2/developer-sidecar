@@ -132,3 +132,17 @@ describe('explainer routes', () => {
     expect(got).toContainEqual({ type: 'reset' })
   })
 })
+
+test('steps carry a revision and answer 304 when it is unchanged', async () => {
+  const app = make()
+  await app.request(U('/events'), { method: 'POST', headers: AUTH, body: JSON.stringify(event) })
+  const first = await app.request(U('/api/sessions/s1/steps'), { headers: AUTH })
+  const rev = first.headers.get('x-sidecar-rev')
+  expect(rev).toBeTruthy()
+  const same = await app.request(U(`/api/sessions/s1/steps?rev=${encodeURIComponent(rev!)}`), { headers: AUTH })
+  expect(same.status).toBe(304)
+  expect(await same.text()).toBe('')
+  const stale = await app.request(U('/api/sessions/s1/steps?rev=old'), { headers: AUTH })
+  expect(stale.status).toBe(200)
+  expect(stale.headers.get('x-sidecar-rev')).toBe(rev)
+})

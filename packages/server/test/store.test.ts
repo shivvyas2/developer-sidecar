@@ -122,3 +122,38 @@ describe('explainer data', () => {
     expect(s.usage()).toEqual({ input: 1, output: 1 })
   })
 })
+
+const openTemp = () => openStore(':memory:')
+const stepFor = (sessionId: string, id: string): FeedStep => ({ ...step(id, 1, 1), sessionId })
+
+describe('revision', () => {
+  test('changes on each write that changes the steps, not on reads', () => {
+    const store = openTemp()
+    const r0 = store.revision('S1')
+    store.saveStep(stepFor('S1', 'a'))
+    const r1 = store.revision('S1')
+    expect(r1).not.toBe(r0)
+    store.stepsForSession('S1')
+    expect(store.revision('S1')).toBe(r1)
+    store.saveExplanation('S1', 'a', { unavailable: 'off' }, 1)
+    const r2 = store.revision('S1')
+    expect(r2).not.toBe(r1)
+    store.deleteSession('S1')
+    expect(store.revision('S1')).not.toBe(r2)
+  })
+  test('one session does not move another', () => {
+    const store = openTemp()
+    const other = store.revision('S2')
+    store.saveStep(stepFor('S1', 'a'))
+    expect(store.revision('S2')).toBe(other)
+  })
+  test('deleteAll moves every session', () => {
+    const store = openTemp()
+    const before = store.revision('S9')
+    store.deleteAll()
+    expect(store.revision('S9')).not.toBe(before)
+  })
+  test('revision differs across store instances (a server restart)', () => {
+    expect(openTemp().revision('S1')).not.toBe(openTemp().revision('S1'))
+  })
+})
