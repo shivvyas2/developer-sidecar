@@ -1,5 +1,5 @@
 import type { Category, SceneSpec, Step, Translation } from '@sidecar/shared'
-import { scenes } from './scenes'
+import { scenes } from '@sidecar/ui-kit/catalog'
 import { detectVendor } from './vendors'
 
 export { detectVendor } from './vendors'

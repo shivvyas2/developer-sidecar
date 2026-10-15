@@ -7,6 +7,7 @@
   "dependencies": {
     "@hono/node-server": "^2.1.5",
     "@sidecar/shared": "workspace:*",
+    "@sidecar/ui-kit": "workspace:*",
     "hono": "^4.13.13",
     "ws": "^8.22.0"
   },

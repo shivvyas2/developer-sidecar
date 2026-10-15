@@ -65,3 +65,24 @@ export const scenes = {
     beats: [{ actor: 'claude', do: 'think' }, { fx: 'thinking', at: 'claude' }], caption,
   }),
 }
+
+/** One example of every scene, used by the /kit gallery and snapshot tests. */
+export const SAMPLE_SCENES: ReadonlyArray<{ name: string; spec: SceneSpec }> = [
+  { name: 'prompt', spec: scenes.prompt('You asked: “add Stripe checkout”') },
+  { name: 'helper', spec: scenes.helper('A helper is exploring the codebase') },
+  { name: 'gadget', spec: scenes.gadget('Using the github gadget (MCP tool “create_issue”)', 'github') },
+  { name: 'ship', spec: scenes.ship('Saving a checkpoint: “add checkout”', false) },
+  { name: 'install', spec: scenes.toolbox('Adding ready-made building blocks: stripe', false) },
+  { name: 'install-failed', spec: scenes.toolbox('Adding ready-made building blocks: stripe', true) },
+  { name: 'test', spec: scenes.inspect('Checking everything still works', false) },
+  { name: 'test-failed', spec: scenes.inspect('Checking everything still works', true) },
+  { name: 'deploy', spec: scenes.launch('Sending your app to the cloud', false) },
+  { name: 'run', spec: scenes.run('Starting your app', false) },
+  { name: 'data', spec: scenes.database('Shaping where your data lives: schema.prisma') },
+  { name: 'external', spec: scenes.connect('Connecting to Stripe', 'Stripe', false) },
+  { name: 'external-failed', spec: scenes.connect('Connecting to Stripe', 'Stripe', true) },
+  { name: 'read', spec: scenes.read('Reading app.ts') },
+  { name: 'create', spec: scenes.brick('Creating users.ts') },
+  { name: 'edit', spec: scenes.bolt('Changing auth.ts') },
+  { name: 'thinking', spec: scenes.thinking('Working…') },
+]

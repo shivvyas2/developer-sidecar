@@ -215,6 +215,9 @@ importers:
       '@sidecar/shared':
         specifier: workspace:*
         version: link:../shared
+      '@sidecar/ui-kit':
+        specifier: workspace:*
+        version: link:../ui-kit
       hono:
         specifier: ^4.13.13
         version: 4.13.13
