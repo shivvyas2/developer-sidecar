@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Category, FeedStep } from '@sidecar/shared'
+import { Stage } from './StageView'
 import { useFeed } from './useFeed'
 
 const ICON: Record<Category, string> = {
@@ -30,8 +31,27 @@ function StepRow({ step }: { step: FeedStep }) {
   )
 }
 
+type Tab = 'stage' | 'decisions' | 'glossary' | 'whiteboard'
+const TABS: Array<[Tab, string]> = [['stage', 'Stage'], ['decisions', 'Decisions'], ['glossary', 'Glossary'], ['whiteboard', 'Whiteboard']]
+const PLACEHOLDER: Record<Exclude<Tab, 'stage'>, string> = {
+  decisions: 'Architecture decisions appear here once plain-English explanations are switched on (coming next).',
+  glossary: 'Terms Claude uses, explained in one line each, appear here once explanations are switched on (coming next).',
+  whiteboard: 'A live diagram of how your app fits together. Coming in v2.',
+}
+
+export function useHash() {
+  const [hash, setHash] = useState(location.hash)
+  useEffect(() => {
+    const on = () => setHash(location.hash)
+    addEventListener('hashchange', on)
+    return () => removeEventListener('hashchange', on)
+  }, [])
+  return hash
+}
+
 export function App() {
   const { state, dispatch, connection } = useFeed()
+  const [tab, setTab] = useState<Tab>('stage')
   const steps = state.selected ? state.steps[state.selected] ?? [] : []
   return (
     <div className="app">
@@ -50,11 +70,23 @@ export function App() {
           ))}
         </select>
       </header>
+      <nav className="tabs" role="tablist">
+        {TABS.map(([id, name]) => (
+          <button key={id} role="tab" aria-selected={tab === id} className="tabs__tab" onClick={() => setTab(id)}>{name}</button>
+        ))}
+      </nav>
       <main>
-        {steps.length === 0 ? (
-          <p className="empty">Waiting for Claude to do something… start a Claude Code session with the plugin enabled.</p>
+        {tab !== 'stage' ? (
+          <p className="empty">{PLACEHOLDER[tab]}</p>
         ) : (
-          <ol className="feed">{steps.map((s) => <StepRow key={s.id} step={s} />)}</ol>
+          <>
+            <Stage sessionId={state.selected} loaded={state.selected ? !!state.loaded[state.selected] : false} steps={steps} />
+            {steps.length === 0 ? (
+              <p className="empty">Waiting for Claude to do something… start a Claude Code session with the plugin enabled.</p>
+            ) : (
+              <ol className="feed">{[...steps].reverse().map((s) => <StepRow key={s.id} step={s} />)}</ol>
+            )}
+          </>
         )}
       </main>
     </div>
