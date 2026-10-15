@@ -1,0 +1,39 @@
+name: Bug report
+description: Something does not work the way it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did in Claude Code, what you expected Sidecar to show, and what it showed instead.
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      placeholder: "Stage animation, feed caption, replay, explanations, Decisions, Glossary, Settings, server startup"
+    validations:
+      required: true
+  - type: input
+    id: setup
+    attributes:
+      label: Setup
+      placeholder: "macOS 26, Node 24.2, Claude Code 2.1 in the terminal, Chrome 141"
+    validations:
+      required: true
+  - type: dropdown
+    id: explainer
+    attributes:
+      label: Explanations
+      options:
+        - Off
+        - Anthropic API key
+        - claude command
+        - Not sure
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: The relevant lines from ~/.developer-sidecar/logs/ and a screenshot help a lot. Remove anything personal, and never paste an API key or token.
