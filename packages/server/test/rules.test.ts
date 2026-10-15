@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { SceneSpecSchema, type Step } from '@sidecar/shared'
+import { render } from '@sidecar/ui-kit'
 import { RULE_IDS, detectVendor, translate } from '../src/rules'
 
 const step = (toolName: string, input: unknown, over: Partial<Step> = {}): Step =>
@@ -35,6 +36,7 @@ describe('translate', () => {
     expect(t.caption).toMatch(caption)
     expect(t.scene.caption).toBe(t.caption)
     expect(SceneSpecSchema.safeParse(t.scene).success).toBe(true)
+    expect(render(t.scene, 1e9)).toMatch(/^<svg[\s\S]*<\/svg>$/)
   })
 
   test('every rule id has at least one case above', () => {
