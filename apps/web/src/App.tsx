@@ -105,7 +105,7 @@ export function App() {
           Explanations paused: {explainer?.reason}
         </StatusStrip>
       ) : status === 'unavailable' ? (
-        <StatusStrip tag="OFF" action={{ label: '⚙', title: 'Open settings', onPress: () => setTab('settings') }}>
+        <StatusStrip tag="OFF" action={{ label: '→', title: 'Open settings', onPress: () => setTab('settings') }}>
           Explanations are not available{explainer?.reason ? `: ${explainer.reason}` : '.'}
         </StatusStrip>
       ) : null}

@@ -15,6 +15,8 @@ Thanks for looking. Sidecar is small, but it sits inside other people's Claude C
 
 **No em dashes.** In code comments, commit messages, docs and UI strings. Use a comma, a period or a colon.
 
+**No emoji.** Not in the interface, captions, toasts or messages. The drafting language uses text marks only (✓ ✕ ● ◢ ▲ ◆). A test fails if an emoji appears in any source under `apps/web/src`, `packages/*/src` or `plugin/src`.
+
 **Never block Claude.** The hook scripts in `plugin/src/` must always exit 0, finish within a few hundred milliseconds, and never wait on the server, the explainer, or the network for longer than their timeout. If a change makes a hook slower or able to fail, it is a bug.
 
 **The mod reads, it never writes.** `plugin/src/mod/` draws from the local server and never emits events; capture belongs to the classic hooks. Code there runs with no Node and no DOM, and every helper that takes `$` must be a top-level function, or the engine refuses the module.
