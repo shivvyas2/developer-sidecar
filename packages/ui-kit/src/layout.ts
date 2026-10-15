@@ -28,7 +28,7 @@ export const ACTOR_HOME: Record<ActorId, Point> = {
 /** Where an actor stands to work on something at `target`, on the side it approaches from. */
 export function standPoint(target: Point, from: Point): Point {
   const side = from.x <= target.x ? -1 : 1
-  return { x: target.x + side * 46, y: LANE_Y }
+  return { x: target.x + side * 72, y: LANE_Y }
 }
 
 const BASE_H: Record<Exclude<PlaceId, 'app'>, number> = {
