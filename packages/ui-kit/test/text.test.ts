@@ -52,8 +52,8 @@ describe('renderText', () => {
   it('handles offline', () => {
     const ls = renderText({ ...model, offline: true }, 80)
     const t = plain(ls)
-    expect(t).toContain(' OFFLINE ')
-    expect(t).toContain(' retrying…')
+    expect(t).toContain(' SIDECAR OFFLINE ')
+    expect(t).toContain(' · retrying')
     expect(t).not.toContain('Added the Stripe')
     for (const l of ls) expect(lineWidth(l)).toBeLessThanOrEqual(80)
   })

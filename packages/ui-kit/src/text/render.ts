@@ -159,7 +159,7 @@ export function renderText(m: TextModel, columns: number, rows: number = DEFAULT
   const budget = Math.max(0, Math.trunc(rows) - FIXED_ROWS)
 
   if (m.offline) {
-    out.push([seg(' '), seg(' OFFLINE ', 'inverse'), seg(' retrying…', 'dim')])
+    out.push([seg(' '), seg(' SIDECAR OFFLINE ', 'inverse'), seg(' · retrying', 'dim')])
   } else if (m.steps.length === 0) {
     out.push([seg(' Waiting for Claude to do something…', 'dim')])
     return out.map((l) => trimTo(l, cols))
