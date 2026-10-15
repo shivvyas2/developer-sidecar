@@ -1,5 +1,5 @@
 import { SIDECAR_NAME } from '@sidecar/shared'
-import { readPort } from '@sidecar/shared/home'
+import { ownPort, readPort } from '@sidecar/shared/home'
 
 export interface StartDeps {
   home: string
@@ -11,7 +11,9 @@ export interface StartDeps {
 }
 
 export async function isSidecarUp(home: string, f: typeof fetch): Promise<number | null> {
-  const port = readPort(home)
+  // no port file: this home has no server yet, so never probe the default port
+  const port = ownPort(home)
+  if (port === null) return null
   try {
     const res = await f(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(300) })
     const body = (await res.json()) as { name?: string }

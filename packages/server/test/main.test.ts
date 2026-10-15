@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
 import { WebSocket } from 'ws'
-import type { ServerMessage } from '@sidecar/shared'
-import { startServer, type RunningServer } from '../src/main'
+import { SIDECAR_NAME, type ServerMessage } from '@sidecar/shared'
+import { sidecarAnswers, startServer, type RunningServer } from '../src/main'
 
 const running: RunningServer[] = []
 const blockers: Server[] = []
@@ -129,5 +129,15 @@ describe('single instance hardening', () => {
     const s = await start({ home: h, preferredPort: basePort(), lockWaitMs: 200 })
     expect(readFileSync(join(h, 'server.pid'), 'utf8')).toBe(String(process.pid))
     expect(s.port).toBeGreaterThan(0)
+  })
+  test('a home with no port file never answers for a sidecar on the default port', async () => {
+    const { DEFAULT_PORT, ensureHome } = await import('@sidecar/shared/home')
+    // make sure some sidecar answers on the default port: the dogfood one, or our own
+    const healthy = await fetch(`http://127.0.0.1:${DEFAULT_PORT}/health`, { signal: AbortSignal.timeout(300) })
+      .then(async (r) => ((await r.json()) as { name?: string }).name === SIDECAR_NAME).catch(() => false)
+    if (!healthy) await start({ home: home(), preferredPort: DEFAULT_PORT })
+    const h = home()
+    ensureHome(h)
+    expect(await sidecarAnswers(h)).toBe(false)
   })
 })

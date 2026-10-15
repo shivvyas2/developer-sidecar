@@ -38,9 +38,15 @@ export function writePort(home: string, port: number): void {
   writeFileSync(join(home, 'port'), String(port))
 }
 
+/** This home's own port, from its port file; null when there is no valid one. */
+export function ownPort(home: string): number | null {
+  const raw = readTrim(join(home, 'port'))
+  const n = Number(raw)
+  return raw && Number.isInteger(n) && n > 0 && n < 65536 ? n : null
+}
+
 export function readPort(home: string): number {
-  const n = Number(readTrim(join(home, 'port')))
-  return Number.isInteger(n) && n > 0 && n < 65536 ? n : DEFAULT_PORT
+  return ownPort(home) ?? DEFAULT_PORT
 }
 
 function isAlive(pid: number): boolean {

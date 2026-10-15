@@ -82,7 +82,7 @@ const RULES: Rule[] = [
     id: 'test',
     match: (c) => TEST.test(c.command),
     build: (c) => ({
-      caption: c.step.status === 'running' ? 'Checking that the code works' : c.failed ? 'Checking the code works — some checks failed' : 'Checking the code works — all good',
+      caption: c.step.status === 'running' ? 'Checking that the code works' : c.failed ? 'Checking the code works: some checks failed' : 'Checking the code works: all good',
       scene: (cap) => scenes.inspect(cap, c.failed),
     }),
   },

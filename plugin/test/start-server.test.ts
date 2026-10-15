@@ -25,10 +25,18 @@ describe('ensureServer', () => {
     const h = home()
     let calls = 0
     const f = (async () => { if (++calls < 3) throw new Error('down'); return Response.json({ ok: true, name: 'developer-sidecar' }) }) as unknown as typeof fetch
-    const spawnServer = vi.fn()
+    // the spawned server writes its port file once it listens
+    const spawnServer = vi.fn(() => writePort(h, 7381))
     expect(await ensureServer({ home: h, serverPath: 's.cjs', fetch: f, spawnServer, sleep: async () => {} }))
-      .toEqual({ ok: true, port: 7377, started: true })
+      .toEqual({ ok: true, port: 7381, started: true })
     expect(spawnServer).toHaveBeenCalledWith('s.cjs')
+  })
+  test('a home with no port file is never up, even if a sidecar answers on the default port', async () => {
+    const h = home()
+    const spawnServer = vi.fn()
+    const r = await ensureServer({ home: h, serverPath: 's.cjs', fetch: healthy, spawnServer, sleep: async () => {}, attempts: 2 })
+    expect(spawnServer).toHaveBeenCalledTimes(1)
+    expect(r).toMatchObject({ ok: false, started: true })
   })
   test('something else on the port → not ok', async () => {
     const other = (async () => Response.json({ hello: 'world' })) as unknown as typeof fetch

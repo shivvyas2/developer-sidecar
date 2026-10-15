@@ -60,6 +60,11 @@ describe('translate', () => {
     expect(() => translate(step('Edit', 'weird'))).not.toThrow()
   })
 
+  test('test captions use plain punctuation, no em dashes', () => {
+    expect(translate({ ...bash('npm test'), status: 'failed' }).caption).toBe('Checking the code works: some checks failed')
+    expect(translate(bash('npm test')).caption).toBe('Checking the code works: all good')
+  })
+
   test('failed tests get an error effect', () => {
     const t = translate({ ...bash('npm test'), status: 'failed' })
     expect(JSON.stringify(t.scene.beats)).toContain('"error"')

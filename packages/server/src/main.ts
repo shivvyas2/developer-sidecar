@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { createAdaptorServer } from '@hono/node-server'
 import { SIDECAR_NAME } from '@sidecar/shared'
 import {
-  DEFAULT_PORT, acquireLock, ensureHome, ensureToken, forceLock, logLine, readPort, releaseLock, writePort,
+  DEFAULT_PORT, acquireLock, ensureHome, ensureToken, forceLock, logLine, ownPort, releaseLock, writePort,
 } from '@sidecar/shared/home'
 import { createApp } from './app'
 import type { Provider } from './explainer/providers'
@@ -51,9 +51,16 @@ function listen(server: Server, port: number): Promise<boolean> {
   })
 }
 
-async function sidecarAnswers(home: string): Promise<boolean> {
+/**
+ * Whether this home's own server answers /health. A home with no port file has no
+ * server yet, so it never falls back to the default port: that could be another
+ * home's sidecar.
+ */
+export async function sidecarAnswers(home: string): Promise<boolean> {
+  const port = ownPort(home)
+  if (port === null) return false
   try {
-    const res = await fetch(`http://127.0.0.1:${readPort(home)}/health`, { signal: AbortSignal.timeout(300) })
+    const res = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(300) })
     return ((await res.json()) as { name?: string }).name === SIDECAR_NAME
   } catch {
     return false

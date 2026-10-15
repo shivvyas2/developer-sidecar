@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, test } from 'vitest'
 import {
-  DEFAULT_PORT, acquireLock, ensureHome, ensureToken, logLine, readPort, readToken,
+  DEFAULT_PORT, acquireLock, ensureHome, ensureToken, logLine, ownPort, readPort, readToken,
   forceLock, releaseLock, sidecarHome, writePort,
 } from '@sidecar/shared/home'
 
@@ -32,6 +32,13 @@ describe('home', () => {
     expect(readPort(home)).toBe(7380)
     writeFileSync(join(home, 'port'), 'garbage')
     expect(readPort(home)).toBe(DEFAULT_PORT)
+  })
+  test('ownPort is null without a valid port file, never the default', () => {
+    expect(ownPort(home)).toBeNull()
+    writePort(home, 7380)
+    expect(ownPort(home)).toBe(7380)
+    writeFileSync(join(home, 'port'), 'garbage')
+    expect(ownPort(home)).toBeNull()
   })
   test('lock: second acquire fails while holder alive', () => {
     expect(acquireLock(home, process.pid)).toBe(true)

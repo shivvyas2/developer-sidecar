@@ -32,7 +32,7 @@ async function main() {
   await runEmit({ stdin, env: process.env, home, now: Date.now(), id: randomUUID(), fetch })
   const message = result.ok
     ? `🛰️ Sidecar live at http://localhost:${result.port}`
-    : 'Sidecar could not start — see ~/.developer-sidecar/logs/server.log'
+    : 'Sidecar could not start, see ~/.developer-sidecar/logs/server.log'
   process.stdout.write(JSON.stringify({ systemMessage: message }))
 }
 

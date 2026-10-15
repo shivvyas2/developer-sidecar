@@ -76,7 +76,7 @@ describe('scrubEvent', () => {
   })
 })
 
-describe('scrubText — env-var and credential forms', () => {
+describe('scrubText: env-var and credential forms', () => {
   test.each([
     ['prefixed password', 'export DB_PASSWORD=hunter2hunter2', 'hunter2hunter2'],
     ['quoted api key', 'export ANTHROPIC_API_KEY="abcdef123456789"', 'abcdef123456789'],
@@ -96,7 +96,7 @@ describe('scrubText — env-var and credential forms', () => {
   })
 })
 
-describe('scrubEvent — prompt size', () => {
+describe('scrubEvent: prompt size', () => {
   test('very long prompts are truncated, not dropped', () => {
     const e = scrubEvent({ id: 'e', sessionId: 's', ts: 1, cwd: '/', kind: 'prompt', prompt: 'p'.repeat(300 * 1024) })
     expect(e.prompt!.length).toBeLessThanOrEqual(4200)

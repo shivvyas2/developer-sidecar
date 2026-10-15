@@ -49,4 +49,4 @@ for (let i = 0; i < rounds; i++) {
     await new Promise((r) => setTimeout(r, 200))
   }
 }
-console.log(`concurrent smoke OK — ${rounds} rounds, one server each`)
+console.log(`concurrent smoke OK: ${rounds} rounds, one server each`)

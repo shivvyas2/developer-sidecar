@@ -43,7 +43,7 @@ try {
   })
   assert.ok(Date.now() - t0 < 2000, 'emit should return fast with no server')
 
-  console.log(`smoke OK — ${steps.length} steps, port ${port}`)
+  console.log(`smoke OK: ${steps.length} steps, port ${port}`)
 } finally {
   if (pid) {
     try { process.kill(pid, 'SIGTERM') } catch {}
