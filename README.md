@@ -1,6 +1,6 @@
 <h1 align="center">Developer Sidecar</h1>
 
-<p align="center">A Claude Code plugin that shows what Claude is doing as live cartoon scenes and plain-English explanations, so people who build with AI can understand what is being built and why.</p>
+<p align="center">A Claude Code plugin that shows what Claude is doing as live technical-drawing scenes and plain-English explanations, so people who build with AI can understand what is being built and why.</p>
 
 <p align="center"><a href="#quick-start">Quick start</a> · <a href="#how-it-works">How it works</a> · <a href="CONTRIBUTING.md">Contribute</a> · <a href="SECURITY.md">Security</a></p>
 
@@ -14,14 +14,14 @@
 
 People who "vibecode" with Claude Code often have no idea what is happening while Claude works. Commands, file edits, API connections and MCP setup scroll past as jargon, and apps get shipped that nobody involved really understands.
 
-Developer Sidecar sits next to your Claude Code session and narrates it. Every step Claude takes becomes a short cartoon scene on a little "town" that grows as your app grows, a caption in plain words, and, once the step finishes, an explanation of what happened and why it matters for a real app. Architecture choices are collected as decisions, and the technical terms Claude uses are collected into a glossary.
+Developer Sidecar sits next to your Claude Code session and narrates it. Every step Claude takes becomes a short scene drawn like a drafting instrument, on a little "town" of isometric blocks that grows as your app grows, a caption in plain words, and, once the step finishes, an explanation of what happened and why it matters for a real app. Architecture choices are collected as decisions, and the technical terms Claude uses are collected into a glossary.
 
 Everything runs on your machine. The only thing that ever leaves it is the optional explanation call to Anthropic, with secrets scrubbed out first, and you can turn that off.
 
 ## Features
 
 - **Live step feed.** Every prompt and tool call in your Claude Code session shows up as a step with a plain-English caption, a status, and a "Show technical" toggle with the raw command or output.
-- **Animated stage.** Each step plays as a cartoon scene: Claude walks to the toolbox to install a package, plugs a cable into an outside service, hammers a brick onto Your App, or launches a rocket to the cloud. Places appear the first time they are used, and Your App gains a floor for every few files created. Bursts of steps never put the stage more than a few scenes behind.
+- **Animated stage.** The design is a drafting instrument, in light and dark. Steps are a file drawer of index cards with numbered tabs, Your App and its services are isometric app blocks, and progress, tokens and time are read off instrument dials and a readout panel. Each step plays as a scene: a hand plugs a cable into an outside service, sets a brick onto Your App, or sends a package up to the cloud. Places appear the first time they are used, and Your App gains a floor for every few files created. Bursts of steps never put the stage more than a few scenes behind.
 - **Replay.** Scrub through any recorded session and watch it play back.
 - **Plain-English explanations.** Each finished step gets one or two everyday sentences, a "why it matters" line about production impact, and a glossary term.
 - **Decisions.** When Claude picks a library, service, database or approach, the choice, the alternatives and the reason are recorded in the Decisions tab.
@@ -48,7 +48,7 @@ Start working in Claude Code as usual. The first session prints the workstation 
 http://localhost:7377
 ```
 
-Open it in a browser and keep it beside your terminal. The gallery of every cartoon piece and scene is at `http://localhost:7377/#/kit`.
+Open it in a browser and keep it beside your terminal. The gallery of every token, primitive, component and scene, in light and dark side by side, is at `http://localhost:7377/#/kit`.
 
 > Installing from the Claude Code plugin marketplace (`/plugin marketplace add shivvyas2/developer-sidecar`) will work from the first tagged release, which ships the prebuilt bundle. Until then, build from source as above.
 
@@ -73,7 +73,7 @@ If neither is available, the feed, stage, replay and captions still work; only t
    ▼
  Sidecar server  127.0.0.1:7377   (Node, Hono, node:sqlite)
    ├─ pair tool start/end events into steps
-   ├─ rules engine → category, caption and cartoon scene   (instant, free)
+   ├─ rules engine → category, caption and scene   (instant, free)
    ├─ explainer → plain / why / concept / decision          (batched, async, optional)
    ├─ store: ~/.developer-sidecar/sidecar.db
    └─ WebSocket + REST, token and Origin checked
@@ -86,7 +86,7 @@ If neither is available, the feed, stage, replay and captions still work; only t
 - **Capture.** The plugin registers classic command hooks. Each one runs a small bundled script that reads the hook payload, scrubs secrets, trims large outputs, and posts it to the local server. It always exits successfully and never blocks Claude.
 - **Steps.** The server pairs each tool's start and end into one step, and marks steps that never finish as interrupted.
 - **Rules.** An ordered list of matchers turns each step into a category (read, create, edit, install, test, run, external service, MCP, git, data, deploy, helper, prompt), a caption, and a scene description. No model is involved, so captions and animations are instant and free.
-- **Cartoons.** The `@sidecar/ui-kit` package renders a scene description at any moment in time as an SVG string. It is pure and deterministic, so the same scene looks the same everywhere and is easy to test.
+- **Scenes.** The `@sidecar/ui-kit` package renders a scene description at any moment in time as an SVG string. It is pure and deterministic, so the same scene looks the same everywhere and is easy to test.
 - **Explanations.** Finished steps are queued per session and sent in batches (after 3 seconds of quiet or 8 steps), one request at a time. Answers are validated, clipped, stored, and pushed to the browser. Failures leave the captions in place, and repeated failures pause explanations with a banner that says why.
 
 ## Configuration
@@ -122,7 +122,7 @@ developer-sidecar/
 │   └── dist/                         Built bundles (generated, not committed)
 ├── packages/
 │   ├── shared/                       Event, step, scene and explanation types, zod schemas, secret scrubbing
-│   ├── ui-kit/                       Cartoon renderer: tokens, layout, timeline, pieces, render(), React <Scene>
+│   ├── ui-kit/                       Scene renderer: tokens, primitives, animators, timeline, render(), text renderer, React <Scene>
 │   └── server/                       Hono server: store, step pairing, rules, explainer, REST and WebSocket
 ├── apps/web/                         The React workstation (stage, feed, tabs, settings, #/kit gallery)
 └── scripts/                          Build and end-to-end smoke scripts

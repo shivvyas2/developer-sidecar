@@ -6,6 +6,17 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Drafting-instrument design.** The whole interface is redrawn as a technical
+  drawing: steps are index cards in a file drawer with numbered tabs, apps and
+  services are isometric blocks, and progress, tokens and time sit on
+  instrument dials and a readout panel. Light and dark themes follow the OS,
+  with a toggle to force either. The cartoon characters are gone, replaced by
+  a pointing hand and drawn tools. Decisions are spec cards, the glossary is a
+  card catalog and settings use rotary selectors. Scene descriptions, stored
+  sessions and the API are unchanged, so earlier sessions replay as before.
+
 ### Added
 
 - **Plain-English explanations.** Each finished step gets one or two everyday
@@ -20,12 +31,12 @@ All notable changes to Developer Sidecar are recorded here. The format follows
   token counter, and buttons to delete one session or all of them. Repeated
   failures pause explanations with a banner that says why and a "Try again"
   button. `SIDECAR_EXPLAINER=off` turns them off entirely.
-- **Animated stage.** Every step plays as a cartoon scene on a persistent
+- **Animated stage.** Every step plays as a scene on a persistent
   town: places appear the first time they are used, and Your App grows with
   the files created. Bursts of steps never leave the stage more than a few
   scenes behind, and reduced-motion settings show still frames.
 - **Replay.** Scrub through any recorded session and play it back.
-- **Cartoon kit gallery** at `#/kit`, previewing every piece and every scene.
+- **Kit gallery** at `#/kit`, previewing every token, primitive, component and scene in light and dark.
 - **Live step feed.** Claude Code hooks feed a local server that pairs tool
   calls into steps and captions them with fast, free rules. A browser
   workstation at `http://localhost:7377` shows them live, across several
