@@ -37,7 +37,9 @@
     "build": "node scripts/build.mjs",
     "smoke": "node scripts/smoke.mjs && node scripts/smoke-concurrent.mjs 3",
     "test:mod": "node scripts/test-mod.mjs",
-    "e2e": "playwright test -c apps/web/playwright.config.ts"
+    "e2e": "playwright test -c apps/web/playwright.config.ts",
+    "release:tree": "node scripts/release-tree.mjs",
+    "release:check": "pnpm build && node scripts/release-tree.mjs && claude plugin validate release-tree/plugin && claude plugin validate ."
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

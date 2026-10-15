@@ -57,7 +57,7 @@ http://localhost:7377
 
 Open it in a browser and keep it beside your terminal. The gallery of every token, primitive, component and scene, in light and dark side by side, is at `http://localhost:7377/#/kit`.
 
-> Installing from the Claude Code plugin marketplace (`/plugin marketplace add shivvyas2/developer-sidecar`) will work from the first tagged release, which ships the prebuilt bundle. Until then, build from source as above.
+> Once the first version is released, install with `/plugin marketplace add shivvyas2/developer-sidecar` and `/plugin install developer-sidecar@developer-sidecar` (on Claude Code 2.1.275 or later, `/plugin install developer-sidecar --marketplace shivvyas2/developer-sidecar` does both). Until then, build from source as above.
 
 ### Explanations
 
@@ -141,11 +141,14 @@ developer-sidecar/
 
 ```bash
 pnpm install
+pnpm lint           # ESLint
 pnpm typecheck      # TypeScript, strict
 pnpm test           # Vitest: shared, ui-kit, server, plugin and web
 pnpm build          # Bundles the plugin scripts, the server and the web app into plugin/dist
 pnpm smoke          # Starts a real server, replays a recorded session, checks the result
 pnpm test:mod       # Runs the mod's engine tests with the claude CLI (after pnpm build)
+pnpm e2e            # Playwright: replays a recorded session in Chromium (after pnpm build)
+pnpm release:check  # Builds the release folder and validates it with the claude CLI
 ```
 
 Run Claude Code against your working copy with `claude --plugin-dir ./plugin` after `pnpm build`. Tests and the smoke scripts never call a real model.

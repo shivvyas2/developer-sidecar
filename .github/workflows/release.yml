@@ -1,0 +1,54 @@
+name: Release
+on:
+  push:
+    tags: ['v*.*.*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Tag matches plugin.json
+        run: |
+          v=$(node -p "require('./plugin/.claude-plugin/plugin.json').version")
+          if [ "v$v" != "$GITHUB_REF_NAME" ]; then echo "Tag $GITHUB_REF_NAME does not match plugin.json version $v"; exit 1; fi
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - run: pnpm smoke
+      - run: node scripts/release-tree.mjs
+      - name: Commit the built plugin to the release branch
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          git config user.name "$(git log -1 --format=%an "$TAG")"
+          git config user.email "$(git log -1 --format=%ae "$TAG")"
+          if git ls-remote --exit-code --heads origin release > /dev/null; then
+            git fetch origin release
+            git worktree add -B release ../release origin/release
+          else
+            git worktree add --detach ../release
+            git -C ../release checkout --orphan release
+          fi
+          find ../release -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -R release-tree/. ../release/
+          git -C ../release add -A
+          git -C ../release commit -m "release $TAG"
+          git -C ../release push origin release
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          node scripts/release-tree.mjs notes "${TAG#v}" > notes.md
+          gh release create "$TAG" --title "$TAG" --notes-file notes.md

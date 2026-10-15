@@ -6,6 +6,7 @@ dist/
 .env.*
 coverage/
 .mod-test/
+release-tree/
 playwright-report/
 test-results/
 

@@ -34,11 +34,13 @@ Thanks for looking. Sidecar is small, but it sits inside other people's Claude C
 Run these before you push. They are what CI runs.
 
 ```sh
+pnpm lint          # ESLint
 pnpm typecheck     # TypeScript, strict
 pnpm test          # Vitest
 pnpm build         # Bundles plugin/dist
 pnpm smoke         # Real server, recorded session, end to end
 pnpm test:mod      # Mod engine tests (needs the claude CLI; run after pnpm build)
+pnpm e2e           # Browser tests in Chromium (run after pnpm build)
 ```
 
 CI does not have the `claude` CLI, so `pnpm test:mod` runs locally. Run it before any pull request that touches `plugin/src/mod/`.
@@ -54,6 +56,16 @@ The scene renderer and the text renderer have snapshot tests. If you change how 
 3. Give its scene id an animator in `ANIMATORS` in `packages/ui-kit/src/scene/animators.ts`, built from the primitives in `packages/ui-kit/src/primitives/` and the sheet slots in `scene/layout.ts`. The scene test fails until every sample id has one.
 4. Use it from a rule in `packages/server/src/rules/index.ts` and add a case to `packages/server/test/rules.test.ts`.
 5. Record its snapshots and check it, bare and framed, in light and dark, at `http://localhost:7377/#/kit`.
+
+## Releasing
+
+1. Move the `Unreleased` notes in `CHANGELOG.md` under a new `## [X.Y.Z] - YYYY-MM-DD` heading.
+2. Set `version` in `plugin/.claude-plugin/plugin.json` to `X.Y.Z`.
+3. Run `pnpm release:check`.
+4. Commit `chore: release vX.Y.Z` on `main`.
+5. Tag `vX.Y.Z` and push the tag. CI builds the plugin, commits it to the `release` branch and opens a GitHub Release with the changelog notes.
+
+The `release` branch is written only by CI; never commit to it by hand.
 
 ## Pull requests
 

@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "developer-sidecar",
-      "source": "./plugin",
+      "source": { "source": "git-subdir", "url": "shivvyas2/developer-sidecar", "path": "plugin", "ref": "release" },
       "description": "See what Claude Code is doing as live technical-drawing scenes and plain-English explanations."
     }
   ]

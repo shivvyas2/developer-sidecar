@@ -8,6 +8,9 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 
 ### Changed
 
+- **Lighter polling.** Sidecar inside Claude Code only downloads steps when
+  they change, slows down while the server is away, and keeps working when
+  only the explanation service fails.
 - **Drafting-instrument design.** The whole interface is redrawn as a technical
   drawing: steps are index cards in a file drawer with numbered tabs, apps and
   services are isometric blocks, and progress, tokens and time sit on
@@ -19,6 +22,9 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 
 ### Added
 
+- **Marketplace install.** Tagged releases publish a ready-built plugin to the
+  `release` branch, which the marketplace entry installs. Browser tests and
+  linting run in CI.
 - **Sidecar inside Claude Code.** A status line with the current step, a
   band above the prompt with the latest plain explanation, toasts for test
   results, new connections and deploys, and a `/sidecar` pane drawn in the
