@@ -21,3 +21,9 @@ export const selectedId = (s: Selection, latestId: string | null): string | null
 
 /** A step's position in its session, 1-based and zero-padded to three digits: 0 -> "001". */
 export const stepNumber = (index: number): string => String(index + 1).padStart(3, '0')
+
+/** Initial tab from a `?tab=` query (used for screenshots and deep links); `fallback` when absent or unknown. */
+export function tabFromSearch<T extends string>(search: string, valid: readonly T[], fallback: T): T {
+  const t = new URLSearchParams(search).get('tab')
+  return valid.find((v) => v === t) ?? fallback
+}

@@ -1,15 +1,21 @@
 import { useEffect, useState } from 'react'
 import type { ExplainLevel, ExplainerState, SessionSummary } from '@sidecar/shared'
 import { deleteAllSessions, deleteSession, fetchSettings, saveSettings } from './api'
+import { ReadoutPanel, RotarySelect, type RotaryOption } from './ds'
 import { formatTokens } from './format'
 
-const STATUS_TEXT: Record<ExplainerState['status'], string> = { ready: 'On', paused: 'Paused', off: 'Off', unavailable: 'Not available' }
+const STATUS_TEXT: Record<ExplainerState['status'], string> = { ready: 'ON', paused: 'PAUSED', off: 'OFF', unavailable: 'N/A' }
 
-const LEVELS: Array<[ExplainLevel, string, string]> = [
-  ['off', 'Off', 'No explanations. Nothing leaves your computer.'],
-  ['haiku', 'Quick (Haiku)', 'Fast, low-cost explanations. Recommended.'],
-  ['sonnet', 'Detailed (Sonnet)', 'Richer explanations, higher cost.'],
+const OPTIONS: RotaryOption<ExplainLevel>[] = [
+  { value: 'off', label: 'OFF' },
+  { value: 'haiku', label: 'QUICK' },
+  { value: 'sonnet', label: 'DETAILED' },
 ]
+const HINTS: Record<ExplainLevel, string> = {
+  off: 'Off: no explanations. Nothing leaves your computer.',
+  haiku: 'Quick (Haiku): fast, low-cost explanations. Recommended.',
+  sonnet: 'Detailed (Sonnet): richer explanations, higher cost.',
+}
 
 export function SettingsView({ explainer, selected, onChanged }: {
   explainer: ExplainerState | null
@@ -38,31 +44,35 @@ export function SettingsView({ explainer, selected, onChanged }: {
     deleteAllSessions().catch(() => setError('Could not delete sessions.'))
   }
 
+  const provider = explainer?.provider ? (explainer.provider === 'api' ? 'API' : 'CLI') : '--'
   return (
     <section className="settings">
-      <h2>Plain-English explanations</h2>
-      <fieldset className="settings__levels" disabled={level === null}>
-        <legend className="sr-only">Explanation level</legend>
-        {LEVELS.map(([id, name, hint]) => (
-          <label key={id} className="settings__level">
-            <input type="radio" name="level" value={id} checked={level === id} onChange={() => choose(id)} />
-            <span><strong>{name}</strong><br /><small>{hint}</small></span>
-          </label>
-        ))}
-      </fieldset>
-      {explainer && (
-        <p className="settings__status">
-          Status: <strong>{STATUS_TEXT[explainer.status]}</strong>
-          {explainer.provider && <> via {explainer.provider === 'api' ? 'the Anthropic API' : 'Claude Code'}</>}
-          {explainer.reason && <> — {explainer.reason}</>}
-          <br />Tokens used so far: {formatTokens(explainer.tokens.input)} in, {formatTokens(explainer.tokens.output)} out.
-        </p>
-      )}
+      <h2 className="settings__h">Plain-English explanations</h2>
+      <div className="settings__grid">
+        <div className={level === null ? 'settings__dial settings__dial--wait' : 'settings__dial'}>
+          <RotarySelect label="Explanation level" value={level ?? 'off'} options={OPTIONS} onChange={(v) => { if (level !== null) choose(v) }} />
+          <p className="settings__hint">{level ? HINTS[level] : 'Loading...'}</p>
+        </div>
+        {explainer && (
+          <div>
+            <ReadoutPanel
+              label="Explainer status"
+              fields={[
+                { label: 'STATUS', value: STATUS_TEXT[explainer.status] },
+                { label: 'VIA', value: provider },
+                { label: 'IN', value: formatTokens(explainer.tokens.input) },
+                { label: 'OUT', value: formatTokens(explainer.tokens.output) },
+              ]}
+              {...(explainer.reason ? { note: explainer.reason } : {})}
+            />
+          </div>
+        )}
+      </div>
       <p className="settings__privacy">Explanations send step details, with known secret patterns and .env values removed, to Anthropic directly or through your Claude Code login. Everything else stays on this computer.</p>
-      <h2>Data</h2>
+      <h2 className="settings__h">Data</h2>
       <div className="settings__danger">
-        <button onClick={removeSession} disabled={!selected}>Delete this session</button>
-        <button onClick={removeAll}>Delete all sessions</button>
+        <button type="button" className="settings__btn" onClick={removeSession} disabled={!selected}>Delete this session</button>
+        <button type="button" className="settings__btn" onClick={removeAll}>Delete all sessions</button>
       </div>
       {error && <p className="settings__error" role="alert">{error}</p>}
     </section>

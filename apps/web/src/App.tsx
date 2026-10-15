@@ -6,6 +6,7 @@ import { formatTokens } from './format'
 import { GlossaryView } from './GlossaryView'
 import { Kit } from './Kit'
 import { SettingsView } from './SettingsView'
+import { tabFromSearch } from './selection'
 import { StageTab } from './StageView'
 import { applyTheme, initialTheme, safeStorage, writeTheme, type ThemePref } from './theme'
 import { useFeed } from './useFeed'
@@ -46,7 +47,10 @@ const projectName = (cwd: string, id: string) => cwd.split('/').filter(Boolean).
 export function App() {
   const hash = useHash()
   const { state, dispatch, connection } = useFeed()
-  const [tab, setTab] = useState<Tab>('stage')
+  const [tab, setTabRaw] = useState<Tab>(() => tabFromSearch(location.search, TABS.map((t) => t.id as Tab), 'stage'))
+  const [pickRequest, setPickRequest] = useState<string | null>(null)
+  const setTab = (t: Tab) => { setPickRequest(null); setTabRaw(t) }
+  const pickStep = (id: string) => { setPickRequest(id); setTabRaw('stage') }
   const [theme, setTheme] = useTheme()
   if (hash === '#/kit') return <Kit />
   const sid = state.selected
@@ -114,11 +118,12 @@ export function App() {
             explanations={state.explanations}
             explainer={explainer}
             readySince={state.readySince}
+            pickRequest={pickRequest}
             {...(project ? { project } : {})}
           />
         )}
-        {tab === 'decisions' && <div className="panel__narrow"><DecisionsView decisions={sid ? state.decisions[sid] ?? [] : []} status={status} /></div>}
-        {tab === 'glossary' && <div className="panel__narrow"><GlossaryView entries={sid ? state.glossary[sid] ?? [] : []} status={status} /></div>}
+        {tab === 'decisions' && <div className="panel__narrow"><DecisionsView decisions={sid ? state.decisions[sid] ?? [] : []} status={status} stepIds={steps.map((x) => x.id)} onPick={pickStep} /></div>}
+        {tab === 'glossary' && <div className="panel__narrow"><GlossaryView entries={sid ? state.glossary[sid] ?? [] : []} status={status} {...(project ? { project } : {})} /></div>}
         {tab === 'settings' && <div className="panel__narrow"><SettingsView explainer={explainer} selected={selectedSession} onChanged={(s) => dispatch({ type: 'explainer', state: s })} /></div>}
         {tab === 'whiteboard' && <p className="empty">{WHITEBOARD}</p>}
       </main>

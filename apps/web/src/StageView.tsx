@@ -19,10 +19,12 @@ export interface StageTabProps {
   explainer: ExplainerState | null
   readySince: number
   project?: string
+  /** Select this step on arrival (from a Decisions link). */
+  pickRequest?: string | null
 }
 
 /** Layout B: the step drawer on the left; the framed stage, replay ruler and pulled-out card on the right. */
-export function StageTab({ sessionId, loaded, steps, explanations, explainer, readySince, project }: StageTabProps) {
+export function StageTab({ sessionId, loaded, steps, explanations, explainer, readySince, project, pickRequest }: StageTabProps) {
   const [stage, dispatch] = useReducer(stageReducer, initialStage)
   const [selection, select] = useReducer(selectionReducer, initialSelection)
   const [replay, setReplay] = useState<Replay | null>(null)
@@ -33,6 +35,8 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
   // eslint-disable-next-line react-hooks/exhaustive-deps -- ids are read on purpose but must not retrigger a reset
   useEffect(() => { dispatch({ type: 'reset', ids }); setReplay(null); select({ type: 'reset' }) }, [sessionId, loaded])
   useEffect(() => { dispatch({ type: 'sync', ids }) }, [ids])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new request should pick
+  useEffect(() => { if (pickRequest && ids.includes(pickRequest)) select({ type: 'pick', id: pickRequest, latestId }) }, [pickRequest])
 
   const picked = selectedId(selection, latestId)
   const pickedIndex = picked ? ids.indexOf(picked) : -1

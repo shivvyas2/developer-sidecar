@@ -1,4 +1,7 @@
+import { useMemo, useState } from 'react'
 import type { ExplainerState, GlossaryEntry } from '@sidecar/shared'
+import { groupCatalog } from './catalog'
+import { CardCatalog } from './ds'
 
 const EMPTY: Record<ExplainerState['status'], string> = {
   ready: 'Terms Claude uses will be explained here, one line each.',
@@ -7,16 +10,15 @@ const EMPTY: Record<ExplainerState['status'], string> = {
   unavailable: 'The glossary is built from plain-English explanations, which need an Anthropic API key or the claude command.',
 }
 
-export function GlossaryView({ entries, status }: { entries: GlossaryEntry[]; status: ExplainerState['status'] | null }) {
-  if (entries.length === 0) return <p className="empty">{EMPTY[status ?? 'ready']}</p>
-  return (
-    <dl className="glossary">
-      {entries.map((e) => (
-        <div key={e.term.toLowerCase()} className="glossary__item">
-          <dt>{e.term}</dt>
-          <dd>{e.definition}</dd>
-        </div>
-      ))}
-    </dl>
+export function GlossaryView({ entries, status, project }: { entries: GlossaryEntry[]; status: ExplainerState['status'] | null; project?: string }) {
+  const [open, setOpen] = useState<string | null>(null)
+  const groups = useMemo(
+    () => groupCatalog(entries).map((g) => ({
+      letter: g.letter,
+      terms: g.entries.map((e) => ({ id: e.term.toLowerCase(), term: e.term, body: e.definition })),
+    })),
+    [entries],
   )
+  if (entries.length === 0) return <p className="empty">{EMPTY[status ?? 'ready']}</p>
+  return <CardCatalog groups={groups} open={open} onOpen={setOpen} label={project ? `${project}'s terms` : 'Terms'} />
 }

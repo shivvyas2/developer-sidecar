@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { initialSelection, selectedId, selectionReducer, stepNumber, type Selection } from '../src/selection'
+import { initialSelection, selectedId, selectionReducer, stepNumber, tabFromSearch, type Selection } from '../src/selection'
 
 describe('selection', () => {
   test('follows the latest step by default', () => {
@@ -45,5 +45,14 @@ describe('selection', () => {
     }
     expect(s.follow).toBe(true)
     expect(selectedId(s, 's499')).toBe('s499')
+  })
+})
+
+describe('tabFromSearch', () => {
+  const valid = ['stage', 'decisions']
+  test('reads ?tab= when valid, else falls back', () => {
+    expect(tabFromSearch('?tab=decisions', valid, 'stage')).toBe('decisions')
+    expect(tabFromSearch('?tab=nope', valid, 'stage')).toBe('stage')
+    expect(tabFromSearch('', valid, 'stage')).toBe('stage')
   })
 })
