@@ -19,11 +19,18 @@ export const color = (k: ColorToken): string => `var(--sk-${k}, ${palette.light[
 const vars = (mode: 'light' | 'dark') =>
   Object.entries(palette[mode]).map(([k, v]) => `--sk-${k}: ${v};`).join(' ')
 
+/** Block sides: 88% / 95% brightness in light, deeper (75% / 88%) in dark. */
+const faces = (scope: string) =>
+  `${scope} .sk-face-l{filter:brightness(.75)} ${scope} .sk-face-r{filter:brightness(.88)}`
+
 /** Auto follows the OS; <html data-theme="light|dark"> forces one. */
 export const themeCss = (): string =>
   `:root { ${vars('light')} } `
   + `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ${vars('dark')} } } `
-  + `:root[data-theme="dark"] { ${vars('dark')} }`
+  + `:root[data-theme="dark"] { ${vars('dark')} } `
+  + `.sk-face-l{filter:brightness(.88)} .sk-face-r{filter:brightness(.95)} `
+  + `@media (prefers-color-scheme: dark) { ${faces(':root:not([data-theme="light"])')} } `
+  + faces(':root[data-theme="dark"]')
 
 export const FONTS = {
   mono: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace",

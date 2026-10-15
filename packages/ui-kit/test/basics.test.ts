@@ -66,6 +66,15 @@ describe('tokens', () => {
     expect(css).toContain(':root[data-theme="dark"]')
     for (const k of Object.keys(palette.light)) expect(css).toContain(`--sk-${k}:`)
   })
+  test('themeCss: block side shading, deeper in dark', () => {
+    const css = themeCss()
+    expect(css).toContain('.sk-face-l{filter:brightness(.88)}')
+    expect(css).toContain('.sk-face-r{filter:brightness(.95)}')
+    expect(css).toContain(':root:not([data-theme="light"]) .sk-face-l{filter:brightness(.75)}')
+    expect(css).toContain(':root:not([data-theme="light"]) .sk-face-r{filter:brightness(.88)}')
+    expect(css).toContain(':root[data-theme="dark"] .sk-face-l{filter:brightness(.75)}')
+    expect(css).toContain(':root[data-theme="dark"] .sk-face-r{filter:brightness(.88)}')
+  })
   test('every action has a positive duration', () => {
     for (const ms of Object.values(BEAT_MS)) expect(ms).toBeGreaterThan(0)
   })
