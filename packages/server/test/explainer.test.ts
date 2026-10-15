@@ -1,0 +1,169 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import type { FeedStep, ServerMessage } from '@sidecar/shared'
+import { createExplainer, MAX_BATCH, QUIET_MS, UNAVAILABLE_REASON } from '../src/explainer/service'
+import { ExplainError, type Provider } from '../src/explainer/providers'
+import { Hub } from '../src/hub'
+import { memorySettings } from '../src/settings'
+import { openStore } from '../src/store'
+
+const step = (id: string, over: Partial<FeedStep> = {}): FeedStep => ({
+  id, sessionId: 's1', toolName: 'Bash', input: { command: `cmd ${id}` }, startedAt: 1, endedAt: 2, status: 'ok', seq: 1,
+  category: 'install', caption: id, techLabel: 'npm i', scene: { scene: 'thinking', cast: [], beats: [], caption: id }, ...over,
+})
+
+function fakeProvider(behaviour: (ids: string[]) => Promise<unknown> | unknown = (ids) => ({ items: ids.map((stepId) => ({
+  stepId, plain: `did ${stepId}`, why: 'matters', concept: { term: 'Package', definition: 'reused code' },
+  decision: stepId === 'd' ? { title: 'Payments', choice: 'Stripe', alternatives: ['Paddle'], reason: 'common' } : null,
+})) })) {
+  const calls: string[][] = []
+  const provider: Provider = {
+    id: 'api',
+    async explain(req) {
+      const ids = [...req.user.matchAll(/"stepId":"([^"]+)"/g)].map((m) => m[1]!)
+      calls.push(ids)
+      const out = await behaviour(ids)
+      return { output: out as never, usage: { input: 10, output: 5 } }
+    },
+  }
+  return { provider, calls }
+}
+
+function setup(provider: Provider | null, level: 'off' | 'haiku' | 'sonnet' = 'haiku') {
+  const hub = new Hub()
+  const store = openStore(':memory:')
+  store.touchSession('s1', '/work/shop', 1)
+  const settings = memorySettings({ explanations: level })
+  const got: ServerMessage[] = []
+  hub.subscribe((m) => got.push(m))
+  const ex = createExplainer({ hub, store, settings, provider, retryDelayMs: 10 })
+  const send = (s: FeedStep) => { store.saveStep(s); hub.publish({ type: 'step', step: s }) }
+  return { hub, store, settings, got, ex, send }
+}
+
+beforeEach(() => vi.useFakeTimers())
+afterEach(() => vi.useRealTimers())
+
+describe('explainer', () => {
+  test('waits for quiet, explains in one batch, stores and publishes explanation/decision/concept/state', async () => {
+    const { provider, calls } = fakeProvider()
+    const { got, ex, send, store } = setup(provider)
+    send(step('a')); send(step('d'))
+    await vi.advanceTimersByTimeAsync(QUIET_MS - 1)
+    expect(calls).toEqual([])
+    await vi.advanceTimersByTimeAsync(1)
+    await ex.idle()
+    expect(calls).toEqual([['a', 'd']])
+    expect(store.stepsForSession('s1').map((s) => s.explanation && 'plain' in s.explanation ? s.explanation.plain : null)).toEqual(['did a', 'did d'])
+    expect(got.filter((m) => m.type === 'explanation')).toHaveLength(2)
+    expect(got.filter((m) => m.type === 'decision').map((m) => m.type === 'decision' && m.decision.id)).toEqual(['d:decision'])
+    expect(got.filter((m) => m.type === 'concept')).toHaveLength(1) // same term twice → published once
+    expect(ex.state()).toMatchObject({ status: 'ready', provider: 'api', tokens: { input: 10, output: 5 } })
+  })
+
+  test('skips running, interrupted, prompt and already explained steps', async () => {
+    const { provider, calls } = fakeProvider()
+    const { ex, send, store } = setup(provider)
+    store.saveExplanation('s1', 'done', { unavailable: 'x' }, 1)
+    send(step('r', { status: 'running' })); send(step('i', { status: 'interrupted' }))
+    send(step('p', { category: 'prompt' })); send(step('done'))
+    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    await ex.idle()
+    expect(calls).toEqual([])
+  })
+
+  test('a 20-step burst becomes batches of at most MAX_BATCH, one request at a time (Review Focus 5)', async () => {
+    let inFlight = 0
+    let maxInFlight = 0
+    const { provider, calls } = fakeProvider(async (ids) => {
+      inFlight++; maxInFlight = Math.max(maxInFlight, inFlight)
+      await new Promise((r) => setTimeout(r, 50))
+      inFlight--
+      return { items: ids.map((stepId) => ({ stepId, plain: 'p', why: 'w', concept: null, decision: null })) }
+    })
+    const { ex, send } = setup(provider)
+    for (let i = 0; i < 20; i++) send(step(`s${i}`))
+    await vi.advanceTimersByTimeAsync(QUIET_MS + 500)
+    await ex.idle()
+    expect(calls.map((c) => c.length)).toEqual([MAX_BATCH, MAX_BATCH, 4])
+    expect(maxInFlight).toBe(1)
+  })
+
+  test('retries once, then marks the batch unavailable; pauses after 3 failed batches (Review Focus 3)', async () => {
+    const { provider, calls } = fakeProvider(() => { throw new ExplainError('Anthropic rate limit reached.', true) })
+    const { got, ex, send, store } = setup(provider)
+    for (const id of ['a', 'b', 'c']) {
+      send(step(id))
+      await vi.advanceTimersByTimeAsync(QUIET_MS + 20)
+      await ex.idle()
+    }
+    expect(calls).toHaveLength(6) // each batch tried twice
+    expect(store.stepsForSession('s1')[0]!.explanation).toEqual({ unavailable: 'Anthropic rate limit reached.' })
+    expect(ex.state()).toMatchObject({ status: 'paused', reason: 'Anthropic rate limit reached.' })
+    send(step('later'))
+    await vi.advanceTimersByTimeAsync(QUIET_MS + 20)
+    await ex.idle()
+    expect(calls).toHaveLength(6) // paused: no more calls
+    expect(got.some((m) => m.type === 'explainer' && m.state.status === 'paused')).toBe(true)
+  })
+
+  test('a non-retryable error pauses at once without retry', async () => {
+    const { provider, calls } = fakeProvider(() => { throw new ExplainError('The Anthropic API key was rejected.', false) })
+    const { ex, send } = setup(provider)
+    send(step('a'))
+    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    await ex.idle()
+    expect(calls).toHaveLength(1)
+    expect(ex.state()).toMatchObject({ status: 'paused', reason: 'The Anthropic API key was rejected.' })
+  })
+
+  test('settingsChanged clears a pause; switching to off drops queued steps (Review Focus 5)', async () => {
+    const { provider, calls } = fakeProvider()
+    const { ex, send, settings } = setup(provider)
+    send(step('a'))
+    settings.set({ explanations: 'off' })
+    ex.settingsChanged()
+    await vi.advanceTimersByTimeAsync(QUIET_MS * 2)
+    await ex.idle()
+    expect(calls).toEqual([])
+    expect(ex.state().status).toBe('off')
+    send(step('b'))
+    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    expect(calls).toEqual([])
+  })
+
+  test('deleting a session drops its queue', async () => {
+    const { provider, calls } = fakeProvider()
+    const { ex, send, hub } = setup(provider)
+    send(step('a'))
+    hub.publish({ type: 'session_deleted', id: 's1' })
+    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    await ex.idle()
+    expect(calls).toEqual([])
+  })
+
+  test('steps the model skipped are marked unavailable', async () => {
+    const { provider } = fakeProvider(() => ({ items: [] }))
+    const { ex, send, store } = setup(provider)
+    send(step('a'))
+    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    await ex.idle()
+    expect(store.stepsForSession('s1')[0]!.explanation).toEqual({ unavailable: 'No explanation was returned for this step.' })
+  })
+
+  test('no provider → unavailable state with a helpful reason; level off → off', () => {
+    expect(setup(null).ex.state()).toMatchObject({ status: 'unavailable', provider: null, reason: UNAVAILABLE_REASON })
+    expect(setup(fakeProvider().provider, 'off').ex.state()).toMatchObject({ status: 'off', level: 'off' })
+  })
+
+  test('sends the project name and the latest prompt as context', async () => {
+    let user = ''
+    const provider: Provider = { id: 'api', async explain(req) { user = req.user; return { output: { items: [] }, usage: { input: 0, output: 0 } } } }
+    const { ex, send, store } = setup(provider)
+    store.saveStep(step('p', { category: 'prompt', toolName: 'UserPrompt', input: { prompt: 'add checkout' } }))
+    send(step('a'))
+    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    await ex.idle()
+    expect(user).toContain('shop')
+    expect(user).toContain('add checkout')
+  })
+})
