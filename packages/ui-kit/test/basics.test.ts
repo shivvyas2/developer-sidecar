@@ -50,11 +50,14 @@ describe('tokens', () => {
   test('light and dark palettes have the same tokens', () => {
     expect(Object.keys(palette.dark).sort()).toEqual(Object.keys(palette.light).sort())
     expect(Object.keys(palette.light).sort()).toEqual(
-      ['accent','blockApp','blockAuth','blockData','blockOk','blockService','card','grid','ink','ink2','label','paper'].sort())
+      ['accent','blockApp','blockAuth','blockData','blockOk','blockService','card','grid','ink','ink2','label','onLabel','paper'].sort())
   })
   test('spec values', () => {
     expect(palette.light.paper).toBe('#EDECE8'); expect(palette.dark.paper).toBe('#141414')
     expect(palette.light.accent).toBe('#FF4A1C'); expect(palette.dark.accent).toBe('#FF4A1C')
+    expect(palette.light.ink2).toBe('#5F5F5F')
+    // text on the yellow label pill: ink in light, paper in dark
+    expect(palette.light.onLabel).toBe(palette.light.ink); expect(palette.dark.onLabel).toBe(palette.dark.paper)
   })
   test('color is a CSS variable with the light fallback', () => {
     expect(color('ink')).toBe(`var(--sk-ink, ${palette.light.ink})`)

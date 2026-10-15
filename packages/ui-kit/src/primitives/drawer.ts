@@ -20,7 +20,7 @@ const nameBudget = (tabW: number, num: string) => Math.floor((tabW - 16) / CHAR)
 /**
  * A card-catalog drawer seen from above the front: up to 8 staggered card edges with
  * numbered trapezoid tabs in 3 columns (black tabs for groups), then the drawer front
- * with a yellow label pill. `at` is the top-left of the back card's tab row.
+ * with a yellow label pill (its text in onLabel, so it reads in both themes). `at` is the top-left of the back card's tab row.
  * The card whose num is `lifted` is skipped; the caller draws it with indexCard.
  */
 export const cardDrawer = (at: P, d: CardDrawerSpec): string => {
@@ -61,6 +61,6 @@ export const cardDrawer = (at: P, d: CardDrawerSpec): string => {
   const chars = text.replace(/&[a-z#0-9]+;/g, '_').length
   const pw = Math.max(56, chars * 4.6 + 18), cx = at.x + w / 2, py = frontY + FRONT_H / 2 - 7
   out += `<rect x="${n(cx - pw / 2)}" y="${n(py)}" width="${n(pw)}" height="14" rx="3" fill="${color('label')}" ${stroke}/>`
-    + mono(cx, py + 9.6, 7, ink, text, { anchor: 'middle', weight: 600 })
+    + mono(cx, py + 9.6, 7, color('onLabel'), text, { anchor: 'middle', weight: 600 })
   return `<g class="sk-drawer">${out}</g>`
 }

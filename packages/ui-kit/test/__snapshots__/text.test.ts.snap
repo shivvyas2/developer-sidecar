@@ -12,7 +12,7 @@ exports[`renderText > snapshot at 40 columns 1`] = `
  │ WHY  hand-built card handling is…  │
  └────────────────────────────────────┘
  ╱041╲  NEW FILE · checkout.ts        ■
- ▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕ 5 STEPS · src/ 6 FILES"
+ ▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏ 5 STEPS · 6 FILES"
 `;
 
 exports[`renderText > snapshot at 60 columns 1`] = `
@@ -27,7 +27,7 @@ exports[`renderText > snapshot at 60 columns 1`] = `
  │ WHY  hand-built card handling is risky for money.…     │
  └────────────────────────────────────────────────────────┘
  ╱041╲  NEW FILE · checkout.ts                            ■
- ▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕ 5 STEPS · src/ 6 FILES"
+ ▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏ 5 STEPS · 6 FILES"
 `;
 
 exports[`renderText > snapshot at 80 columns 1`] = `
@@ -42,7 +42,7 @@ exports[`renderText > snapshot at 80 columns 1`] = `
  │ [npm package]                                                              │
  └────────────────────────────────────────────────────────────────────────────┘
  ╱041╲  NEW FILE · checkout.ts                                                ■
- ▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕ 5 STEPS · src/ 6 FILES"
+ ▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏ 5 STEPS · 6 FILES"
 `;
 
 exports[`renderText > snapshot at 120 columns 1`] = `
@@ -57,5 +57,5 @@ exports[`renderText > snapshot at 120 columns 1`] = `
  │ [npm package]                                                                                                      │
  └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
  ╱041╲  NEW FILE · checkout.ts                                                                                        ■
- ▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕ 5 STEPS · src/ 6 FILES"
+ ▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏ 5 STEPS · 6 FILES"
 `;

@@ -3,8 +3,9 @@ import { SAMPLE_SCENES, scenes } from '../src/catalog'
 import { render } from '../src/render'
 import { ANIMATORS, animatorFor } from '../src/scene/animators'
 import { makeCtx } from '../src/scene/context'
-import { fmtTokens } from '../src/scene/frame'
-import { SLOTS, slotsFor } from '../src/scene/layout'
+import { fmtTokens } from '../src/format'
+import { ARC, STRIP_Y } from '../src/scene/frame'
+import { FRAMED, SLOTS, drawerCards, slotsFor } from '../src/scene/layout'
 import { compile } from '../src/timeline'
 import { wellFormed } from './well-formed'
 
@@ -108,6 +109,39 @@ describe('frame', () => {
     expect(svg).toContain('000')
   })
 
+  test('with a project the header is the project line only; the page already names the product', () => {
+    const svg = render(scenes.bolt('x'), 400, { frame: true, readout: { ...readout, project: 'shop-app' } })
+    expect(svg).toContain('SHOP-APP · SHEET 01')
+    expect(svg).not.toContain('DEVELOPER SIDECAR')
+  })
+
+  test('the session arc clears the framed dial and stays above the status strip', () => {
+    const d = FRAMED.dial
+    expect(Math.hypot(d.c.x - ARC.c.x, d.c.y - ARC.c.y)).toBeGreaterThan(ARC.r + d.r + 12)
+    for (const session of [0, 0.5, 1]) {
+      const svg = render(scenes.bolt('x'), 400, { frame: true, readout: { ...readout, session } })
+      const arc = svg.match(/<g class="sk-session-arc">[\s\S]*?<\/g>/)![0]
+      const ys = [...arc.matchAll(/\b(?:y1|y2|cy)="([\d.-]+)"/g)].map((m) => Number(m[1]))
+      for (const m of arc.matchAll(/ d="([^"]+)"/g)) ys.push(...[...m[1]!.matchAll(/,([\d.-]+)/g)].map((p) => Number(p[1])))
+      expect(ys.length).toBeGreaterThan(100)
+      for (const y of ys) expect(y).toBeLessThan(STRIP_Y)
+      expect(arc).not.toMatch(/<circle[^>]*r="180"/)
+    }
+  })
+
+  test('the drawer copes with non-finite or fractional file counts', () => {
+    const spec = scenes.bolt('Creating users.ts')
+    for (const files of [Number.NaN, Infinity, -Infinity, -3, 4.7]) {
+      const ctx = makeCtx(spec, compile(spec), 0, { frame: true, readout: { ...readout, files } })
+      const n = drawerCards(ctx).length
+      expect(Number.isInteger(n), String(files)).toBe(true)
+      expect(n).toBeGreaterThanOrEqual(3); expect(n).toBeLessThanOrEqual(6)
+      for (const s of SAMPLE_SCENES) {
+        wellFormed(render(s.spec, end(s.spec) / 2, { frame: true, readout: { ...readout, files }, town: { places: ['bookshelf'], labels: {}, appFloors: 2 } }))
+      }
+    }
+  })
+
   test('tokens read like 4.3k', () => {
     expect(fmtTokens(0)).toBe('0')
     expect(fmtTokens(950)).toBe('950')
@@ -116,6 +150,7 @@ describe('frame', () => {
     expect(fmtTokens(2_500_000)).toBe('2.5M')
     expect(fmtTokens(Number.NaN)).toBe('0')
     expect(fmtTokens(-4)).toBe('0')
+    expect(fmtTokens(999_999)).toBe('1M')
   })
 })
 

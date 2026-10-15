@@ -1,11 +1,11 @@
 import { FONTS } from '../tokens'
 import { label, n } from '../svg'
 
-/** Trim to at most `max` visible characters, ending in an ellipsis when cut. Then escape via label(). */
+/** Trim to at most `max` visible characters (code points), ending in an ellipsis when cut. Then escape via label(). */
 export const fit = (s: string, max: number): string => {
-  const t = s.trim()
-  const m = Math.max(1, Math.floor(max))
-  return label(t.length > m ? `${t.slice(0, m - 1)}…` : t)
+  const t = [...s.trim()]
+  const m = Math.max(1, Math.floor(Number.isFinite(max) ? max : 1))
+  return label(t.length > m ? `${t.slice(0, m - 1).join('')}…` : t.join(''))
 }
 
 export const mono = (

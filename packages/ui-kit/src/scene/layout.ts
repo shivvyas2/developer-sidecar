@@ -73,8 +73,8 @@ export const blockBox = (s: Slots, which: 'service' | 'data' | 'auth', h?: numbe
 
 /** Cut a label for a callout slot: upper case, at most `max` characters. */
 export const tag = (s: string, max = 10): string => {
-  const t = s.trim().toUpperCase()
-  return t.length > max ? `${t.slice(0, max - 1)}…` : t
+  const t = [...s.trim().toUpperCase()]
+  return t.length > max ? `${t.slice(0, max - 1).join('')}…` : t.join('')
 }
 
 /** The file a caption names ("Creating users.ts" gives users.ts), if any. */
@@ -88,7 +88,10 @@ export const pad = (v: number, width: number): string =>
 
 /** The drawer's cards: 3 to 6 numbered edges, the front one is the step's file. */
 export const drawerCards = (ctx: SceneCtx): DrawerCard[] => {
-  const count = Math.min(6, Math.max(3, ctx.readout?.files || ctx.town.appFloors * 3))
+  const files = ctx.readout?.files ?? 0
+  // a missing, zero, negative or non-finite count falls back to the town's size
+  const want = Number.isFinite(files) && files >= 1 ? Math.floor(files) : ctx.town.appFloors * 3
+  const count = Math.min(6, Math.max(3, want))
   return Array.from({ length: count }, (_, i) => ({ num: pad(i + 1, 3), name: '' }))
 }
 export const drawerLabel = (ctx: SceneCtx): string => {

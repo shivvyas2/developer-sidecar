@@ -2,13 +2,13 @@ import type { ActionId } from '@sidecar/shared'
 
 export const palette = {
   light: {
-    paper: '#EDECE8', card: '#FFFFFF', ink: '#111111', ink2: '#777777', grid: '#DCDAD4',
-    accent: '#FF4A1C', label: '#F4E7A1',
+    paper: '#EDECE8', card: '#FFFFFF', ink: '#111111', ink2: '#5F5F5F', grid: '#DCDAD4',
+    accent: '#FF4A1C', label: '#F4E7A1', onLabel: '#111111',
     blockApp: '#F4E7A1', blockService: '#A9D4E0', blockData: '#D9D0BF', blockAuth: '#EBA3AE', blockOk: '#C7D9A5',
   },
   dark: {
     paper: '#141414', card: '#1C1C1C', ink: '#E8E6E0', ink2: '#8A8A8A', grid: '#222222',
-    accent: '#FF4A1C', label: '#8E8352',
+    accent: '#FF4A1C', label: '#8E8352', onLabel: '#141414',
     blockApp: '#8E8352', blockService: '#4F7F8C', blockData: '#6E6658', blockAuth: '#8C5560', blockOk: '#5E7346',
   },
 } as const

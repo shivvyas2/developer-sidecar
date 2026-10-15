@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import * as P from '../src/primitives'
+import { fit } from '../src/primitives/text'
 import { wellFormed } from './well-formed'
 
 
@@ -7,6 +8,20 @@ const o = { x: 300, y: 200 }
 
 describe('batch 1', () => {
   test('gridPaper', () => wellFormed(P.gridPaper(640, 360)))
+  test('gridPaper clamps non-finite and oversized sizes to the canvas', () => {
+    const canvas = P.gridPaper(640, 360)
+    for (const [w, h] of [[Infinity, 360], [640, Number.NaN], [-Infinity, Infinity], [1e9, 1e9]] as const) {
+      expect(P.gridPaper(w, h)).toBe(canvas)
+    }
+    expect(P.gridPaper(-5, -5)).toBe(P.gridPaper(0, 0))
+    wellFormed(P.gridPaper(160, 90, Number.NaN))
+  })
+  test('fit cuts by code points, never splitting a surrogate pair', () => {
+    expect(fit('😀😀😀😀', 3)).toBe('😀😀…')
+    expect(fit('😀😀😀', 3)).toBe('😀😀😀')
+    expect(fit('ab<cd', 4)).toBe('ab&lt;…')
+    expect(fit('😀😀😀😀', 3)).not.toMatch(/[\uD800-\uDFFF](?![\uDC00-\uDFFF])/u)
+  })
   test.each(['app', 'service', 'data', 'auth', 'ok', 'paper'] as const)('isoBlock %s solid and dashed', (tone) => {
     wellFormed(P.isoBlock(o, { x: 0, y: 0, z: 0, w: 40, d: 30, h: 20 }, tone))
     const dashed = P.isoBlock(o, { x: 0, y: 0, z: 0, w: 40, d: 30, h: 20 }, tone, { dashed: true })
@@ -89,6 +104,8 @@ describe('batch 2: cards, drawer, stamp', () => {
     expect(new Set(xs).size).toBe(3)
     expect((s.match(/sk-drawer-tab--group/g) ?? []).length).toBe(2)
     expect(s).toContain('var(--sk-label')
+    // the pill's text uses onLabel (ink in light, paper in dark), never plain ink
+    expect(s).toMatch(/fill="var\(--sk-onLabel, #111111\)"[^>]*>src\/</)
     expect(s).toContain('src/')
   })
   test('cardDrawer shows at most 8 card edges', () => {
@@ -132,6 +149,19 @@ describe('batch 3: instruments', () => {
       wellFormed(P.dial(c, 40, { progress: p, value: '042', title: 'step', unit: 'files', state }))
     }
     wellFormed(P.sessionArc(c, 100, p))
+  })
+  test('sessionArc with a floor draws only the ring above it', () => {
+    const floor = 150
+    const s = P.sessionArc(c, 100, 0.5, { floor })
+    wellFormed(s)
+    expect(s).not.toMatch(/<circle[^>]*r="100"/)
+    const ring = s.match(/class="sk-arc-ring" d="M([\d.]+),([\d.]+)A100 100 0 1 1 ([\d.]+),([\d.]+)"/)
+    expect(ring).not.toBeNull()
+    const [, x0, y0, x1, y1] = ring!.map(Number)
+    expect(y0).toBe(floor); expect(y1).toBe(floor)
+    expect(x0! + x1!).toBeCloseTo(2 * c.x)
+    // a floor below the circle keeps the whole ring
+    expect(P.sessionArc(c, 100, 0.5, { floor: 999 })).toBe(P.sessionArc(c, 100, 0.5))
   })
   test('dial has no accent at 0 and all 49 ticks accent at 1', () => {
     expect(accents(P.dial(c, 40, { progress: 0, value: '0', title: 'x' }))).toBe(0)

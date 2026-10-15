@@ -43,8 +43,8 @@ const cardTitle = (ctx: SceneCtx, fallback: string) => subjectFile(ctx.spec.capt
 const frontSlot = (ctx: SceneCtx) => {
   const { at: d, w } = ctx.slots.drawer
   const cards = drawerCards(ctx)
-  const y = d.y + 9 + (cards.length - 1) * 12
-  return { x: d.x + 4, y, w: w - 8, up: y - 42, num: cards.at(-1)!.num, cards }
+  const y = d.y + 9 + (Math.max(1, cards.length) - 1) * 12
+  return { x: d.x + 4, y, w: w - 8, up: y - 42, num: cards.at(-1)?.num ?? '001', cards }
 }
 const drawer = (ctx: SceneCtx, lifted?: string, cards = drawerCards(ctx)) =>
   cardDrawer(ctx.slots.drawer.at, { cards, label: drawerLabel(ctx), width: ctx.slots.drawer.w, ...(lifted ? { lifted } : {}) })

@@ -8,6 +8,7 @@
  * Every box starts at column 1 and ends at column `columns - 2`, so the right
  * borders of the readout and the card line up exactly.
  */
+import { fmtTokens } from '../format'
 import { lineWidth, type Line, type Seg, type TextModel, type TextStep, type Tone } from './model'
 
 export { lineWidth }
@@ -24,16 +25,16 @@ const cut = (s: string, max: number): string => {
   return max === 1 ? '…' : [...s].slice(0, max - 1).join('') + '…'
 }
 const sp = (n: number) => ' '.repeat(Math.max(0, n))
-const clean = (s: string) => s.replace(/\s+/g, ' ').trim()
+/** C0 and C1 controls (ESC, BEL, CSI...) and bidi/zero-width controls: never sent to a terminal. */
+const CONTROLS = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g
+/** Every model string goes through this: whitespace becomes one space, controls go. */
+const clean = (s: string) => String(s ?? '').replace(/\s+/g, ' ').replace(CONTROLS, '').replace(/ {2,}/g, ' ').trim()
 const seg = (text: string, tone?: Tone): Seg => (tone ? { text, tone } : { text })
-const pad3 = (n: number) => String(Math.max(0, Math.trunc(n))).padStart(3, '0')
+/** A count for display: non-finite or negative reads 0. */
+const count = (n: number) => (Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0)
+const pad3 = (n: number) => String(count(n)).padStart(3, '0')
 const tabOf = (n: number) => `╱${pad3(n)}╲`
-
-const fmtTok = (n: number): string => {
-  if (n < 1000) return String(Math.max(0, Math.trunc(n)))
-  const k = n / 1000
-  return (k < 100 ? k.toFixed(1) : String(Math.round(k))) + 'k'
-}
+const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 'S'}`
 
 /** Word wrap, hard-splitting words longer than `width`. */
 function wrap(text: string, width: number): string[] {
@@ -75,14 +76,15 @@ function markOf(status: TextStep['status']): Seg {
   switch (status) {
     case 'running': return seg('●', 'accent')
     case 'failed': return seg('✕', 'accent')
-    case 'interrupted': return seg('○', 'dim')
+    case 'interrupted': return seg('⏸', 'dim')
     default: return seg('■', 'dim')
   }
 }
 
 function header(m: TextModel, cols: number): Line {
-  const off = !!m.offline || !m.live
-  const right: Line = off ? [seg('OFFLINE', 'dim')] : [seg('●', 'accent'), seg('LIVE', 'bold')]
+  const right: Line = m.offline ? [seg('OFFLINE', 'dim')]
+    : m.live ? [seg('●', 'accent'), seg('LIVE', 'bold')]
+    : [seg('REPLAY', 'dim')]
   const rw = lineWidth(right)
   const left = cut(' DEVELOPER SIDECAR · ' + clean(m.project).toUpperCase(), Math.max(0, cols - rw - 2))
   return [seg(left, 'bold'), seg(sp(cols - w(left) - rw - 1)), ...right, seg(' ')]
@@ -90,8 +92,8 @@ function header(m: TextModel, cols: number): Line {
 
 function readout(m: TextModel, B: number): Line[] {
   const labels = ['STEP', 'FILES', 'TOKENS', 'ELAPSED']
-  const vals = [pad3(m.readout.step), String(Math.max(0, m.readout.files)).padStart(2, '0'),
-    fmtTok(m.readout.tokens), clean(m.readout.elapsed)]
+  const vals = [pad3(m.readout.step), String(count(m.readout.files)).padStart(2, '0'),
+    fmtTokens(m.readout.tokens), clean(m.readout.elapsed)]
   const c = [8, 7, 8, 0]
   c[3] = B - 5 - c[0]! - c[1]! - c[2]!
   const top: Line = [seg(' ┌')]
@@ -142,13 +144,15 @@ function collapsed(s: TextStep, B: number): Line {
 }
 
 function footer(m: TextModel, B: number): Line {
-  const label = cut(` ${m.steps.length} STEPS · src/ ${Math.max(0, m.readout.files)} FILES`, B)
+  const label = cut(` ${plural(m.steps.length, 'STEP')} · ${plural(count(m.readout.files), 'FILE')}`, B)
   const n = B - w(label)
   return [seg(' '), seg('▕▏'.repeat(Math.floor(n / 2)) + (n % 2 ? '▕' : ''), 'dim'), seg(label)]
 }
 
 export function renderText(m: TextModel, columns: number, rows: number = DEFAULT_ROWS): Line[] {
-  const cols = Math.trunc(columns)
+  // non-finite sizes fall back to the narrowest full layout and the default height
+  const cols = Number.isFinite(columns) ? Math.trunc(columns) : MIN_COLUMNS
+  rows = Number.isFinite(rows) ? rows : DEFAULT_ROWS
   if (cols < MIN_COLUMNS) return [[seg(cut(`SIDECAR · STEP ${pad3(m.readout.step)}`, Math.max(0, cols)))]]
   const B = cols - 2
   const out: Line[] = [header(m, cols), ...readout(m, B)]

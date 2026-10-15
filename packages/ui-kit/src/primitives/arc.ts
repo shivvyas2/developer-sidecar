@@ -6,15 +6,27 @@ import { mono } from './text'
 
 const TICKS = 120, A0 = 196, SWEEP = 110
 
+/** The full circle, or with a floor inside it the part above the floor as one arc path. */
+const ring = (c: P, r: number, floor: number | undefined, ink: string): string => {
+  const style = `fill="none" stroke="${ink}" stroke-width=".9"`
+  const dy = floor === undefined || !Number.isFinite(floor) ? r : floor - c.y
+  if (dy >= r) return `<circle cx="${n(c.x)}" cy="${n(c.y)}" r="${n(r)}" ${style}/>`
+  if (dy <= -r) return ''
+  const half = Math.sqrt(r * r - dy * dy), y = c.y + dy
+  return `<path class="sk-arc-ring" d="M${n(c.x - half)},${n(y)}A${n(r)} ${n(r)} 0 ${dy > 0 ? 1 : 0} 1 ${n(c.x + half)},${n(y)}" ${style}/>`
+}
+
 /**
  * The large session arc that frames the stage: a thin ink circle of radius `r` and
  * 121 ticks over 110 degrees from 196 (every 10th long), lit in accent up to
  * `progress`. A pointer rises from the progress tick to a knob showing the percent.
+ * With a `floor` the ring is drawn only above that y, as one arc over the top, so it
+ * never runs under whatever sits below (the status strip).
  */
-export const sessionArc = (c: P, r: number, progress: number): string => {
+export const sessionArc = (c: P, r: number, progress: number, o: { floor?: number } = {}): string => {
   const p = unit01(progress)
   const ink = color('ink'), accent = color('accent')
-  let out = `<circle cx="${n(c.x)}" cy="${n(c.y)}" r="${n(r)}" fill="none" stroke="${ink}" stroke-width=".9"/>`
+  let out = ring(c, r, o.floor, ink)
   for (let i = 0; i <= TICKS; i++) {
     const deg = A0 + (SWEEP * i) / TICKS
     const len = i % 10 === 0 ? 9 : 4

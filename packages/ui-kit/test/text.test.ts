@@ -85,4 +85,55 @@ describe('renderText', () => {
     expect(ls.flat().some((s) => s.tone === 'inverse' && s.text === '╱042╲')).toBe(true)
     expect(ls.flat().some((s) => s.tone === 'accent' && s.text === '✕')).toBe(true)
   })
+
+  it('strips terminal control and bidi characters from every model string', () => {
+    const bad = ['\x1b]0;PWN\x07', '\x1b[2J', '‮', '​', '⁦', '\x9b']
+    const dirty = (t: string) => `${bad.join('')}${t}${bad.join('')}`
+    const m: TextModel = {
+      project: dirty('proj'), live: true,
+      readout: { step: 1, files: 1, tokens: 1, elapsed: dirty('00:01') },
+      steps: [{ num: 1, title: dirty('Read'), caption: dirty('a.ts'), status: 'running', plain: dirty('plain'), why: dirty('why'), chip: dirty('chip') }],
+    }
+    const out = plain(renderText(m, 120, 30))
+    expect(out).not.toMatch(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩]/)
+    for (const t of ['PROJ', 'READ', 'a.ts', 'plain', 'why', 'chip', '00:01']) expect(out).toContain(t)
+  })
+
+  it('formats tokens like the stage readout and guards bad numbers', () => {
+    const at = (tokens: number, files = 6, step = 42) => plain(renderText({ ...model, readout: { ...model.readout, tokens, files, step } }, 80))
+    expect(at(Number.NaN)).toMatch(/│ 0 +│/)
+    expect(at(999_999)).toContain('│ 1M ')
+    expect(at(12_000)).toContain('│ 12k ')
+    const nan = at(Number.NaN, Number.NaN, Number.NaN)
+    expect(nan).not.toMatch(/NaN|Infinity/)
+  })
+
+  it('treats non-finite columns and rows as the narrowest full layout', () => {
+    for (const c of [Number.NaN, Infinity, -Infinity]) {
+      const ls = renderText(model, c, Number.NaN)
+      expect(plain(ls)).toBe(plain(renderText(model, 40)))
+    }
+  })
+
+  it('footer: singular step, no hard-coded folder', () => {
+    const one = plain(renderText({ ...model, readout: { ...model.readout, files: 1 }, steps: [steps[4]!] }, 80))
+    expect(one).toMatch(/ 1 STEP · 1 FILE$/)
+    const many = plain(renderText(model, 80))
+    expect(many).toMatch(/ 5 STEPS · 6 FILES$/)
+    expect(many).not.toContain('src/')
+  })
+
+  it('header: OFFLINE only when offline, REPLAY when not live', () => {
+    const replay = plain(renderText({ ...model, live: false }, 80)).split('\n')[0]!
+    expect(replay).toMatch(/REPLAY $/)
+    expect(replay).not.toContain('OFFLINE')
+    expect(plain(renderText({ ...model, live: false, offline: true }, 80)).split('\n')[0]).toMatch(/OFFLINE $/)
+  })
+
+  it('marks an interrupted step with the pause glyph, like the web step card', () => {
+    const m: TextModel = { ...model, steps: [{ ...steps[0]!, status: 'interrupted' }, steps[4]!] }
+    const ls = renderText(m, 80, 20)
+    expect(ls.flat().some((s) => s.text === '⏸' && s.tone === 'dim')).toBe(true)
+    expect(plain(ls)).not.toContain('○')
+  })
 })
