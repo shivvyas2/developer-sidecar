@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import type { FeedStep } from '@sidecar/shared'
 import { feedReducer, initialFeed } from '../src/feed'
 
@@ -65,7 +65,46 @@ describe('explainer state', () => {
     s = feedReducer(s, { type: 'concept', concept: c('sdk') })
     expect(s.glossary.s1!.map((x) => x.term)).toEqual(['api', 'SDK'])
     s = feedReducer(s, { type: 'glossary', sessionId: 's1', entries: [c('Zeta')] })
-    expect(s.glossary.s1!.map((x) => x.term)).toEqual(['Zeta'])
+    expect(s.glossary.s1!.map((x) => x.term)).toEqual(['api', 'SDK', 'Zeta'])
+  })
+  test('a decisions snapshot merges with live decisions by id (snapshot wins), in time order (final fix 5)', () => {
+    const d = (id: string, at: number, title = id) => ({ id, sessionId: 's1', stepId: 'a', at, title, choice: 'c', alternatives: [], reason: 'r' })
+    let s = feedReducer(initialFeed, { type: 'decision', decision: d('live', 5) })
+    s = feedReducer(s, { type: 'decision', decision: d('both', 3, 'old') })
+    s = feedReducer(s, { type: 'decisions', sessionId: 's1', decisions: [d('both', 3, 'new'), d('first', 1)] })
+    expect(s.decisions.s1!.map((x) => [x.id, x.title])).toEqual([['first', 'first'], ['both', 'new'], ['live', 'live']])
+  })
+  test('a glossary snapshot merges with live terms case-insensitively; the existing entry wins (final fix 5)', () => {
+    const c = (term: string, definition = 'd') => ({ term, definition, sessionId: 's1', stepId: 'a', at: 1 })
+    let s = feedReducer(initialFeed, { type: 'concept', concept: c('Webhook', 'live') })
+    s = feedReducer(s, { type: 'glossary', sessionId: 's1', entries: [c(' webhook ', 'snapshot'), c('API')] })
+    expect(s.glossary.s1!.map((x) => [x.term, x.definition])).toEqual([['API', 'd'], ['Webhook', 'live']])
+  })
+  test('session_deleted also prunes that session\'s explanations (final fix 9)', () => {
+    let s = feedReducer(initialFeed, { type: 'step', step: step('x', 1, 1, 'b') })
+    s = feedReducer(s, { type: 'step', step: step('y', 2, 2, 'a') })
+    s = feedReducer(s, { type: 'explanation', sessionId: 'b', stepId: 'x', explanation: { unavailable: 'r' } })
+    s = feedReducer(s, { type: 'explanation', sessionId: 'a', stepId: 'y', explanation: { unavailable: 'r' } })
+    s = feedReducer(s, { type: 'session_deleted', id: 'b' })
+    expect(Object.keys(s.explanations)).toEqual(['y'])
+  })
+  test('readySince is set when the explainer becomes ready and kept while it stays ready (final fix 3)', () => {
+    vi.useFakeTimers()
+    try {
+      const st = (status: 'ready' | 'paused') => ({ level: 'haiku' as const, provider: 'api' as const, status, tokens: { input: 0, output: 0 } })
+      vi.setSystemTime(1000)
+      let s = feedReducer(initialFeed, { type: 'explainer', state: st('ready') })
+      expect(s.readySince).toBe(1000)
+      vi.setSystemTime(2000)
+      s = feedReducer(s, { type: 'explainer', state: st('ready') })
+      expect(s.readySince).toBe(1000)
+      s = feedReducer(s, { type: 'explainer', state: st('paused') })
+      vi.setSystemTime(3000)
+      s = feedReducer(s, { type: 'explainer', state: st('ready') })
+      expect(s.readySince).toBe(3000)
+    } finally {
+      vi.useRealTimers()
+    }
   })
   test('session_deleted removes the session and reselects; reset clears all but explainer state', () => {
     let s = feedReducer(initialFeed, { type: 'sessions', sessions: [session('a', 1), session('b', 2)] })

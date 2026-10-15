@@ -1,11 +1,14 @@
-import type { DecisionEntry } from '@sidecar/shared'
+import type { DecisionEntry, ExplainerState } from '@sidecar/shared'
 
-export function DecisionsView({ decisions, explaining }: { decisions: DecisionEntry[]; explaining: boolean }) {
-  if (decisions.length === 0) {
-    return <p className="empty">{explaining
-      ? 'No architecture decisions yet. When Claude picks a library, service, database or approach, it shows up here with the reasons.'
-      : 'Architecture decisions are collected from plain-English explanations, which are off. Turn them on in Settings.'}</p>
-  }
+const EMPTY: Record<ExplainerState['status'], string> = {
+  ready: 'No architecture decisions yet. When Claude picks a library, service, database or approach, it shows up here with the reasons.',
+  off: 'Architecture decisions are collected from plain-English explanations, which are off. Turn them on in Settings.',
+  paused: 'Architecture decisions are collected from plain-English explanations, which are paused. See the banner or Settings.',
+  unavailable: 'Architecture decisions are collected from plain-English explanations, which need an Anthropic API key or the claude command.',
+}
+
+export function DecisionsView({ decisions, status }: { decisions: DecisionEntry[]; status: ExplainerState['status'] | null }) {
+  if (decisions.length === 0) return <p className="empty">{EMPTY[status ?? 'ready']}</p>
   return (
     <ol className="decisions">
       {decisions.map((d) => (

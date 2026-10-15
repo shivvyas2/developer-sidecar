@@ -10,6 +10,8 @@ export interface FeedState {
   decisions: Record<string, DecisionEntry[]>
   glossary: Record<string, GlossaryEntry[]>
   explainer: ExplainerState | null
+  /** When (Date.now()) the explainer last became ready in this page; steps that ended earlier may never be explained. */
+  readySince: number
 }
 
 export type FeedAction =
@@ -21,12 +23,13 @@ export type FeedAction =
   | { type: 'glossary'; sessionId: string; entries: GlossaryEntry[] }
 
 export const initialFeed: FeedState = { sessions: [], selected: null, steps: {}, lastSeq: 0, loaded: {},
-  explanations: {}, decisions: {}, glossary: {}, explainer: null,
+  explanations: {}, decisions: {}, glossary: {}, explainer: null, readySince: 0,
 }
 
 const byLastAt = (a: SessionSummary, b: SessionSummary) => b.lastAt - a.lastAt
 const byTerm = (a: GlossaryEntry, b: GlossaryEntry) => a.term.localeCompare(b.term, undefined, { sensitivity: 'base' })
 const byAt = (a: DecisionEntry, b: DecisionEntry) => a.at - b.at || a.id.localeCompare(b.id)
+const termKey = (term: string) => term.trim().toLowerCase()
 const byStart = (a: FeedStep, b: FeedStep) => a.startedAt - b.startedAt || a.seq - b.seq
 
 export function feedReducer(state: FeedState, action: FeedAction): FeedState {
@@ -78,21 +81,32 @@ export function feedReducer(state: FeedState, action: FeedAction): FeedState {
       const list = (state.decisions[d.sessionId] ?? []).filter((x) => x.id !== d.id)
       return { ...state, decisions: { ...state.decisions, [d.sessionId]: [...list, d].sort(byAt) } }
     }
-    case 'decisions':
-      return { ...state, decisions: { ...state.decisions, [action.sessionId]: [...action.decisions].sort(byAt) } }
+    case 'decisions': {
+      // merge, don't replace: live decisions may have arrived while this snapshot was in flight
+      const merged = new Map((state.decisions[action.sessionId] ?? []).map((d) => [d.id, d]))
+      for (const d of action.decisions) merged.set(d.id, d)
+      return { ...state, decisions: { ...state.decisions, [action.sessionId]: [...merged.values()].sort(byAt) } }
+    }
     case 'concept': {
       const c = action.concept
       const list = state.glossary[c.sessionId] ?? []
-      if (list.some((x) => x.term.trim().toLowerCase() === c.term.trim().toLowerCase())) return state
+      if (list.some((x) => termKey(x.term) === termKey(c.term))) return state
       return { ...state, glossary: { ...state.glossary, [c.sessionId]: [...list, c].sort(byTerm) } }
     }
-    case 'glossary':
-      return { ...state, glossary: { ...state.glossary, [action.sessionId]: [...action.entries].sort(byTerm) } }
-    case 'explainer':
-      return { ...state, explainer: action.state }
+    case 'glossary': {
+      // merge, the entry already shown wins
+      const merged = new Map(action.entries.map((e) => [termKey(e.term), e]))
+      for (const e of state.glossary[action.sessionId] ?? []) merged.set(termKey(e.term), e)
+      return { ...state, glossary: { ...state.glossary, [action.sessionId]: [...merged.values()].sort(byTerm) } }
+    }
+    case 'explainer': {
+      const becameReady = action.state.status === 'ready' && state.explainer?.status !== 'ready'
+      return { ...state, explainer: action.state, readySince: becameReady ? Date.now() : state.readySince }
+    }
     case 'session_deleted': {
       const omit = <T,>(r: Record<string, T>) => Object.fromEntries(Object.entries(r).filter(([k]) => k !== action.id))
       const sessions = state.sessions.filter((x) => x.id !== action.id)
+      const gone = new Set((state.steps[action.id] ?? []).map((x) => x.id))
       return {
         ...state,
         sessions,
@@ -101,9 +115,10 @@ export function feedReducer(state: FeedState, action: FeedAction): FeedState {
         decisions: omit(state.decisions),
         glossary: omit(state.glossary),
         loaded: omit(state.loaded),
+        explanations: Object.fromEntries(Object.entries(state.explanations).filter(([k]) => !gone.has(k))),
       }
     }
     case 'reset':
-      return { ...initialFeed, explainer: state.explainer }
+      return { ...initialFeed, explainer: state.explainer, readySince: state.readySince }
   }
 }

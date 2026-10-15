@@ -3,6 +3,8 @@ import type { ExplainLevel, ExplainerState, SessionSummary } from '@sidecar/shar
 import { deleteAllSessions, deleteSession, fetchSettings, saveSettings } from './api'
 import { formatTokens } from './format'
 
+const STATUS_TEXT: Record<ExplainerState['status'], string> = { ready: 'On', paused: 'Paused', off: 'Off', unavailable: 'Not available' }
+
 const LEVELS: Array<[ExplainLevel, string, string]> = [
   ['off', 'Off', 'No explanations. Nothing leaves your computer.'],
   ['haiku', 'Quick (Haiku)', 'Fast, low-cost explanations. Recommended.'],
@@ -19,8 +21,13 @@ export function SettingsView({ explainer, selected, onChanged }: {
   useEffect(() => { fetchSettings().then((s) => setLevel(s.explanations)).catch(() => setError('Could not load settings.')) }, [])
 
   const choose = (next: ExplainLevel) => {
+    const previous = level
     setLevel(next)
-    saveSettings({ explanations: next }).then((r) => onChanged(r.explainer)).catch(() => setError('Could not save settings.'))
+    setError(null)
+    saveSettings({ explanations: next }).then((r) => onChanged(r.explainer)).catch(() => {
+      setLevel(previous)
+      setError('Could not save settings.')
+    })
   }
   const removeSession = () => {
     if (!selected || !confirm(`Delete the session "${selected.cwd.split('/').pop() || selected.id}" and everything recorded for it?`)) return
@@ -45,13 +52,13 @@ export function SettingsView({ explainer, selected, onChanged }: {
       </fieldset>
       {explainer && (
         <p className="settings__status">
-          Status: <strong>{explainer.status}</strong>
+          Status: <strong>{STATUS_TEXT[explainer.status]}</strong>
           {explainer.provider && <> via {explainer.provider === 'api' ? 'the Anthropic API' : 'Claude Code'}</>}
           {explainer.reason && <> — {explainer.reason}</>}
           <br />Tokens used so far: {formatTokens(explainer.tokens.input)} in, {formatTokens(explainer.tokens.output)} out.
         </p>
       )}
-      <p className="settings__privacy">Explanations send scrubbed step details (secrets removed) to Anthropic. Everything else stays on this computer.</p>
+      <p className="settings__privacy">Explanations send step details, with known secret patterns and .env values removed, to Anthropic directly or through your Claude Code login. Everything else stays on this computer.</p>
       <h2>Data</h2>
       <div className="settings__danger">
         <button onClick={removeSession} disabled={!selected}>Delete this session</button>

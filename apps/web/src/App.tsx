@@ -1,25 +1,23 @@
 import { useEffect, useState } from 'react'
-import { isExplained, type Category, type ExplainerState, type FeedStep, type StepExplanation } from '@sidecar/shared'
+import { isExplained, type FeedStep, type StepExplanation } from '@sidecar/shared'
 import { saveSettings } from './api'
 import { DecisionsView } from './DecisionsView'
 import { formatTokens } from './format'
 import { GlossaryView } from './GlossaryView'
+import { stepIcon } from './icon'
 import { Kit } from './Kit'
+import { isPendingExplanation } from './pending'
 import { SettingsView } from './SettingsView'
 import { Stage } from './StageView'
 import { useFeed } from './useFeed'
 
-const ICON: Record<Category, string> = {
-  prompt: '💬', subagent: '👥', mcp: '🤝', git: '📦', install: '🧰', test: '✅', deploy: '🚀',
-  run: '🔑', data: '🗄️', external: '🔌', read: '🔍', create: '🧱', edit: '🔧', fallback: '💭',
-}
 const STATUS: Record<FeedStep['status'], string> = { running: '…', ok: '✓', failed: '✗', interrupted: '⏸' }
 
-function StepRow({ step, explanation, explaining }: { step: FeedStep; explanation?: StepExplanation; explaining: boolean }) {
+function StepRow({ step, explanation, pending }: { step: FeedStep; explanation?: StepExplanation; pending: boolean }) {
   const [open, setOpen] = useState(false)
   return (
     <li className={`step step--${step.status}`}>
-      <span className="step__icon" aria-hidden>{ICON[step.category]}</span>
+      <span className="step__icon" aria-hidden>{stepIcon(step)}</span>
       <div className="step__body">
         <p className="step__caption">{step.caption}</p>
         {isExplained(explanation) ? (
@@ -28,7 +26,9 @@ function StepRow({ step, explanation, explaining }: { step: FeedStep; explanatio
             <p className="step__why"><strong>Why it matters:</strong> {explanation.why}</p>
             {explanation.concept && <p className="step__concept"><span className="chip">{explanation.concept.term}</span> {explanation.concept.definition}</p>}
           </div>
-        ) : explaining && !explanation && step.status !== 'running' && step.category !== 'prompt' ? (
+        ) : explanation ? (
+          <p className="step__unavailable">No explanation: {explanation.unavailable}</p>
+        ) : pending ? (
           <p className="step__pending">Explaining…</p>
         ) : null}
         <button className="step__toggle" onClick={() => setOpen(!open)} aria-expanded={open}>
@@ -68,7 +68,7 @@ export function App() {
   const [tab, setTab] = useState<Tab>('stage')
   if (hash === '#/kit') return <Kit />
   const steps = state.selected ? state.steps[state.selected] ?? [] : []
-  const explaining = state.explainer?.status === 'ready'
+  const status = state.explainer?.status ?? null
   const selectedSession = state.sessions.find((x) => x.id === state.selected) ?? null
   const resume = () => {
     if (!state.explainer) return
@@ -113,12 +113,12 @@ export function App() {
             {steps.length === 0 ? (
               <p className="empty">Waiting for Claude to do something… start a Claude Code session with the plugin enabled.</p>
             ) : (
-              <ol className="feed">{[...steps].reverse().map((s) => <StepRow key={s.id} step={s} explanation={state.explanations[s.id]} explaining={explaining} />)}</ol>
+              <ol className="feed">{[...steps].reverse().map((s) => <StepRow key={s.id} step={s} explanation={state.explanations[s.id]} pending={isPendingExplanation(s, state.explanations[s.id], state.explainer, state.readySince)} />)}</ol>
             )}
           </>
         )}
-        {tab === 'decisions' && <DecisionsView decisions={state.selected ? state.decisions[state.selected] ?? [] : []} explaining={explaining} />}
-        {tab === 'glossary' && <GlossaryView entries={state.selected ? state.glossary[state.selected] ?? [] : []} explaining={explaining} />}
+        {tab === 'decisions' && <DecisionsView decisions={state.selected ? state.decisions[state.selected] ?? [] : []} status={status} />}
+        {tab === 'glossary' && <GlossaryView entries={state.selected ? state.glossary[state.selected] ?? [] : []} status={status} />}
         {tab === 'settings' && <SettingsView explainer={state.explainer} selected={selectedSession} onChanged={(s) => dispatch({ type: 'explainer', state: s })} />}
         {tab === 'whiteboard' && <p className="empty">{WHITEBOARD}</p>}
       </main>
