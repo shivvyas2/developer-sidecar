@@ -36,10 +36,12 @@
     "lint": "eslint .",
     "build": "node scripts/build.mjs",
     "smoke": "node scripts/smoke.mjs && node scripts/smoke-concurrent.mjs 3",
-    "test:mod": "node scripts/test-mod.mjs"
+    "test:mod": "node scripts/test-mod.mjs",
+    "e2e": "playwright test -c apps/web/playwright.config.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
     "@sidecar/shared": "workspace:*",
     "@types/node": "^26.6.5",
     "esbuild": "^0.28.2",
