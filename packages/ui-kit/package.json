@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./catalog": "./src/catalog.ts",
+    "./primitives": "./src/primitives/index.ts",
     "./react": "./src/react.tsx"
   },
   "dependencies": { "@sidecar/shared": "workspace:*" },
