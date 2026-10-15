@@ -46,6 +46,3 @@ export const BEAT_MS: Record<ActionId, number> = {
 }
 export const FX_MS = 700
 export const HOLD_MS = 900
-
-/** @deprecated removed in Task 6 with pieces/ */
-export const legacyColor = (k: string): string => `var(--sk-${k}, #888)`

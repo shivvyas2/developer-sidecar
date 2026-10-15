@@ -14,11 +14,13 @@ const chars = (s: string) => Math.min(MAX_LABEL, s.trim().length)
 /**
  * The chamfered readout panel: card fill, ink edge, the top-right corner cut at 16 and
  * an 8x6 accent tick on the top edge. Fields sit in content-sized columns (mono key, dot-matrix
- * value, 30 when big else 20). An optional note row follows a dotted rule. `at` is top-left.
+ * value, 30 when big else 20). Optional note rows (one, or a list) follow a dotted rule, 14 apart.
+ * `at` is top-left.
  */
-export const readout = (at: P, w: number, fields: ReadoutField[], note?: ReadoutNote): string => {
+export const readout = (at: P, w: number, fields: ReadoutField[], note?: ReadoutNote | ReadoutNote[]): string => {
   const W = Math.max(60, w)
-  const H = note ? 82 : 60
+  const notes = note === undefined ? [] : Array.isArray(note) ? note : [note]
+  const H = notes.length ? 82 + (notes.length - 1) * 14 : 60
   const { x, y } = at
   const ink = color('ink')
   let out = `<path d="M${n(x)},${n(y)}h${n(W - CHAMFER)}l${CHAMFER},${CHAMFER}v${H - CHAMFER}h${n(-W)}Z" `
@@ -41,12 +43,15 @@ export const readout = (at: P, w: number, fields: ReadoutField[], note?: Readout
       + `<text x="${n(fx)}" y="${n(y + 48)}" font-family="${FONTS.dot}" font-size="${size[i]}" fill="${ink}">${fit(f.v, cw / (size[i]! * DOT))}</text>`
     fx += cw + gap
   })
-  if (note) {
-    const k = label(note.k)
-    const kw = Math.max(28, k.replace(/&[a-z#0-9]+;/g, '_').length * 4.8 + 10)
+  if (notes.length) {
     out += `<line x1="${n(x + PAD)}" y1="${n(y + 60)}" x2="${n(x + W - PAD)}" y2="${n(y + 60)}" stroke="${ink}" stroke-width=".6" stroke-dasharray="1 2"/>`
-      + mono(x + PAD, y + 73, 6, ink, k, { weight: 700, spacing: 1.2 })
-      + mono(x + PAD + kw, y + 73, 6.5, ink, label(note.v), { spacing: 1 })
+    const keys = notes.map((m) => label(m.k))
+    const kw = Math.max(28, ...keys.map((k) => k.replace(/&[a-z#0-9]+;/g, '_').length * 4.8 + 10))
+    notes.forEach((m, i) => {
+      const ny = y + 73 + i * 14
+      out += mono(x + PAD, ny, 6, ink, keys[i]!, { weight: 700, spacing: 1.2 })
+        + mono(x + PAD + kw, ny, 6.5, ink, label(m.v), { spacing: 1 })
+    })
   }
   return `<g class="sk-readout">${out}</g>`
 }

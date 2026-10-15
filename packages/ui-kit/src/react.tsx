@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SceneSpec } from '@sidecar/shared'
-import { render } from './render'
+import { render, type Readout } from './render'
 import { compile } from './timeline'
 import type { Town } from './town'
 
@@ -14,6 +14,10 @@ export interface SceneProps {
   /** Called once when a non-looping scene finishes. */
   onDone?: () => void
   className?: string
+  /** Draw the stage frame (header, session arc, readout panel, status strip). */
+  frame?: boolean
+  /** The frame's numbers. */
+  readout?: Readout
 }
 
 /** How long a reduced-motion still frame stays up before onDone, so live playback keeps moving. */
@@ -27,7 +31,7 @@ export const startTime = (at: number | undefined, reduced: boolean, duration: nu
 export const prefersReducedMotion = (): boolean =>
   typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
 
-export function Scene({ spec, town, at, loop = false, onDone, className }: SceneProps) {
+export function Scene({ spec, town, at, loop = false, onDone, className, frame, readout }: SceneProps) {
   const key = specKey(spec)
   // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on content so an equal spec does not restart
   const timeline = useMemo(() => compile(spec), [key])
@@ -64,6 +68,9 @@ export function Scene({ spec, town, at, loop = false, onDone, className }: Scene
     return () => cancelAnimationFrame(raf)
   }, [timeline, at, loop])
 
-  const svg = useMemo(() => render(spec, at ?? t, { town, timeline }), [key, at, t, town, timeline]) // eslint-disable-line react-hooks/exhaustive-deps
+  const svg = useMemo(
+    () => render(spec, at ?? t, { timeline, ...(town ? { town } : {}), ...(frame ? { frame } : {}), ...(readout ? { readout } : {}) }),
+    [key, at, t, town, timeline, frame, readout], // eslint-disable-line react-hooks/exhaustive-deps
+  )
   return <div className={className ?? 'sk-stage'} dangerouslySetInnerHTML={{ __html: svg }} />
 }

@@ -1,0 +1,135 @@
+import { describe, expect, test } from 'vitest'
+import { SAMPLE_SCENES, scenes } from '../src/catalog'
+import { render } from '../src/render'
+import { ANIMATORS, animatorFor } from '../src/scene/animators'
+import { makeCtx } from '../src/scene/context'
+import { fmtTokens } from '../src/scene/frame'
+import { SLOTS, slotsFor } from '../src/scene/layout'
+import { compile } from '../src/timeline'
+import { wellFormed } from './well-formed'
+
+const ids = [...new Set(SAMPLE_SCENES.map((s) => s.spec.scene))]
+const end = (spec: Parameters<typeof compile>[0]) => compile(spec).duration
+const readout = { step: 7, files: 3, tokens: 950, now: 'EDIT · AUTH.TS', elapsed: '00:42', live: false }
+
+describe('animators', () => {
+  test('every catalog scene id has its own animator', () => {
+    expect(ids).toHaveLength(14)
+    for (const id of ids) {
+      expect(ANIMATORS[id], id).toBeTypeOf('function')
+      expect(animatorFor(id)).toBe(ANIMATORS[id])
+    }
+  })
+
+  test('an unknown scene id falls back to the generic animator', () => {
+    expect(animatorFor('mystery')).toBe(ANIMATORS.thinking)
+    const spec = { scene: 'mystery', cast: [], beats: [], caption: '?' }
+    expect(() => render(spec, 500)).not.toThrow()
+    expect(render(spec, 500)).toContain('sk-hand')
+  })
+
+  test.each(ids.map((id) => [id] as const))('%s draws something of its own at every time (Review Focus 1)', (id) => {
+    const spec = SAMPLE_SCENES.find((s) => s.spec.scene === id)!.spec
+    const tl = compile(spec)
+    for (const t of [0, tl.duration / 2, tl.duration]) {
+      for (const frame of [false, true]) {
+        const out = ANIMATORS[id]!(makeCtx(spec, tl, t, { frame }))
+        wellFormed(out)
+        expect(out).toMatch(/<(polygon|rect|path|circle)/)
+      }
+    }
+    expect(render(spec, tl.duration, {}).replace(/^[\s\S]*?class="sk-grid"[^>]*\/>/, '')).toMatch(/<polygon|<rect/)
+  })
+
+  test('the failed flag reaches the animators: a failed connect ends with an accent cross', () => {
+    const bad = scenes.connect('Connecting to Stripe', 'Stripe', true)
+    const good = scenes.connect('Connecting to Stripe', 'Stripe', false)
+    expect(makeCtx(bad, compile(bad), 0, {}).failed).toBe(true)
+    expect(makeCtx(good, compile(good), 0, {}).failed).toBe(false)
+    expect(render(bad, end(bad))).toMatch(/fill="var\(--sk-accent[^"]*"[^>]*>✕</)
+    expect(render(good, end(good))).not.toContain('✕')
+  })
+
+  test('test and install show their outcome only at the end', () => {
+    const ok = scenes.inspect('x', false), bad = scenes.inspect('x', true)
+    expect(render(ok, end(ok))).toContain('sk-dial--ok')
+    expect(render(bad, end(bad))).toContain('sk-dial--fail')
+    expect(render(bad, 0)).not.toContain('sk-dial--fail')
+    const inst = scenes.toolbox('x', true)
+    expect(render(inst, end(inst))).toContain('sk-dial--fail')
+  })
+
+  test('progress p runs 0..1 over the beats, before the hold, and clamps odd times', () => {
+    const spec = scenes.read('x')
+    const tl = compile(spec)
+    const active = tl.beats.at(-1)!.end
+    expect(makeCtx(spec, tl, 0, {}).p).toBe(0)
+    expect(makeCtx(spec, tl, active / 2, {}).p).toBeCloseTo(0.5)
+    expect(makeCtx(spec, tl, active, {}).p).toBe(1)
+    expect(makeCtx(spec, tl, tl.duration, {}).p).toBe(1)
+    expect(makeCtx(spec, tl, Number.NaN, {}).p).toBe(0)
+    expect(makeCtx(spec, tl, -5, {}).beatP(0)).toBe(0)
+    expect(makeCtx(spec, tl, 1e9, {}).beatP(1)).toBe(1)
+    expect(makeCtx(spec, tl, 1e9, {}).beatP(9)).toBe(0)
+  })
+
+  test('the user prompt is typed out, escaped', () => {
+    const spec = scenes.prompt('add <b>checkout</b>')
+    const svg = render(spec, end(spec))
+    expect(svg).toContain('add &lt;b&gt;checkout')
+    expect(svg).not.toContain('<b>')
+  })
+})
+
+describe('frame', () => {
+  test('frame: true draws the header, the readout panel with the padded step and the status strip', () => {
+    const spec = scenes.bolt('Changing auth.ts')
+    const svg = render(spec, 400, { frame: true, readout })
+    for (const s of ['DEVELOPER SIDECAR', 'STEP', '007', 'FILES', 'TOKENS', '950', 'NOW', 'ELAPSED', '00:42', 'REPLAY', 'STEP 007 · Changing auth.ts', 'sk-session-arc', 'sk-readout', 'sk-status-strip']) {
+      expect(svg, s).toContain(s)
+    }
+    expect(render(spec, 400, { frame: true, readout: { ...readout, live: true } })).toContain('LIVE')
+  })
+
+  test('without the frame there is no header, panel or strip', () => {
+    const svg = render(scenes.bolt('x'), 400)
+    for (const s of ['DEVELOPER SIDECAR', 'sk-readout', 'sk-status-strip', 'sk-session-arc']) expect(svg).not.toContain(s)
+  })
+
+  test('frame values are escaped', () => {
+    const svg = render(scenes.bolt('x'), 400, { frame: true, readout: { ...readout, now: '<b>now</b>', elapsed: '<i>', project: '<p>' } })
+    expect(svg).not.toMatch(/<b>|<i>|<p>/)
+    expect(svg).toContain('&lt;b&gt;')
+  })
+
+  test('a frame without a readout still renders', () => {
+    const svg = render(scenes.bolt('x'), 400, { frame: true })
+    wellFormed(svg)
+    expect(svg).toContain('000')
+  })
+
+  test('tokens read like 4.3k', () => {
+    expect(fmtTokens(0)).toBe('0')
+    expect(fmtTokens(950)).toBe('950')
+    expect(fmtTokens(4300)).toBe('4.3k')
+    expect(fmtTokens(12000)).toBe('12k')
+    expect(fmtTokens(2_500_000)).toBe('2.5M')
+    expect(fmtTokens(Number.NaN)).toBe('0')
+    expect(fmtTokens(-4)).toBe('0')
+  })
+})
+
+describe('layout', () => {
+  test('the sheet slots match the brief; the frame moves the dial out from under the readout panel', () => {
+    expect(SLOTS.cloud).toEqual({ x: 470, y: 70 })
+    expect(SLOTS.drawer).toEqual({ at: { x: 450, y: 196 }, w: 160 })
+    expect(SLOTS.dial).toEqual({ c: { x: 560, y: 92 }, r: 26 })
+    expect(SLOTS.hand).toEqual({ x: 330, y: 150 })
+    expect(SLOTS.world).toEqual({ service: { x: 95, y: -12 }, data: { x: -50, y: 48 }, auth: { x: 62, y: 72 } })
+    const f = slotsFor(true)
+    expect(f.panel).toEqual({ at: { x: 440, y: 20 }, w: 178 })
+    const r = f.dial.r + 12
+    const inPanel = f.dial.c.x + r > 440 && f.dial.c.y - r < 20 + 96
+    expect(inPanel).toBe(false)
+  })
+})

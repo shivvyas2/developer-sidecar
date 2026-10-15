@@ -91,7 +91,7 @@ export const hand = (at: P, h: HandSpec): string => {
   return `<g class="sk-hand sk-hand--${h.pose}">${frame(parts.back)}${item}${frame(parts.front)}</g>`
 }
 
-/** A subagent: the hand at 0.7 scale pointing, with a tiny r 9 dial over its back. */
-export const helperHand = (at: P, progress: number): string =>
-  `<g class="sk-helper-hand">${hand(at, { pose: 'point', scale: 0.7 })}`
-  + `${dial({ x: at.x + 44, y: at.y - 34 }, 9, { progress, value: '', title: '' })}</g>`
+/** A subagent: the hand at 0.7 scale pointing, with a tiny r 9 dial over its back. Facing -1 reaches right. */
+export const helperHand = (at: P, progress: number, facing: 1 | -1 = 1): string =>
+  `<g class="sk-helper-hand">${hand(at, { pose: 'point', scale: 0.7, facing })}`
+  + `${dial({ x: at.x + 44 * facing, y: at.y - 34 }, 9, { progress, value: '', title: '' })}</g>`

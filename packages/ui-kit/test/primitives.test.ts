@@ -1,14 +1,8 @@
 import { describe, expect, test } from 'vitest'
 import * as P from '../src/primitives'
+import { wellFormed } from './well-formed'
 
-/** Tags balance; no NaN/undefined; no raw hex in attributes. */
-export function wellFormed(svg: string) {
-  const opens = (svg.match(/<(?!\/)[a-z]+[^>]*?(?<!\/)>/gi) ?? []).length
-  const closes = (svg.match(/<\/[a-z]+>/gi) ?? []).length
-  expect(opens).toBe(closes)
-  expect(svg).not.toMatch(/NaN|undefined|Infinity/)
-  expect(svg).not.toMatch(/="#[0-9a-f]{3,8}"/i)
-}
+
 const o = { x: 300, y: 200 }
 
 describe('batch 1', () => {
@@ -23,6 +17,14 @@ describe('batch 1', () => {
     expect(P.isoStack(o, 99, {})).toBe(P.isoStack(o, 5, {}))
     expect(P.isoStack(o, 0, {})).toBe(P.isoStack(o, 1, {}))
     expect(P.isoStack(o, 3, { building: true })).toContain('stroke-dasharray')
+  })
+  test('callout can end its label at the leader, for labels left of what they point at', () => {
+    const start = P.callout({ x: 100, y: 50 }, { x: 50, y: 20 }, 'YOUR APP', 'FLOOR 02')
+    const end = P.callout({ x: 100, y: 50 }, { x: 50, y: 20 }, 'YOUR APP', 'FLOOR 02', { align: 'end' })
+    wellFormed(end)
+    expect(start).not.toContain('text-anchor')
+    expect(end.match(/text-anchor="end"/g)).toHaveLength(2)
+    expect(end).toContain('<text x="47"')
   })
   test('callout escapes and truncates', () => {
     const s = P.callout({ x: 1, y: 1 }, { x: 50, y: 20 }, '<script>' + 'x'.repeat(200), 'a & b')
@@ -175,6 +177,13 @@ describe('batch 3: instruments', () => {
     const [a, b, c2] = xs(big)
     expect(b! - a!).toBeGreaterThanOrEqual(3 * 30 * 0.52 + 6)
     expect(c2! + 4 * 20 * 0.52).toBeLessThanOrEqual(180 - 12)
+  })
+  test('readout takes several note rows and grows to fit them', () => {
+    const s = P.readout({ x: 0, y: 0 }, 178, [{ k: 'STEP', v: '042', big: true }], [{ k: 'NOW', v: 'A' }, { k: 'ELAPSED', v: '<02:14>' }])
+    wellFormed(s)
+    expect(s).toContain('ELAPSED'); expect(s).toContain('&lt;02:14&gt;')
+    expect(s).toMatch(/v80h-178Z/)
+    expect(P.readout({ x: 0, y: 0 }, 178, [], { k: 'NOW', v: 'A' })).toMatch(/v66h-178Z/)
   })
   test('a small dial moves its title below the ring', () => {
     const s = P.dial({ x: 100, y: 100 }, 22, { progress: 0.5, value: '64', title: 'install', unit: 'pct' })
