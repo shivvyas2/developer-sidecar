@@ -48,3 +48,11 @@ test('vendorOf reads the service label and cleans it', () => {
   expect(vendorOf(step(1, 'external', 'ok', 'Str\u001bipe'))).toBe('Str ipe')
   expect(vendorOf(step(1, 'external', 'ok'))).toBeUndefined()
 })
+
+test('review I3: a null cast member never throws', () => {
+  const st = step(1, 'external', 'ok', 'Stripe')
+  ;(st.scene as { cast: unknown[] }).cast = [null, 'claude', { place: 'service', label: 'Stripe' }]
+  expect(vendorOf(st)).toBe('Stripe')
+  ;(st.scene as unknown as { cast: unknown }).cast = 'nope'
+  expect(vendorOf(st)).toBeUndefined()
+})

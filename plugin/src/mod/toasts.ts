@@ -15,8 +15,10 @@ export const freshMemory = (): ToastMemory => ({ seeded: false, seen: new Set(),
 
 /** The service label on a connect scene, cleaned for display. */
 export function vendorOf(step: FeedStep): string | undefined {
-  for (const c of step.scene?.cast ?? []) {
-    if (typeof c === 'object' && c.place === 'service' && c.label) return plain(c.label) || undefined
+  const cast: unknown = step.scene?.cast
+  if (!Array.isArray(cast)) return undefined
+  for (const c of cast as unknown[]) {
+    if (c && typeof c === 'object' && 'place' in c && c.place === 'service' && 'label' in c && c.label) return plain(c.label) || undefined
   }
   return undefined
 }

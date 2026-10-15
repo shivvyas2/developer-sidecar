@@ -15,6 +15,7 @@ import { freshMemory, milestones, type ToastMemory } from './toasts'
 const PANE = 'sidecar'
 const ANIM_MS = 125 // up to 8 frames a second while a scene plays
 const START_AFTER_OFFLINE_POLLS = 3
+const FETCH_TIMEOUT_MS = 3_000
 const TONE: Record<Tone, Record<string, unknown>> = {
   ink: {}, dim: { dimColor: true }, accent: { color: 'red' }, inverse: { inverse: true }, bold: { bold: true },
 }
@@ -24,14 +25,31 @@ let token = ''
 let sessionId = ''
 let cadence: Cadence = newCadence(0)
 let memory: ToastMemory = freshMemory()
-let lastStatus: string | undefined
+/** null until the first publish, so a new session always sets (or clears) the status line. */
+let lastStatus: string | undefined | null = null
 let latest = { id: '', at: 0 }
 let muted = false
 let bandHidden = false
 let busy = false
 let offlinePolls = 0
 let startedServer = false
-let stopAnim: (() => void) | undefined
+let pollTimer: { cancel(): void } | undefined
+let animTimer: { cancel(): void } | undefined
+let animTicks = 0
+
+/** A new conversation (the first start, a /clear, a resume): forget what was shown for the last one. */
+function resetSession(id: string, now: number): void {
+  sessionId = id
+  state = { ...emptyState(), port: state.port, project: state.project }
+  cadence = newCadence(now)
+  memory = freshMemory()
+  lastStatus = null
+  latest = { id: '', at: 0 }
+  muted = false
+  bandHidden = false
+  offlinePolls = 0
+  startedServer = false
+}
 
 async function locate($: Engine): Promise<void> {
   const ran = await $.process.run(['node', `${$.plugin.root}/dist/locate.cjs`], { timeoutMs: 5_000 })
@@ -40,13 +58,19 @@ async function locate($: Engine): Promise<void> {
   token = found.token ?? ''
 }
 
+/** A fetch has no timeout of its own: a server that accepts and never answers must not wedge polling. */
+async function within<T>($: Engine, work: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([work, $.clock.sleep(ms).then((): never => { throw new Error('timed out') })])
+}
+
 async function get<T>($: Engine, path: string): Promise<T> {
-  const res = await $.http.fetch(`http://127.0.0.1:${state.port}${path}`, { headers: { 'x-sidecar-token': token } })
+  const res = await within($, $.http.fetch(`http://127.0.0.1:${state.port}${path}`, { headers: { 'x-sidecar-token': token } }), FETCH_TIMEOUT_MS)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return JSON.parse(res.text) as T
 }
 
-function publish($: Engine, now: number): void {
+/** Status line, the latest step's start time, and a redraw. */
+function show($: Engine, now: number): void {
   const status = statusLine(state)
   if (status !== lastStatus) {
     lastStatus = status
@@ -54,38 +78,54 @@ function publish($: Engine, now: number): void {
   }
   const last = state.steps.at(-1)
   if (last && last.id !== latest.id) latest = { id: last.id, at: now }
+  $.ui.invalidate('ui.render')
+}
+
+/** Toasts only ever come from a successful poll: the first one seeds the memory with the history. */
+function announce($: Engine): void {
   const toasts = milestones(state.steps, memory)
   if (!muted) for (const t of toasts) $.ui.toast(t)
-  $.ui.invalidate('ui.render')
 }
 
 async function poll($: Engine): Promise<void> {
   if (busy || !sessionId) return
-  const now = await $.clock.now()
-  if (!due(cadence, now)) return
   busy = true
   try {
-    if (!token || state.offline) await locate($)
-    const [steps, explainer] = await Promise.all([
-      get<FeedStep[]>($, `/api/sessions/${encodeURIComponent(sessionId)}/steps`),
-      get<ExplainerState>($, '/api/explainer'),
-    ])
+    const now = await $.clock.now()
+    if (!due(cadence, now)) return
+    const id = await $.session.id()
+    if (id && id !== sessionId) resetSession(id, now)
+    let steps: FeedStep[]
+    let explainer: ExplainerState
+    try {
+      if (!token || state.offline) await locate($)
+      ;[steps, explainer] = await Promise.all([
+        get<FeedStep[]>($, `/api/sessions/${encodeURIComponent(sessionId)}/steps`),
+        get<ExplainerState>($, '/api/explainer'),
+      ])
+    } catch {
+      cadence = recordPoll(cadence, now, 'offline')
+      offlinePolls += 1
+      if (!state.offline) {
+        state = { ...state, offline: true }
+        show($, now)
+      }
+      if (offlinePolls >= START_AFTER_OFFLINE_POLLS && !startedServer) {
+        startedServer = true
+        await $.process.run(['node', `${$.plugin.root}/dist/start-server.cjs`], { stdin: '', timeoutMs: 15_000 }).catch(() => undefined)
+      }
+      return
+    }
     const changed = state.offline || fingerprint(steps, explainer) !== fingerprint(state.steps, state.explainer)
     state = { ...state, steps, explainer, offline: false }
     offlinePolls = 0
     cadence = recordPoll(cadence, now, changed ? 'changed' : 'same')
-    if (changed) publish($, now)
+    if (changed) {
+      show($, now)
+      announce($)
+    }
   } catch {
-    cadence = recordPoll(cadence, now, 'offline')
-    offlinePolls += 1
-    if (!state.offline) {
-      state = { ...state, offline: true }
-      publish($, now)
-    }
-    if (offlinePolls >= START_AFTER_OFFLINE_POLLS && !startedServer) {
-      startedServer = true
-      await $.process.run(['node', `${$.plugin.root}/dist/start-server.cjs`], { stdin: '', timeoutMs: 15_000 }).catch(() => undefined)
-    }
+    // Odd data in a step is not the server going away: skip this round, keep polling.
   } finally {
     busy = false
   }
@@ -95,12 +135,22 @@ function lineEl(Text: unknown, line: Line, mono: boolean): unknown {
   return h(Text, mono ? { mono: true } : null, ...line.map((s) => h(Text, TONE[s.tone ?? 'ink'], s.text)))
 }
 
-function animate($: Engine, playing: boolean): void {
-  if (playing && !stopAnim) stopAnim = $.clock.every(ANIM_MS, () => $.ui.invalidate('ui.render'))
-  else if (!playing && stopAnim) {
-    stopAnim()
-    stopAnim = undefined
-  }
+function stopAnimation(): void {
+  animTimer?.cancel()
+  animTimer = undefined
+}
+
+/** Redraw at up to 8 frames a second until the scene ends, even if the pane closes and stops asking. */
+function animate($: Engine, remainingMs: number): void {
+  animTicks = Math.ceil(remainingMs / ANIM_MS) + 1
+  if (remainingMs <= 0) stopAnimation()
+  else if (!animTimer) animTimer = $.clock.every(ANIM_MS, () => tick($))
+}
+
+function tick($: Engine): void {
+  animTicks -= 1
+  if (animTicks <= 0) stopAnimation()
+  else $.ui.invalidate('ui.render')
 }
 
 async function drawPane($: Engine, e: RenderEvent): Promise<unknown> {
@@ -109,9 +159,12 @@ async function drawPane($: Engine, e: RenderEvent): Promise<unknown> {
   const mono = e.surface !== 'terminal'
   const lines = renderText(textModel(state), e.viewport?.columns ?? 80, e.viewport?.rows ?? 24)
   const cards = lines.map((l) => lineEl(Text, l, mono))
-  if (e.surface === 'terminal' || !Svg || state.offline) return h(Box, { flexDirection: 'column' }, ...cards)
+  if (e.surface === 'terminal' || !Svg || state.offline) {
+    stopAnimation()
+    return h(Box, { flexDirection: 'column' }, ...cards)
+  }
   const scene = paneScene(state.steps, readoutOf(state), (await $.clock.now()) - latest.at)
-  animate($, scene?.playing ?? false)
+  animate($, scene?.remainingMs ?? 0)
   const alt = plain(state.steps.at(-1)?.caption) || 'Sidecar stage'
   return h(Box, { flexDirection: 'column' }, ...(scene ? [h(Svg, { source: scene.svg, alt })] : []), ...cards)
 }
@@ -132,13 +185,13 @@ function drawBand($: Engine, e: RenderEvent, line: string): unknown {
 
 async function begin($: Engine, cwd: string): Promise<void> {
   await $.command.register({ name: 'sidecar', description: 'Developer Sidecar: open the pane, or web, off, on', argumentHint: '[web|off|on]' })
-  sessionId = await $.session.id()
   state = { ...emptyState(), project: basename(cwd) }
-  cadence = newCadence(await $.clock.now())
-  memory = freshMemory()
   token = ''
-  $.clock.every(FAST_MS, () => { void poll($) })
-  await poll($)
+  resetSession(await $.session.id(), await $.clock.now())
+  pollTimer?.cancel()
+  pollTimer = $.clock.every(FAST_MS, () => { void poll($) })
+  // Not awaited: the first session.start holds up turn one, and the server may be slow or still starting.
+  void poll($)
 }
 
 export function register(on: On): void {

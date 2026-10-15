@@ -2,7 +2,7 @@
 export interface Engine {
   plugin: { root: string }
   session: { id(): Promise<string> }
-  clock: { now(): Promise<number>; every(ms: number, fn: () => void): () => void }
+  clock: { now(): Promise<number>; sleep(ms: number): Promise<void>; every(ms: number, fn: () => void): { cancel(): void } }
   process: {
     run(argv: readonly string[], init?: { stdin?: string; timeoutMs?: number }): Promise<{ exitCode: number; stdout: string; stderr: string }>
   }

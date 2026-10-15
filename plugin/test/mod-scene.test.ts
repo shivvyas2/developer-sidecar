@@ -29,6 +29,8 @@ test('plays until the timeline ends, then holds still', () => {
   const spec = SAMPLE_SCENES[0]!.spec
   expect(paneScene([step(spec)], readout, 0)!.playing).toBe(true)
   expect(paneScene([step(spec)], readout, 1e9)!.playing).toBe(false)
+  expect(paneScene([step(spec)], readout, 1e9)!.remainingMs).toBe(0)
+  expect(paneScene([step(spec)], readout, 100)!.remainingMs).toBe(paneScene([step(spec)], readout, 0)!.remainingMs - 100)
 })
 
 test('a negative clock reads as the start', () => {

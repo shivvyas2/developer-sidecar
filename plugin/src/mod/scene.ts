@@ -9,7 +9,8 @@ export const SVG_LIMIT = 131_072
 /** Put the theme's CSS inside the SVG: an Svg element has no page stylesheet to inherit. */
 export const themed = (svg: string): string => svg.replace(/^<svg([^>]*)>/, `<svg$1><style>${themeCss()}</style>`)
 
-export function paneScene(steps: readonly FeedStep[], readout: Readout, sinceMs: number): { svg: string; playing: boolean } | undefined {
+/** `remainingMs` is how much of the scene is left to play; 0 once it holds still. */
+export function paneScene(steps: readonly FeedStep[], readout: Readout, sinceMs: number): { svg: string; playing: boolean; remainingMs: number } | undefined {
   const last = steps.at(-1)
   if (!last) return undefined
   try {
@@ -18,7 +19,8 @@ export function paneScene(steps: readonly FeedStep[], readout: Readout, sinceMs:
     const timeline = compile(parsed.data)
     const t = Math.min(Math.max(0, sinceMs), timeline.duration)
     const svg = themed(render(parsed.data, t, { frame: true, readout, timeline, town: townFrom(steps) }))
-    return svg.length < SVG_LIMIT ? { svg, playing: sinceMs < timeline.duration } : undefined
+    const remainingMs = Math.max(0, timeline.duration - Math.max(0, sinceMs))
+    return svg.length < SVG_LIMIT ? { svg, playing: remainingMs > 0, remainingMs } : undefined
   } catch {
     return undefined
   }

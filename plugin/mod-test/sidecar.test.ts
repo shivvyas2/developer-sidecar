@@ -19,19 +19,22 @@ interface World {
   toasts: string[]
   runs: string[][]
   urls: string[]
+  sid: string
+  hang: boolean
+  renders: number
   clock: { advance(ms: number): Promise<void>; settle(): Promise<void> }
 }
 
 // on is the test's registrar; its hooks stand beneath the mod.
 function world(on: any, steps: unknown[] = []): World {
-  const w = { steps, online: true, port: 7391, statuses: [], toasts: [], runs: [], urls: [] } as unknown as World
+  const w = { steps, online: true, port: 7391, statuses: [], toasts: [], runs: [], urls: [], sid: 'S1', hang: false, renders: 0 } as unknown as World
   w.clock = mock.clock(on)
   on('session.start', async (_$: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
-  on('session.id', async () => ({ value: 'S1' }))
+  on('session.id', async () => ({ value: w.sid }))
   on('command.register', async () => ({ value: undefined }))
   on('ui.open', async () => ({ value: { isPlaced: true } }))
   // What the engine draws when the band passes with next(e): an empty box of its own.
-  on('ui.render', async () => ({ type: 'Box', props: {}, children: [] }))
+  on('ui.render', async () => { w.renders += 1; return { type: 'Box', props: {}, children: [] } })
   on('ui.status', async (_$: unknown, e: { text?: string }) => { w.statuses.push(e.text); return { value: undefined } })
   on('ui.toast', async (_$: unknown, e: { text: string }) => { w.toasts.push(e.text); return { value: undefined } })
   on('process.run', async (_$: unknown, e: { argv: string[] }) => {
@@ -41,6 +44,8 @@ function world(on: any, steps: unknown[] = []): World {
   })
   on('http.fetch', async (_$: unknown, e: { url: string; init?: { headers?: Record<string, string> } }) => {
     w.urls.push(e.url)
+    // A server that accepts the connection and never answers.
+    if (w.hang) return new Promise(() => {})
     // The mod treats a refused connection and a non-ok answer the same way; a non-ok answer keeps the test's hook from failing the test.
     if (!w.online) return { value: { status: 503, ok: false, headers: {}, text: '' } }
     expect(e.init?.headers?.['x-sidecar-token']).toBe('T')
@@ -141,5 +146,57 @@ test('relocates after going offline and starts the server once', async ($, on) =
   w.port = 7392
   await w.clock.advance(5000)
   expect(w.urls.at(-1)).toMatch(/^http:\/\/127\.0\.0\.1:7392\//)
+  expect(w.statuses.at(-1)).toMatch(/^◢ 001 /)
+})
+
+test('review C1: a failed first poll does not turn history into toasts', async ($, on) => {
+  const w = world(on, [step(1, 'test', 'failed'), step(2, 'deploy', 'ok')])
+  w.online = false
+  await start($, w)
+  w.online = true
+  for (let i = 0; i < 3; i++) await w.clock.advance(5000)
+  expect(w.statuses.at(-1)).toMatch(/^◢ 002 /)
+  expect(w.toasts).toEqual([])
+})
+
+test('review C2: after /clear the mod follows the new session id, fresh', async ($, on) => {
+  const w = world(on, [step(1, 'install', 'ok')])
+  await start($, w)
+  await $.command.run({ command: 'sidecar', args: 'off' } as never)
+  w.sid = 'S2'
+  w.steps = [step(1, 'test', 'failed'), step(2, 'test', 'failed'), step(3, 'install', 'running')]
+  await w.clock.advance(1000)
+  await w.clock.advance(1000)
+  expect(w.urls.at(-1)).toMatch(/\/api\/(sessions\/S2\/steps|explainer)$/)
+  expect(w.urls.some((u) => u.includes('/api/sessions/S2/steps'))).toBe(true)
+  expect(w.statuses.at(-1)).toMatch(/^◢ 003 /)
+  expect(w.toasts).toEqual([])
+  const band = await $.ui.mount({ plugin: PLUGIN, surface: 'terminal', component: 'AbovePrompt', props: { hasSurvey: false } as never })
+  expect(await band.find({ text: /Caption 3/ })).toBeDefined()
+})
+
+test('review I1: the scene timer stops when the pane goes offline', async ($, on) => {
+  const w = world(on, [step(1, 'install', 'running')])
+  await start($, w)
+  await $.command.run({ command: 'sidecar', args: 'off' } as never)
+  const band = await $.ui.mount({ plugin: PLUGIN, surface: 'terminal', component: 'AbovePrompt', props: { hasSurvey: false } as never })
+  const pane = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', component: 'Pane', props: {} as never, requestId: 'sidecar', viewport: { columns: 80, rows: 30 } })
+  expect((await pane.findAll({ type: 'Svg' })).length).toBe(1)
+  w.online = false
+  await w.clock.advance(1000)
+  await pane.redraw()
+  expect(await pane.find({ text: /SIDECAR OFFLINE/ })).toBeDefined()
+  const before = w.renders
+  await w.clock.advance(3000)
+  expect(w.renders - before).toBeLessThan(3)
+  expect(band).toBeDefined()
+})
+
+test('review I2: a server that never answers does not hold up the session or stop polling', async ($, on) => {
+  const w = world(on, [step(1, 'install', 'ok')])
+  w.hang = true
+  await $.session.start({ source: 'startup', cwd: '/work/shop', surface: 'terminal' })
+  w.hang = false
+  for (let i = 0; i < 4; i++) await w.clock.advance(5000)
   expect(w.statuses.at(-1)).toMatch(/^◢ 001 /)
 })
