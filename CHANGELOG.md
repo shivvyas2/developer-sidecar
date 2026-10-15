@@ -19,6 +19,13 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 
 ### Added
 
+- **Sidecar inside Claude Code.** A status line with the current step, a
+  band above the prompt with the latest plain explanation, toasts for test
+  results, new connections and deploys, and a `/sidecar` pane drawn in the
+  drafting-instrument style: the scene on Claude Code Desktop, box-drawing
+  cards in the terminal. `/sidecar off` quiets the band and toasts for a
+  session. Capture still runs through the classic hooks, so nothing about
+  how steps are recorded changes.
 - **Plain-English explanations.** Each finished step gets one or two everyday
   sentences, a "why it matters" line and a glossary term. Steps are explained
   in batches with Claude Haiku 5.5 through the Anthropic API, or through your

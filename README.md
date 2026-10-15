@@ -27,6 +27,13 @@ Everything runs on your machine. The only thing that ever leaves it is the optio
 - **Decisions.** When Claude picks a library, service, database or approach, the choice, the alternatives and the reason are recorded in the Decisions tab.
 - **Glossary.** The terms from your session, defined in one line each, sorted A to Z.
 - **Settings.** Explanations off, quick (Claude Haiku) or detailed (Claude Sonnet). A running token counter in the header. Delete one session or all of them.
+- **Inside Claude Code.** You can follow along without leaving Claude Code:
+  - The status line shows the current step, like `◢ 042 INSTALL · STRIPE ●`.
+  - A band above the prompt shows the latest plain explanation, an `[OPEN WORKSTATION]` link and a Hide button.
+  - Toasts mark milestones: tests failing, tests passing again, a first connection to a service, and a deploy.
+  - `/sidecar` opens a pane. On Claude Code Desktop it shows the drawn scene above the cards. In the terminal it shows the same cards drawn in box-drawing characters (the pane needs a window about 110 columns wide).
+  - `/sidecar web` gives the workstation link, and `/sidecar off` and `/sidecar on` hide or show the band and toasts for the session.
+  - The VS Code extension has no in-editor surface yet. Its steps still reach the browser workstation.
 - **Works with any Claude Code session.** Terminal, the desktop app, and IDE terminals all feed the same local workstation. Several sessions at once share one server.
 - **Never slows Claude down.** Hooks hand events off in a few milliseconds and always succeed, even when the sidecar is not running.
 
@@ -118,7 +125,9 @@ developer-sidecar/
 ├── plugin/                           The Claude Code plugin
 │   ├── .claude-plugin/plugin.json    Plugin manifest
 │   ├── hooks/hooks.json              Hook registrations
-│   ├── src/                          emit and start-server sources
+│   ├── src/                          emit, start-server and locate sources
+│   ├── src/mod/                      The in-Claude-Code mod: pane, status line, band, toasts, /sidecar
+│   ├── mod-test/                     Engine tests for the mod (claude plugin test)
 │   └── dist/                         Built bundles (generated, not committed)
 ├── packages/
 │   ├── shared/                       Event, step, scene and explanation types, zod schemas, secret scrubbing
@@ -136,6 +145,7 @@ pnpm typecheck      # TypeScript, strict
 pnpm test           # Vitest: shared, ui-kit, server, plugin and web
 pnpm build          # Bundles the plugin scripts, the server and the web app into plugin/dist
 pnpm smoke          # Starts a real server, replays a recorded session, checks the result
+pnpm test:mod       # Runs the mod's engine tests with the claude CLI (after pnpm build)
 ```
 
 Run Claude Code against your working copy with `claude --plugin-dir ./plugin` after `pnpm build`. Tests and the smoke scripts never call a real model.
@@ -144,7 +154,6 @@ Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first.
 
 ## Roadmap
 
-- **Inside Claude Code.** A Sidecar pane with live scenes on the desktop app, a status line, a band above the prompt, and toasts for milestones like tests passing or a deploy finishing.
 - **Releases.** Prebuilt bundles on tagged releases so the plugin installs straight from the marketplace.
 - **Whiteboard.** A live diagram of how your app fits together, built from steps and decisions.
 - **Recap videos.** Export a session as a short animated recap.

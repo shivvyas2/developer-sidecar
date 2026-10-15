@@ -17,6 +17,8 @@ Thanks for looking. Sidecar is small, but it sits inside other people's Claude C
 
 **Never block Claude.** The hook scripts in `plugin/src/` must always exit 0, finish within a few hundred milliseconds, and never wait on the server, the explainer, or the network for longer than their timeout. If a change makes a hook slower or able to fail, it is a bug.
 
+**The mod reads, it never writes.** `plugin/src/mod/` draws from the local server and never emits events; capture belongs to the classic hooks. Code there runs with no Node and no DOM, and every helper that takes `$` must be a top-level function, or the engine refuses the module.
+
 **Scrub before anything is stored or sent.** Every value that reaches the database or a model goes through `scrubDeep` from `@sidecar/shared` first. If you add a new field that carries user data, scrub it and add a test with a fake secret in it.
 
 **Model text is data.** Explanations are rendered as React text, never with `dangerouslySetInnerHTML`. Step data is sent to the model as JSON, and the system prompt treats it as data, never as instructions.
@@ -36,7 +38,10 @@ pnpm typecheck     # TypeScript, strict
 pnpm test          # Vitest
 pnpm build         # Bundles plugin/dist
 pnpm smoke         # Real server, recorded session, end to end
+pnpm test:mod      # Mod engine tests (needs the claude CLI; run after pnpm build)
 ```
+
+CI does not have the `claude` CLI, so `pnpm test:mod` runs locally. Run it before any pull request that touches `plugin/src/mod/`.
 
 New logic gets a test beside its package (`packages/server/src/store.ts` and `packages/server/test/store.test.ts`). Write the failing test first when you can; it keeps the change small.
 
