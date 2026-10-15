@@ -1,3 +1,4 @@
+import { formatElapsed, stepSubject, stepTitle } from '../src/index'
 import { describe, expect, test } from 'vitest'
 import { clamp, easeInOut, easeOutBack, lerp, progress } from '../src/ease'
 import { esc, g, label, MAX_LABEL, n, truncate } from '../src/svg'
@@ -80,5 +81,20 @@ describe('tokens', () => {
   })
   test('every action has a positive duration', () => {
     for (const ms of Object.values(BEAT_MS)) expect(ms).toBeGreaterThan(0)
+  })
+})
+
+describe('step formatters', () => {
+  test('stepTitle reads CATEGORY · subject', () => {
+    expect(stepTitle({ category: 'install', techLabel: 'Bash: pnpm add stripe' })).toBe('INSTALL · pnpm add stripe')
+    expect(stepTitle({ category: 'create', techLabel: 'Write src/users.ts' })).toBe('NEW FILE · users.ts')
+    expect(stepTitle({ category: 'prompt', techLabel: 'UserPromptSubmit' })).toBe('PROMPT')
+  })
+  test('stepSubject keeps URLs whole', () => {
+    expect(stepSubject('WebFetch https://api.stripe.com/v1')).toBe('https://api.stripe.com/v1')
+  })
+  test('formatElapsed is mm:ss and never negative', () => {
+    expect(formatElapsed(252_000)).toBe('04:12')
+    expect(formatElapsed(-5)).toBe('00:00')
   })
 })
