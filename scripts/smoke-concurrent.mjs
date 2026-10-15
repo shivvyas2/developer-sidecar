@@ -4,6 +4,12 @@ import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
+import { createServer } from 'node:net'
+
+// A port the OS says is free, so a test server never lands on a live sidecar's 7377.
+const freePort = () => new Promise((resolve) => {
+  const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)) })
+})
 
 const startPayload = (sid) => JSON.stringify({ session_id: sid, cwd: '/tmp/demo', hook_event_name: 'SessionStart' })
 
@@ -32,7 +38,7 @@ function sidecarPids(_home) {
 const rounds = Number(process.argv[2] ?? 5)
 for (let i = 0; i < rounds; i++) {
   const home = mkdtempSync(join(tmpdir(), 'sidecar-race-'))
-  const env = { ...process.env, SIDECAR_HOME: home, SIDECAR_EXPLAINER: 'off' }
+  const env = { ...process.env, SIDECAR_HOME: home, SIDECAR_EXPLAINER: 'off', SIDECAR_PORT: String(await freePort()) }
   const before = new Set(await sidecarPids(home))
   const outs = await Promise.all([runStart(env, `a${i}`), runStart(env, `b${i}`)])
   await new Promise((r) => setTimeout(r, 500))

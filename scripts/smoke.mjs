@@ -3,9 +3,16 @@ import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
+import { createServer } from 'node:net'
+
+// A port the OS says is free, so a test server never lands on a live sidecar's 7377.
+const freePort = () => new Promise((resolve) => {
+  const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)) })
+})
 
 const home = mkdtempSync(join(tmpdir(), 'sidecar-smoke-'))
-const env = { ...process.env, SIDECAR_HOME: home, SIDECAR_EXPLAINER: 'off' }
+const wanted = await freePort()
+const env = { ...process.env, SIDECAR_HOME: home, SIDECAR_EXPLAINER: 'off', SIDECAR_PORT: String(wanted) }
 const lines = readFileSync('packages/server/test/fixtures/session-basic.jsonl', 'utf8').trim().split('\n')
 
 const run = (script, input) => {
@@ -22,6 +29,7 @@ try {
   for (const line of lines.slice(1)) run('emit.cjs', line)
 
   const port = readFileSync(join(home, 'port'), 'utf8').trim()
+  assert.equal(port, String(wanted), 'the smoke server must use the free port it was given, never 7377')
   const token = readFileSync(join(home, 'token'), 'utf8').trim()
   const headers = { 'x-sidecar-token': token }
   const steps = await (await fetch(`http://127.0.0.1:${port}/api/sessions/smoke-1/steps`, { headers })).json()

@@ -21,6 +21,10 @@ jobs:
         run: |
           v=$(node -p "require('./plugin/.claude-plugin/plugin.json').version")
           if [ "v$v" != "$GITHUB_REF_NAME" ]; then echo "Tag $GITHUB_REF_NAME does not match plugin.json version $v"; exit 1; fi
+      - name: Release notes exist for this version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: node scripts/release-tree.mjs notes "${TAG#v}" > notes.md
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
@@ -43,12 +47,11 @@ jobs:
           find ../release -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
           cp -R release-tree/. ../release/
           git -C ../release add -A
-          git -C ../release commit -m "release $TAG"
+          # A re-run after a later step failed finds the same tree: nothing to commit, nothing to push.
+          git -C ../release diff --cached --quiet || git -C ../release commit -m "release $TAG"
           git -C ../release push origin release
       - name: GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: |
-          node scripts/release-tree.mjs notes "${TAG#v}" > notes.md
-          gh release create "$TAG" --title "$TAG" --notes-file notes.md
+        run: gh release view "$TAG" > /dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --notes-file notes.md

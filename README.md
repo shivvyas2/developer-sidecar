@@ -104,8 +104,9 @@ If neither is available, the feed, stage, replay and captions still work; only t
 | `ANTHROPIC_API_KEY` | environment | unset | Use the Anthropic API for explanations |
 | `SIDECAR_EXPLAINER=off` | environment | unset | Turn explanations off entirely, regardless of the setting. Read when the sidecar server starts, so stop a running server first |
 | `SIDECAR_HOME` | environment | `~/.developer-sidecar` | Where the database, token, port and logs live |
+| `SIDECAR_PORT` | environment | `7377` | The first port the server tries. Tests use it to stay clear of a running sidecar |
 
-The server listens on port 7377. If that port is taken it tries the next ten and records the one it chose in `$SIDECAR_HOME/port`. It shuts itself down after two hours with no activity and no open browser tabs.
+The server listens on port 7377 (or `SIDECAR_PORT`). If that port is taken it tries the next ten and records the one it chose in `$SIDECAR_HOME/port`. It shuts itself down after two hours with no activity and no open browser tabs.
 
 ## Privacy and security
 
