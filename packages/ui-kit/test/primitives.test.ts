@@ -119,3 +119,91 @@ describe('batch 2: cards, drawer, stamp', () => {
     expect(P.stamp(at, '<x>')).toContain('&lt;x&gt;')
   })
 })
+
+describe('batch 3: instruments', () => {
+  const c = { x: 120, y: 120 }
+  const accents = (s: string) => (s.match(/var\(--sk-accent/g) ?? []).length
+  const progresses = [-1, 0, 0.5, 1, 2]
+
+  test.each(progresses)('dial, sessionArc well formed at progress %s', (p) => {
+    for (const state of ['run', 'ok', 'fail'] as const) {
+      wellFormed(P.dial(c, 40, { progress: p, value: '042', title: 'step', unit: 'files', state }))
+    }
+    wellFormed(P.sessionArc(c, 100, p))
+  })
+  test('dial has no accent at 0 and all 49 ticks accent at 1', () => {
+    expect(accents(P.dial(c, 40, { progress: 0, value: '0', title: 'x' }))).toBe(0)
+    expect(accents(P.dial(c, 40, { progress: 1, value: '9', title: 'x' }))).toBe(49)
+    expect(accents(P.dial(c, 40, { progress: 0.5, value: '9', title: 'x' }))).toBe(25)
+  })
+  test('dial clamps progress', () => {
+    const d = (p: number) => P.dial(c, 40, { progress: p, value: '1', title: 'x' })
+    expect(d(-1)).toBe(d(0)); expect(d(2)).toBe(d(1)); expect(d(Number.NaN)).toBe(d(0))
+  })
+  test('dial states: ok shows an ink check, fail an accent cross, both drop the value', () => {
+    const ok = P.dial(c, 40, { progress: 1, value: 'QZQ', title: 'x', state: 'ok' })
+    const fail = P.dial(c, 40, { progress: 0, value: 'QZQ', title: 'x', state: 'fail' })
+    expect(ok).toContain('✓'); expect(ok).not.toContain('QZQ')
+    expect(fail).toMatch(/fill="var\(--sk-accent[^"]*"[^>]*>✕</)
+    expect(fail).not.toContain('QZQ')
+    expect(accents(fail)).toBe(1)
+  })
+  test('dial escapes the value, title and unit', () => {
+    const s = P.dial(c, 40, { progress: 0.2, value: '<b>', title: '<i>&', unit: '"u"' })
+    wellFormed(s)
+    expect(s).not.toMatch(/<b>|<i>/); expect(s).toContain('&lt;b&gt;'); expect(s).toContain('&amp;'); expect(s).toContain('&quot;')
+  })
+
+  test('readout is well formed, chamfered and escapes hostile text', () => {
+    const fields = [{ k: 'STEP', v: '042', big: true }, { k: 'FILES', v: '06' }, { k: 'TOKENS', v: '4.3k' }]
+    const s = P.readout({ x: 20, y: 20 }, 180, fields, { k: 'NOW', v: 'INSTALL · STRIPE' })
+    wellFormed(s)
+    expect(s).toContain('042'); expect(s).toContain('INSTALL · STRIPE'); expect(s).toContain('stroke-dasharray')
+    expect(s).toContain('font-size="30"'); expect(s).toContain('font-size="20"')
+    const bad = P.readout({ x: 0, y: 0 }, 180, [{ k: '<script>', v: '<img onerror=x>' }], { k: '&', v: '"><svg>' })
+    wellFormed(bad)
+    expect(bad).not.toMatch(/<script>|<img|<svg>/)
+    expect(bad).toContain('&lt;script&gt;'); expect(bad).toContain('&lt;img'); expect(bad).toContain('&quot;&gt;&lt;svg&gt;')
+    wellFormed(P.readout({ x: 0, y: 0 }, 120, []))
+  })
+
+  test('readout keeps long values inside the panel and spaces a big value from its neighbour', () => {
+    const s = P.readout({ x: 0, y: 0 }, 180, [{ k: 'LONG', v: '123456789012345678901' }, { k: 'B', v: '9' }])
+    expect(s).toContain('…')
+    const xs = (r: string) => [...r.matchAll(/<text x="([\d.]+)"[^>]*font-family="'DotGothic16/g)].map((m) => Number(m[1]))
+    const big = P.readout({ x: 0, y: 0 }, 180, [{ k: 'STEP', v: '042', big: true }, { k: 'FILES', v: '06' }, { k: 'TOKENS', v: '4.3k' }])
+    const [a, b, c2] = xs(big)
+    expect(b! - a!).toBeGreaterThanOrEqual(3 * 30 * 0.52 + 6)
+    expect(c2! + 4 * 20 * 0.52).toBeLessThanOrEqual(180 - 12)
+  })
+  test('a small dial moves its title below the ring', () => {
+    const s = P.dial({ x: 100, y: 100 }, 22, { progress: 0.5, value: '64', title: 'install', unit: 'pct' })
+    wellFormed(s)
+    const y = Number(s.match(/<text x="100" y="([\d.]+)"[^>]*>INSTALL</)![1])
+    expect(y).toBeGreaterThan(100 + 22 + 9)
+  })
+  test.each([0, 1, 2, 3, 9, -2])('indicatorRow has exactly lit accent fills (%s)', (lit) => {
+    const s = P.indicatorRow({ x: 10, y: 10 }, ['LT', 'P', 'TC'], lit)
+    wellFormed(s)
+    expect((s.match(/fill="var\(--sk-accent/g) ?? []).length).toBe(Math.min(3, Math.max(0, lit)))
+    expect(s).toContain('>TC<')
+  })
+
+  test('sessionArc: 121 ticks, accent up to progress', () => {
+    const lines = (s: string) => (s.match(/<line /g) ?? []).length
+    expect(lines(P.sessionArc(c, 100, 0)) - 1).toBe(121)
+    expect(accents(P.sessionArc(c, 100, 0))).toBe(0)
+    expect(accents(P.sessionArc(c, 100, 1))).toBe(121)
+    expect(accents(P.sessionArc(c, 100, 0.6))).toBe(73)
+    expect(P.sessionArc(c, 100, 2)).toBe(P.sessionArc(c, 100, 1))
+  })
+
+  test('statusStrip shows LIVE or REPLAY in an ink block and escapes the text', () => {
+    const live = P.statusStrip({ x: 24, y: 340 }, 592, { text: 'STEP 042 · ADDING STRIPE', live: true })
+    const replay = P.statusStrip({ x: 24, y: 340 }, 592, { text: '<b>x</b>' + 'y'.repeat(300), live: false })
+    wellFormed(live); wellFormed(replay)
+    expect(live).toContain('>LIVE<'); expect(live).toContain('STEP 042 · ADDING STRIPE'); expect(live).not.toContain('REPLAY')
+    expect(replay).toContain('>REPLAY<'); expect(replay).not.toContain('<b>'); expect(replay).toContain('&lt;b&gt;'); expect(replay).toContain('…')
+    expect(accents(live)).toBe(0)
+  })
+})
