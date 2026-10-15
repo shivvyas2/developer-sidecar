@@ -207,3 +207,97 @@ describe('batch 3: instruments', () => {
     expect(accents(live)).toBe(0)
   })
 })
+
+describe('batch 4: figures and tools', () => {
+  const at = { x: 200, y: 160 }
+  const accents = (s: string) => (s.match(/var\(--sk-accent/g) ?? []).length
+  const poses = ['point', 'press', 'hold'] as const
+  const holdings = [undefined, 'card', 'block', 'module'] as const
+  const combos = poses.flatMap((pose) => holdings.flatMap((holding) =>
+    ([1, -1] as const).flatMap((facing) => [1, 0.7].map((scale) => ({ pose, holding, facing, scale })))))
+
+  test.each(combos)('hand $pose holding $holding facing $facing scale $scale is well formed', (h) => {
+    const s = P.hand(at, h)
+    wellFormed(s)
+    expect(s).toContain('var(--sk-card')
+    expect(s).toContain('stroke-width="1.1"')
+    expect(s).toContain(`sk-hand--${h.pose}`)
+  })
+  test('hand is anchored at the fingertip and mirrors with facing', () => {
+    const right = P.hand(at, { pose: 'point' })
+    const left = P.hand(at, { pose: 'point', facing: -1 })
+    expect(right).toContain('translate(200 160) scale(1 1)')
+    expect(left).toContain('translate(200 160) scale(-1 1)')
+    expect(P.hand(at, { pose: 'point', scale: 0.7 })).toContain('scale(0.7 0.7)')
+  })
+  test('poses differ and only hold draws what it holds', () => {
+    const [pt, pr, ho] = poses.map((pose) => P.hand(at, { pose }))
+    expect(pt).not.toBe(pr); expect(pr).not.toBe(ho)
+    expect(P.hand(at, { pose: 'point', holding: 'block' })).toBe(pt)
+    expect(P.hand(at, { pose: 'hold', holding: 'block' })).toContain('sk-block--service')
+    expect(P.hand(at, { pose: 'hold', holding: 'card' })).toContain('sk-held--card')
+    expect(P.hand(at, { pose: 'hold', holding: 'module' })).toContain('sk-module')
+  })
+  test('hand never uses the accent, except the held module dot', () => {
+    for (const pose of poses) expect(accents(P.hand(at, { pose }))).toBe(0)
+    expect(accents(P.hand(at, { pose: 'hold', holding: 'module' }))).toBe(1)
+  })
+
+  test.each([-1, 0, 0.5, 1, 2, Number.NaN])('helperHand at progress %s', (p) => {
+    const s = P.helperHand(at, p)
+    wellFormed(s)
+    expect(s).toContain('scale(0.7 0.7)')
+    expect(s).toContain('sk-dial')
+  })
+  test('helperHand dial follows progress', () => {
+    expect(accents(P.helperHand(at, 0))).toBe(0)
+    expect(accents(P.helperHand(at, 1))).toBe(49)
+    expect(P.helperHand(at, 2)).toBe(P.helperHand(at, 1))
+  })
+
+  test('cursor escapes and truncates to 34 characters', () => {
+    const s = P.cursor(at, '<script>alert("x")</script>' + 'y'.repeat(200))
+    wellFormed(s)
+    expect(s).not.toMatch(/<script>|<\/script>/)
+    expect(s).toContain('&lt;script&gt;'); expect(s).toContain('&quot;'); expect(s).toContain('…')
+    const text = s.match(/<text[^>]*>([^<]*)<\/text>/)![1]!
+    const visible = text.replace(/&[a-z]+;|&#\d+;/g, '_')
+    expect(visible.length).toBe(34)
+  })
+  test('cursor keeps a 30 character prompt whole and draws a 2px caret', () => {
+    const q = 'add stripe checkout to my shop'
+    const s = P.cursor(at, q)
+    wellFormed(s)
+    expect(s).toContain(`>${q}<`); expect(s).not.toContain('…')
+    expect(s).toMatch(/<rect[^>]*width="2"[^>]*fill="var\(--sk-ink/)
+    expect(s).toContain('font-size="7"')
+  })
+  test('cursor box grows with the text', () => {
+    const w = (s: string) => Number(s.match(/class="sk-speech"[^>]*\swidth="([\d.]+)"/)![1])
+    expect(w(P.cursor(at, 'hi there, add a page'))).toBeGreaterThan(w(P.cursor(at, 'hi')))
+    expect(w(P.cursor(at, 'x'.repeat(500)))).toBe(w(P.cursor(at, 'x'.repeat(34))))
+  })
+
+  test('cloud, magnifier and instrumentModule are well formed and use the card fill', () => {
+    for (const s of [P.cloud(at), P.magnifier(at), P.instrumentModule(at)]) {
+      wellFormed(s)
+      expect(s).toContain('var(--sk-card')
+    }
+    expect(accents(P.cloud(at))).toBe(0)
+    expect(accents(P.magnifier(at))).toBe(0)
+    expect(accents(P.instrumentModule(at))).toBe(1)
+  })
+
+  test.each([-1, 0, 0.5, 1, 2])('packageBlock at progress %s', (p) => {
+    const s = P.packageBlock(at, p)
+    wellFormed(s)
+    expect(s).toContain('sk-block--service')
+  })
+  test('packageBlock: no accent at 0, a slit tape drawn with progress, clamped', () => {
+    expect(accents(P.packageBlock(at, 0))).toBe(0)
+    expect(accents(P.packageBlock(at, 1))).toBe(1)
+    expect(P.packageBlock(at, 0.5)).not.toBe(P.packageBlock(at, 1))
+    expect(P.packageBlock(at, 5)).toBe(P.packageBlock(at, 1))
+    expect(P.packageBlock(at, -5)).toBe(P.packageBlock(at, 0))
+  })
+})
