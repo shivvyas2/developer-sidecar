@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Category, FeedStep } from '@sidecar/shared'
+import { Kit } from './Kit'
 import { Stage } from './StageView'
 import { useFeed } from './useFeed'
 
@@ -50,8 +51,10 @@ export function useHash() {
 }
 
 export function App() {
+  const hash = useHash()
   const { state, dispatch, connection } = useFeed()
   const [tab, setTab] = useState<Tab>('stage')
+  if (hash === '#/kit') return <Kit />
   const steps = state.selected ? state.steps[state.selected] ?? [] : []
   return (
     <div className="app">
@@ -69,6 +72,7 @@ export function App() {
             </option>
           ))}
         </select>
+        <a className="bar__link" href="#/kit">UI kit</a>
       </header>
       <nav className="tabs" role="tablist">
         {TABS.map(([id, name]) => (

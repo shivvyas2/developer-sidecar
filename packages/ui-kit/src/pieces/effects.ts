@@ -29,7 +29,7 @@ export function effect(id: EffectId, p: number, t: number): string {
       case 'thinking':
         return `<g transform="scale(${pop(p)})"><circle cx="-14" cy="10" r="4" fill="${color('paper')}" ${S}/><circle cx="-6" cy="-2" r="6" fill="${color('paper')}" ${S}/><ellipse cx="18" cy="-26" rx="28" ry="18" fill="${color('paper')}" ${S}/>${dots(t, -26, 18)}</g>`
       case 'speech':
-        return `<g transform="scale(${pop(p)})"><path d="M-30 -48 h60 a8 8 0 0 1 8 8 v18 a8 8 0 0 1 -8 8 h-38 l-12 12 v-12 h-10 a8 8 0 0 1 -8 -8 v-18 a8 8 0 0 1 8 -8 z" fill="${color('paper')}" ${S}/>${dots(t, -31)}</g>`
+        return `<g transform="scale(${pop(p)})"><g transform="translate(24 0)"><path d="M-30 -48 h60 a8 8 0 0 1 8 8 v18 a8 8 0 0 1 -8 8 h-38 l-12 12 v-12 h-10 a8 8 0 0 1 -8 -8 v-18 a8 8 0 0 1 8 -8 z" fill="${color('paper')}" ${S}/>${dots(t, -31)}</g></g>`
     }
   })()
   return `<g class="sk-fx sk-fx--${id}">${body}</g>`

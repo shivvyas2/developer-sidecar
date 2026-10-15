@@ -43,3 +43,10 @@ main { max-width: 760px; margin: 0 auto; padding: 16px; }
 .scrubber__live { color: var(--ok); }
 .scrubber__pos { min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
 @media (max-width: 480px) { .scrubber { flex-wrap: wrap; } .scrubber input[type="range"] { flex-basis: 100%; order: 3; } }
+.bar__link { font-size: 13px; color: var(--accent); }
+.kit { max-width: 1200px; }
+.kit h2 { font-size: 15px; margin: 24px 0 8px; }
+.kit__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.kit__card { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.kit__card figcaption { padding: 8px 10px; font-size: 12px; color: var(--muted); }
+.kit__card figcaption strong { color: var(--text); }
