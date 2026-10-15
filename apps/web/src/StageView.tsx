@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useReducer, useState } from 'react'
-import type { FeedStep } from '@sidecar/shared'
+import { SceneSpecSchema, type FeedStep } from '@sidecar/shared'
 import { townFrom } from '@sidecar/ui-kit'
+import { forStatus } from '@sidecar/ui-kit/catalog'
 import { Scene } from '@sidecar/ui-kit/react'
 import { initialStage, replayAdvance, stageReducer, type Replay } from './stage'
 
@@ -20,7 +21,8 @@ export function Stage({ sessionId, loaded, steps }: { sessionId: string | null; 
   const shown = index >= 0 ? steps[index] : undefined
   const town = useMemo(() => townFrom(steps.slice(0, index + 1)), [steps, index])
 
-  if (!shown) {
+  const parsed = shown ? SceneSpecSchema.safeParse(forStatus(shown.scene, shown.status)) : undefined
+  if (!shown || !parsed?.success) {
     return <section className="stage stage--empty"><p>The stage lights up when Claude starts working.</p></section>
   }
 
@@ -32,10 +34,10 @@ export function Stage({ sessionId, loaded, steps }: { sessionId: string | null; 
     <section className="stage" aria-label="Stage">
       <Scene
         key={`${replay ? 'replay' : 'live'}:${shown.id}`}
-        spec={shown.scene}
+        spec={parsed.data}
         town={town}
         onDone={onDone}
-        {...(replay && !replay.playing ? { at: END } : {})}
+        {...((replay ? !replay.playing : !stage.playing) ? { at: END } : {})}
       />
       <p className={`stage__caption stage__caption--${shown.status}`} aria-live="polite">{shown.caption}</p>
       <div className="scrubber">
@@ -47,7 +49,7 @@ export function Stage({ sessionId, loaded, steps }: { sessionId: string | null; 
               onChange={(e) => setReplay({ index: Number(e.target.value), playing: false })}
             />
             <span className="scrubber__pos">{index + 1} / {steps.length}</span>
-            <button onClick={() => setReplay(null)}>● Live</button>
+            <button onClick={() => { dispatch({ type: 'reset', ids }); setReplay(null) }}>● Live</button>
           </>
         ) : (
           <>

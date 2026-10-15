@@ -43,6 +43,7 @@ export function Scene({ spec, town, at, loop = false, onDone, className }: Scene
       const id = setTimeout(() => done.current?.(), REDUCED_MOTION_HOLD_MS)
       return () => clearTimeout(id)
     }
+    setT(0)
     let raf = 0
     let start = -1
     const tick = (now: number) => {

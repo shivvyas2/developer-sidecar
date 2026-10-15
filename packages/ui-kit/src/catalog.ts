@@ -1,4 +1,4 @@
-import type { SceneSpec } from '@sidecar/shared'
+import type { SceneSpec, StepStatus } from '@sidecar/shared'
 
 type Beat = SceneSpec['beats'][number]
 const done = (failed: boolean, at: string): Beat => ({ fx: failed ? 'error' : 'success', at })
@@ -86,3 +86,10 @@ export const SAMPLE_SCENES: ReadonlyArray<{ name: string; spec: SceneSpec }> = [
   { name: 'edit', spec: scenes.bolt('Changing auth.ts') },
   { name: 'thinking', spec: scenes.thinking('Working…') },
 ]
+
+/** A step that has not finished has no outcome yet: drop the success/error beats so the scene doesn't announce one. */
+export function forStatus(spec: SceneSpec, status: StepStatus): SceneSpec {
+  if (status !== 'running' && status !== 'interrupted') return spec
+  const beats = spec.beats.filter((b) => !('fx' in b) || (b.fx !== 'success' && b.fx !== 'error'))
+  return { ...spec, beats }
+}
