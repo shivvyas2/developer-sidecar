@@ -5,6 +5,7 @@
   "type": "module",
   "exports": { ".": "./src/main.ts" },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.131.0",
     "@hono/node-server": "^2.1.5",
     "@sidecar/shared": "workspace:*",
     "@sidecar/ui-kit": "workspace:*",
