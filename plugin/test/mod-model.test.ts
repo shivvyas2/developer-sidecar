@@ -1,0 +1,94 @@
+import { describe, expect, test } from 'vitest'
+import type { ExplainerState, FeedStep } from '@sidecar/shared'
+import { bandLine, basename, emptyState, fingerprint, plain, readoutOf, statusLine, textModel, workstationUrl, type ModState } from '../src/mod/model'
+
+const step = (n: number, over: Partial<FeedStep> = {}): FeedStep => ({
+  id: `s${n}`, sessionId: 'S1', seq: n, toolName: 'Bash', input: {}, startedAt: 1_000 + n * 1_000, status: 'ok',
+  category: 'install', caption: `Installing thing ${n}`, techLabel: 'Bash: pnpm add stripe',
+  scene: { scene: 'install-package', cast: ['claude'], beats: [], caption: `Installing thing ${n}` },
+  ...over,
+} as FeedStep)
+const explainer = (input: number, output: number): ExplainerState => ({ level: 'haiku', provider: 'api', status: 'ready', tokens: { input, output } })
+const state = (over: Partial<ModState> = {}): ModState => ({ ...emptyState(), project: 'shop', ...over })
+
+describe('plain', () => {
+  test('strips terminal controls and bidi marks', () => {
+    expect(plain('a\u001b[31mb\u0007c\u202ed\ne')).toBe('a [31mb c d e')
+  })
+  test('null and numbers are safe', () => {
+    expect(plain(undefined)).toBe('')
+    expect(plain(42)).toBe('42')
+  })
+})
+
+test('basename works on posix and windows paths', () => {
+  expect(basename('/work/shop/')).toBe('shop')
+  expect(basename('C:\\work\\shop')).toBe('shop')
+  expect(basename('')).toBe('')
+})
+
+test('readout counts every step, new files and both token kinds', () => {
+  const steps = [step(1), step(2, { category: 'create', techLabel: 'Write src/a.ts' }), step(3, { category: 'create', status: 'failed' })]
+  const r = readoutOf(state({ steps, explainer: explainer(1000, 234) }))
+  expect(r).toMatchObject({ step: 3, files: 1, tokens: 1234, elapsed: '00:02', live: true, project: 'shop' })
+})
+
+test('textModel windows the newest steps but keeps their real numbers', () => {
+  const steps = Array.from({ length: 1042 }, (_, i) => step(i + 1))
+  const m = textModel(state({ steps }))
+  expect(m.steps).toHaveLength(50)
+  expect(m.steps.at(-1)?.num).toBe(1042)
+  expect(m.steps[0]?.num).toBe(993)
+  expect(m.readout.step).toBe(1042)
+})
+
+test('textModel carries the explanation and its glossary term', () => {
+  const m = textModel(state({ steps: [step(1, { explanation: { plain: 'Adds Stripe.', why: 'Payments.', concept: { term: 'SDK', definition: 'A kit.' }, decision: null } })] }))
+  expect(m.steps[0]).toMatchObject({ plain: 'Adds Stripe.', why: 'Payments.', chip: 'SDK', title: 'INSTALL · pnpm add stripe' })
+})
+
+test('textModel marks the offline state', () => {
+  expect(textModel(state({ offline: true })).offline).toBe(true)
+})
+
+describe('statusLine', () => {
+  test('number, title and a status mark', () => {
+    expect(statusLine(state({ steps: [step(42, { status: 'running' })] }))).toBe('◢ 001 INSTALL · PNPM ADD STRIPE ●')
+  })
+  test('cut to fit keeps the mark', () => {
+    const s = statusLine(state({ steps: [step(1, { status: 'failed' })] }), 20)!
+    expect([...s].length).toBe(20)
+    expect(s.endsWith(' ✕')).toBe(true)
+    expect(s).toContain('…')
+  })
+  test('cleared when offline or empty', () => {
+    expect(statusLine(state())).toBeUndefined()
+    expect(statusLine(state({ steps: [step(1)], offline: true }))).toBeUndefined()
+  })
+  test('hostile techLabel is cleaned', () => {
+    expect(statusLine(state({ steps: [step(1, { techLabel: 'Bash: echo \u001b]0;pwned\u0007' })] }))).not.toMatch(/[\u0000-\u001f]/)
+  })
+})
+
+describe('bandLine', () => {
+  test('prefers the plain explanation, else the caption', () => {
+    expect(bandLine(state({ steps: [step(1)] }))).toBe('Installing thing 1')
+    expect(bandLine(state({ steps: [step(1, { explanation: { plain: 'Adds\nStripe.', why: 'x', concept: null, decision: null } })] }))).toBe('Adds Stripe.')
+  })
+  test('hidden with no steps or offline', () => {
+    expect(bandLine(state())).toBeUndefined()
+    expect(bandLine(state({ steps: [step(1)], offline: true }))).toBeUndefined()
+  })
+})
+
+test('fingerprint changes when an older step gets its explanation', () => {
+  const a = [step(1), step(2)]
+  const b = [step(1, { explanation: { unavailable: 'off' } }), step(2)]
+  expect(fingerprint(a, null)).not.toBe(fingerprint(b, null))
+  expect(fingerprint(a, explainer(1, 1))).not.toBe(fingerprint(a, explainer(1, 2)))
+  expect(fingerprint(a, null)).toBe(fingerprint([...a], null))
+})
+
+test('workstationUrl uses the located port', () => {
+  expect(workstationUrl(state({ port: 7390 }))).toBe('http://localhost:7390')
+})
