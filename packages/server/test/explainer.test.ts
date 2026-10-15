@@ -166,4 +166,97 @@ describe('explainer', () => {
     expect(user).toContain('shop')
     expect(user).toContain('add checkout')
   })
+
+  const slow = (ms = 100) => fakeProvider(async (ids) => {
+    await new Promise((r) => setTimeout(r, ms))
+    return { items: ids.map((stepId) => ({ stepId, plain: 'p', why: 'w', concept: { term: `T${stepId}`, definition: 'd' }, decision: null })) }
+  })
+
+  test('tokens are counted even when the batch is dropped mid-flight (session deleted)', async () => {
+    const { provider, calls } = slow()
+    const { ex, send, hub, store } = setup(provider)
+    send(step('a'))
+    await vi.advanceTimersByTimeAsync(QUIET_MS + 10)
+    expect(calls).toHaveLength(1)
+    hub.publish({ type: 'session_deleted', id: 's1' })
+    await vi.advanceTimersByTimeAsync(200)
+    await ex.idle()
+    expect(ex.state().tokens).toEqual({ input: 10, output: 5 })
+    expect(store.hasExplanation('a')).toBe(false)
+  })
+
+  test('reset drops in-flight and chained batches without writing or publishing', async () => {
+    const { provider, calls } = slow(QUIET_MS * 2)
+    const { ex, send, hub, store, got } = setup(provider)
+    for (let i = 0; i < MAX_BATCH + 2; i++) send(step(`s${i}`)) // 8 flush at once, 2 follow after quiet
+    await vi.advanceTimersByTimeAsync(QUIET_MS + 10) // second batch is chained behind the first
+    expect(calls).toHaveLength(1)
+    hub.publish({ type: 'reset' })
+    await vi.advanceTimersByTimeAsync(QUIET_MS * 3)
+    await ex.idle()
+    expect(calls).toHaveLength(1) // the chained batch never called the provider
+    expect(store.hasExplanation('s0')).toBe(false)
+    expect(got.filter((m) => ['explanation', 'decision', 'concept'].includes(m.type))).toEqual([])
+    expect(ex.state().tokens).toEqual({ input: 10, output: 5 })
+  })
+
+  test('batches waiting on the chain when a pause begins are marked unavailable', async () => {
+    const { provider, calls } = fakeProvider(async () => {
+      await new Promise((r) => setTimeout(r, 50))
+      throw new ExplainError('The Anthropic API key was rejected.', false)
+    })
+    const { ex, send, store } = setup(provider)
+    for (let i = 0; i < MAX_BATCH + 1; i++) send(step(`s${i}`))
+    await vi.advanceTimersByTimeAsync(QUIET_MS + 10)
+    await vi.advanceTimersByTimeAsync(500)
+    await ex.idle()
+    expect(calls).toHaveLength(1)
+    const last = store.stepsForSession('s1').find((s) => s.id === `s${MAX_BATCH}`)!
+    expect(last.explanation).toEqual({ unavailable: 'The Anthropic API key was rejected.' })
+  })
+
+  test('a step republished while its batch is in flight is explained once', async () => {
+    const { provider, calls } = slow()
+    const { ex, send } = setup(provider)
+    const a = step('a')
+    send(a)
+    await vi.advanceTimersByTimeAsync(QUIET_MS + 10)
+    send(a)
+    await vi.advanceTimersByTimeAsync(QUIET_MS + 300)
+    await ex.idle()
+    expect(calls).toEqual([['a']])
+  })
+
+  test('settingsChanged clears a real pause so a new step is explained again', async () => {
+    let fail = true
+    const { provider, calls } = fakeProvider((ids) => {
+      if (fail) throw new ExplainError('The Anthropic API key was rejected.', false)
+      return { items: ids.map((stepId) => ({ stepId, plain: 'p', why: 'w', concept: null, decision: null })) }
+    })
+    const { ex, send } = setup(provider)
+    send(step('a'))
+    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    await ex.idle()
+    expect(ex.state().status).toBe('paused')
+    fail = false
+    ex.settingsChanged()
+    expect(ex.state().status).toBe('ready')
+    send(step('b'))
+    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    await ex.idle()
+    expect(calls).toEqual([['a'], ['b']])
+  })
+
+  test('disabledReason reports off with that reason and queues nothing', async () => {
+    const { provider, calls } = fakeProvider()
+    const hub = new Hub()
+    const store = openStore(':memory:')
+    store.touchSession('s1', '/work/shop', 1)
+    const ex = createExplainer({ hub, store, settings: memorySettings({ explanations: 'haiku' }), provider, disabledReason: 'Turned off by SIDECAR_EXPLAINER=off.' })
+    expect(ex.state()).toMatchObject({ status: 'off', reason: 'Turned off by SIDECAR_EXPLAINER=off.' })
+    const s = step('a'); store.saveStep(s); hub.publish({ type: 'step', step: s })
+    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    await ex.idle()
+    expect(calls).toEqual([])
+  })
 })

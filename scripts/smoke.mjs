@@ -30,9 +30,9 @@ try {
     ['prompt', 'ok'], ['install', 'ok'], ['create', 'ok'], ['test', 'failed'],
   ])
   const explainer = await (await fetch(`http://127.0.0.1:${port}/api/explainer`, { headers })).json()
-  // SIDECAR_EXPLAINER=off yields no provider; the state is 'unavailable' (status 'off' only reflects the user's setting)
+  // SIDECAR_EXPLAINER=off disables the explainer outright
   assert.equal(explainer.provider, null, 'smoke must never call a model')
-  assert.equal(explainer.status, 'unavailable', 'smoke must never call a model')
+  assert.equal(explainer.status, 'off', 'smoke must never call a model')
   assert.ok(!JSON.stringify(steps).includes('sk-live-abc'), 'secret leaked into storage')
   const html = await (await fetch(`http://127.0.0.1:${port}/`)).text()
   assert.ok(html.includes('name="sidecar-token"'), 'web UI not served')

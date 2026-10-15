@@ -30,6 +30,8 @@ export interface ExplainerOptions {
   maxBatch?: number
   retryDelayMs?: number
   pauseAfter?: number
+  /** When set, explanations are switched off from outside (e.g. an env var) and nothing is ever queued. */
+  disabledReason?: string
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
@@ -46,11 +48,15 @@ export function createExplainer(o: ExplainerOptions): Explainer {
   let chain: Promise<void> = Promise.resolve()
   let failures = 0
   let paused: string | null = null
+  let epoch = 0 // bumped on reset
+  const sessionEpochs = new Map<string, number>() // bumped on session_deleted
+  const inFlight = new Set<string>() // step ids flushed but not finished
 
-  const level = () => o.settings.get().explanations
+  const level = () => (o.disabledReason ? 'off' : o.settings.get().explanations)
 
   const state = (): ExplainerState => {
     const base = { level: level(), provider: o.provider?.id ?? null, tokens: o.store.usage() }
+    if (o.disabledReason) return { ...base, status: 'off', reason: o.disabledReason }
     if (base.level === 'off') return { ...base, status: 'off' }
     if (!o.provider) return { ...base, status: 'unavailable', reason: UNAVAILABLE_REASON }
     if (paused) return { ...base, status: 'paused', reason: paused }
@@ -71,9 +77,16 @@ export function createExplainer(o: ExplainerOptions): Explainer {
     o.hub.publish({ type: 'explanation', sessionId, stepId, explanation })
   }
 
-  async function runBatch(sessionId: string, steps: FeedStep[], lvl: ModelLevel): Promise<void> {
+  async function runBatch(sessionId: string, steps: FeedStep[], lvl: ModelLevel, at: { epoch: number; session: number }): Promise<void> {
     const provider = o.provider
-    if (!provider || paused) return
+    const stale = () => at.epoch !== epoch || at.session !== (sessionEpochs.get(sessionId) ?? 0)
+    const finish = () => { for (const s of steps) inFlight.delete(s.id) }
+    if (!provider || stale()) return finish()
+    if (paused) {
+      for (const s of steps) mark(sessionId, s.id, { unavailable: paused })
+      finish()
+      return
+    }
     const session = o.store.getSession(sessionId)
     const req = buildRequest(
       { project: session?.cwd ? basename(session.cwd) : 'this project', lastPrompt: o.store.lastPrompt(sessionId) },
@@ -90,7 +103,16 @@ export function createExplainer(o: ExplainerOptions): Explainer {
         if (attempt === 0) await sleep(retryDelayMs)
       }
     }
-    if (!queuesAllowed(sessionId)) return // session deleted or level switched off mid-flight
+    if (result) {
+      // the tokens were spent even if the batch is dropped below
+      o.store.addUsage(result.usage)
+      failures = 0
+    }
+    if (stale() || level() === 'off') { // reset, session deleted or level switched off mid-flight
+      finish()
+      publishState()
+      return
+    }
 
     if (result) {
       const explained = normalize(result.output, steps.map((s) => s.id))
@@ -109,19 +131,15 @@ export function createExplainer(o: ExplainerOptions): Explainer {
           if (o.store.addConcept(concept)) o.hub.publish({ type: 'concept', concept })
         }
       }
-      o.store.addUsage(result.usage)
-      failures = 0
     } else {
       const reason = error?.message ?? 'Explanation failed.'
       for (const s of steps) mark(sessionId, s.id, { unavailable: reason })
       failures++
       if (failures >= pauseAfter || (error && !error.retryable)) paused = reason
     }
+    finish()
     publishState()
   }
-
-  const deleted = new Set<string>()
-  const queuesAllowed = (sessionId: string) => level() !== 'off' && !deleted.has(sessionId)
 
   const flush = (sessionId: string) => {
     clearTimeout(timers.get(sessionId))
@@ -132,9 +150,11 @@ export function createExplainer(o: ExplainerOptions): Explainer {
     if (lvl === 'off') { queues.delete(sessionId); return }
     const all = [...q.values()]
     queues.delete(sessionId)
+    const at = { epoch, session: sessionEpochs.get(sessionId) ?? 0 }
+    for (const s of all) inFlight.add(s.id)
     for (let i = 0; i < all.length; i += maxBatch) {
       const batch = all.slice(i, i + maxBatch)
-      chain = chain.then(() => runBatch(sessionId, batch, lvl)).catch(() => undefined)
+      chain = chain.then(() => runBatch(sessionId, batch, lvl, at)).catch(() => undefined)
     }
   }
 
@@ -142,8 +162,7 @@ export function createExplainer(o: ExplainerOptions): Explainer {
     if (step.status !== 'ok' && step.status !== 'failed') return
     if (step.category === 'prompt') return
     if (level() === 'off' || !o.provider || paused) return
-    if (o.store.hasExplanation(step.id)) return
-    deleted.delete(step.sessionId)
+    if (inFlight.has(step.id) || o.store.hasExplanation(step.id)) return
     const q = queues.get(step.sessionId) ?? new Map<string, FeedStep>()
     q.set(step.id, step)
     queues.set(step.sessionId, q)
@@ -154,8 +173,8 @@ export function createExplainer(o: ExplainerOptions): Explainer {
 
   const unsubscribe = o.hub.subscribe((m: ServerMessage) => {
     if (m.type === 'step') enqueue(m.step)
-    else if (m.type === 'session_deleted') { deleted.add(m.id); drop(m.id) }
-    else if (m.type === 'reset') { for (const id of queues.keys()) deleted.add(id); drop() }
+    else if (m.type === 'session_deleted') { sessionEpochs.set(m.id, (sessionEpochs.get(m.id) ?? 0) + 1); drop(m.id) }
+    else if (m.type === 'reset') { epoch++; drop() }
   })
 
   return {

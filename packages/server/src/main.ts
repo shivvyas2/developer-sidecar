@@ -90,7 +90,10 @@ export async function startServer(o: StartOptions): Promise<RunningServer> {
   const hub = new Hub()
   const settings = fileSettings(o.home)
   const provider = 'provider' in o ? o.provider ?? null : await pickProvider({ env: process.env, hasClaude: claudeAvailable() })
-  const explainer = createExplainer({ hub, store, settings, provider })
+  const envOff = !('provider' in o) && process.env.SIDECAR_EXPLAINER === 'off'
+  const explainer = createExplainer({
+    hub, store, settings, provider, ...(envOff ? { disabledReason: 'Turned off by SIDECAR_EXPLAINER=off.' } : {}),
+  })
   const pipeline = createPipeline({ store, hub })
   let port = o.preferredPort ?? DEFAULT_PORT
   const app = createApp({ pipeline, store, hub, settings, explainer, token, port: () => port, version: o.version ?? '0.1.0', staticDir: o.staticDir })
