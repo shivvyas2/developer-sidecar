@@ -2,7 +2,7 @@
 
 A companion for vibecoders. Developer Sidecar is a Claude Code plugin that turns what Claude is doing into live, cartoon-style animations and plain-English explanations, so anyone can understand what's being built and why.
 
-> **Status:** early design. See [`docs/superpowers/specs`](docs/superpowers/specs) for the current spec.
+> **Status:** in development. The live feed (Plan 1) and the animated cartoon stage with replay (Plan 2) work today. Plain-English explanations and the in-Claude-Code pane come next. See [`docs/superpowers`](docs/superpowers) for the spec and plans.
 
 ## What it will do
 
@@ -26,3 +26,5 @@ claude --plugin-dir ./plugin
 ```
 
 Then open http://localhost:7377. Data lives in `~/.developer-sidecar/` (override with `SIDECAR_HOME`).
+
+Every cartoon piece and rule scene is previewed at http://localhost:7377/#/kit.
