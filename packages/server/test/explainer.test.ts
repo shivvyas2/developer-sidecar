@@ -247,6 +247,21 @@ describe('explainer', () => {
     expect(calls).toEqual([['a'], ['b']])
   })
 
+  test('setProvider: nothing queued while null; later steps are explained and state is published', async () => {
+    const { provider, calls } = fakeProvider()
+    const { got, ex, send } = setup(null)
+    send(step('a'))
+    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    await ex.idle()
+    expect(calls).toEqual([])
+    got.length = 0
+    ex.setProvider(provider)
+    expect(got).toContainEqual({ type: 'explainer', state: expect.objectContaining({ status: 'ready', provider: 'api' }) })
+    send(step('b'))
+    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    await ex.idle()
+    expect(calls).toEqual([['b']])
+  })
   test('disabledReason reports off with that reason and queues nothing', async () => {
     const { provider, calls } = fakeProvider()
     const hub = new Hub()

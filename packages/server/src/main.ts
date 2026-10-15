@@ -88,16 +88,28 @@ export async function startServer(o: StartOptions): Promise<RunningServer> {
     throw err
   }
   const hub = new Hub()
-  const settings = fileSettings(o.home)
-  const provider = 'provider' in o ? o.provider ?? null : await pickProvider({ env: process.env, hasClaude: claudeAvailable() })
-  const envOff = !('provider' in o) && process.env.SIDECAR_EXPLAINER === 'off'
-  const explainer = createExplainer({
-    hub, store, settings, provider, ...(envOff ? { disabledReason: 'Turned off by SIDECAR_EXPLAINER=off.' } : {}),
-  })
-  const pipeline = createPipeline({ store, hub })
+  const given = 'provider' in o
+  const envOff = !given && process.env.SIDECAR_EXPLAINER === 'off'
+  let settings: ReturnType<typeof fileSettings>
+  let explainer: ReturnType<typeof createExplainer>
+  let pipeline: ReturnType<typeof createPipeline>
+  let app: ReturnType<typeof createApp>
+  let server: Server
   let port = o.preferredPort ?? DEFAULT_PORT
-  const app = createApp({ pipeline, store, hub, settings, explainer, token, port: () => port, version: o.version ?? '0.1.0', staticDir: o.staticDir })
-  const server = createAdaptorServer({ fetch: app.fetch }) as Server
+  try {
+    settings = fileSettings(o.home)
+    explainer = createExplainer({
+      hub, store, settings, provider: given ? o.provider ?? null : null,
+      ...(envOff ? { disabledReason: 'Turned off by SIDECAR_EXPLAINER=off.' } : {}),
+    })
+    pipeline = createPipeline({ store, hub })
+    app = createApp({ pipeline, store, hub, settings, explainer, token, port: () => port, version: o.version ?? '0.1.0', staticDir: o.staticDir })
+    server = createAdaptorServer({ fetch: app.fetch }) as Server
+  } catch (err) {
+    store.close()
+    releaseLock(o.home)
+    throw err
+  }
 
   const first = port
   let bound = false
@@ -118,9 +130,21 @@ export async function startServer(o: StartOptions): Promise<RunningServer> {
   writePort(o.home, port)
   const ws = attachWs(server, { hub, store, token, port: () => port, explainerState: explainer.state })
   logLine(o.home, 'server.log', `listening on 127.0.0.1:${port}`)
-  logLine(o.home, 'server.log', `explanations: ${explainer.state().status}${provider ? ` via ${provider.id}` : ''}`)
+  const logChoice = (p: Provider | null) =>
+    logLine(o.home, 'server.log', `explanations: ${explainer.state().status}${p ? ` via ${p.id}` : ''}`)
+  logChoice(given ? o.provider ?? null : null)
 
   let closed = false
+  // detection can take seconds (claude --version), so it runs after the server is listening
+  if (!given && !envOff) {
+    void pickProvider({ env: process.env, hasClaude: claudeAvailable() })
+      .then((p) => {
+        if (closed) return
+        explainer.setProvider(p)
+        logChoice(p)
+      })
+      .catch(() => undefined)
+  }
   const close = async () => {
     if (closed) return
     closed = true

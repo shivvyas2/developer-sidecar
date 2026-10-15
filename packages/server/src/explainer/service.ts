@@ -16,6 +16,8 @@ const MISSING = 'No explanation was returned for this step.'
 export interface Explainer {
   state(): ExplainerState
   settingsChanged(): void
+  /** Swaps the provider (late detection): clears any pause and failure count and publishes state. */
+  setProvider(p: Provider | null): void
   idle(): Promise<void>
   stop(): void
 }
@@ -46,6 +48,7 @@ export function createExplainer(o: ExplainerOptions): Explainer {
   const queues = new Map<string, Map<string, FeedStep>>()
   const timers = new Map<string, ReturnType<typeof setTimeout>>()
   let chain: Promise<void> = Promise.resolve()
+  let current = o.provider
   let failures = 0
   let paused: string | null = null
   let epoch = 0 // bumped on reset
@@ -55,10 +58,10 @@ export function createExplainer(o: ExplainerOptions): Explainer {
   const level = () => (o.disabledReason ? 'off' : o.settings.get().explanations)
 
   const state = (): ExplainerState => {
-    const base = { level: level(), provider: o.provider?.id ?? null, tokens: o.store.usage() }
+    const base = { level: level(), provider: current?.id ?? null, tokens: o.store.usage() }
     if (o.disabledReason) return { ...base, status: 'off', reason: o.disabledReason }
     if (base.level === 'off') return { ...base, status: 'off' }
-    if (!o.provider) return { ...base, status: 'unavailable', reason: UNAVAILABLE_REASON }
+    if (!current) return { ...base, status: 'unavailable', reason: UNAVAILABLE_REASON }
     if (paused) return { ...base, status: 'paused', reason: paused }
     return { ...base, status: 'ready' }
   }
@@ -78,7 +81,7 @@ export function createExplainer(o: ExplainerOptions): Explainer {
   }
 
   async function runBatch(sessionId: string, steps: FeedStep[], lvl: ModelLevel, at: { epoch: number; session: number }): Promise<void> {
-    const provider = o.provider
+    const provider = current
     const stale = () => at.epoch !== epoch || at.session !== (sessionEpochs.get(sessionId) ?? 0)
     const finish = () => { for (const s of steps) inFlight.delete(s.id) }
     if (!provider || stale()) return finish()
@@ -161,7 +164,7 @@ export function createExplainer(o: ExplainerOptions): Explainer {
   const enqueue = (step: FeedStep) => {
     if (step.status !== 'ok' && step.status !== 'failed') return
     if (step.category === 'prompt') return
-    if (level() === 'off' || !o.provider || paused) return
+    if (level() === 'off' || !current || paused) return
     if (inFlight.has(step.id) || o.store.hasExplanation(step.id)) return
     const q = queues.get(step.sessionId) ?? new Map<string, FeedStep>()
     q.set(step.id, step)
@@ -183,6 +186,12 @@ export function createExplainer(o: ExplainerOptions): Explainer {
       paused = null
       failures = 0
       if (level() === 'off') drop()
+      publishState()
+    },
+    setProvider(p) {
+      current = p
+      paused = null
+      failures = 0
       publishState()
     },
     idle: () => chain,
