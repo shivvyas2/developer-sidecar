@@ -57,5 +57,10 @@ describe('render', () => {
     const odd: SceneSpec = { scene: 'odd', cast: [], beats: [{ actor: 'helper', do: 'launch', to: 'moon' }, { fx: 'error', at: '' }], caption: '' }
     for (const t of [Number.NaN, -1, 0, 1e12]) expect(render(odd, t)).toMatch(/^<svg[\s\S]*<\/svg>$/)
     for (const t of [Number.NaN, -1, 0, 1e12]) expect(render(odd, t, { frame: true })).toMatch(/^<svg[\s\S]*<\/svg>$/)
+    for (const scene of ['__proto__', 'toString', 'constructor', 'hasOwnProperty', 'valueOf']) {
+      const spec: SceneSpec = { scene, cast: ['claude'], beats: [{ actor: 'claude', do: 'think' }], caption: scene }
+      expect(() => render(spec, 500), scene).not.toThrow()
+      expect(render(spec, 500), scene).toMatch(/^<svg[\s\S]*sk-anim--thinking[\s\S]*<\/svg>$/)
+    }
   })
 })

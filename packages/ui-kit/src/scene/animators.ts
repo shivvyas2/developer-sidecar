@@ -194,31 +194,41 @@ const git: Animator = (ctx) => {
   let out = drawer(ctx, undefined, all.slice(0, left))
   if (ctx.p > 0.6) {
     const d = ctx.slots.drawer.at
-    out += stamp({ x: d.x + 44, y: drawerFrontY(ctx, 0) - 30 }, `SAVED ${pad(ctx.readout?.step ?? 0, 3)}`)
+    out += stamp({ x: d.x + 44, y: drawerFrontY(ctx, 0) - 30 }, ctx.readout ? `SAVED ${pad(ctx.readout.step, 3)}` : 'SAVED')
   }
   return g('git', out)
 }
 
-/** deploy: Your App lifts along a dashed arc to the cloud, shrinking, leaving its dashed outline behind. */
+/** A quadratic arc from `a` to `b` bowing `lift` above the higher end: its SVG path and its point at `t`. */
+const arc = (a: P, b: P, lift: number) => {
+  const c = { x: (a.x + b.x) / 2, y: Math.min(a.y, b.y) - lift }
+  return {
+    d: `M${n(a.x)},${n(a.y)} Q${n(c.x)},${n(c.y)} ${n(b.x)},${n(b.y)}`,
+    at: (t: number): P => mix(mix(a, c, t), mix(c, b, t), t),
+  }
+}
+
+/**
+ * deploy: Your App lifts along a dashed arc to the cloud, shrinking, leaving its dashed
+ * outline behind. The stack's top centre rides the drawn arc, from its place on the
+ * sheet to where it stands, small, on the cloud.
+ */
 const deploy: Animator = (ctx) => {
   const s = ctx.slots
   const floors = ctx.town.appFloors
   const k = easeInOut(ctx.p)
   const sc = lerp(1, 0.32, k)
-  const foot = (scale: number) => ({ x: (APP.w - APP.d) / 2 * 0.866 * scale, y: (APP.w + APP.d) / 2 * 0.5 * scale })
-  const startTop = iso(APP.w / 2, APP.d / 2, appTopZ(floors), s.app)
-  const land = { x: s.cloud.x, y: s.cloud.y - 26 }
-  const ctrl = { x: (startTop.x + land.x) / 2, y: Math.min(startTop.y, land.y) - 12 }
-  let out = `<path d="M${n(startTop.x)},${n(startTop.y)} Q${n(ctrl.x)},${n(ctrl.y)} ${n(land.x)},${n(land.y)}" fill="none" `
-    + `stroke="${color('ink')}" stroke-width=".8" stroke-dasharray="3 3"/>`
+  const topZ = appTopZ(floors)
+  /** The top centre of a stack at `scale`, relative to its origin. */
+  const top = (scale: number) => ({ x: (APP.w - APP.d) / 2 * 0.866 * scale, y: ((APP.w + APP.d) / 2 * 0.5 - topZ) * scale })
+  const startTop = { x: s.app.x + top(1).x, y: s.app.y + top(1).y }
+  // On the cloud the scaled stack's foot sits on the cloud's top, so its top is that much higher.
+  const endTop = { x: s.cloud.x, y: s.cloud.y - 26 - topZ * 0.32 }
+  const path = arc(startTop, endTop, 12)
+  let out = `<path d="${path.d}" fill="none" stroke="${color('ink')}" stroke-width=".8" stroke-dasharray="3 3"/>`
   if (ctx.p > 0) {
-    // The stack's foot centre follows the same curve, from Your App's slot to the cloud's top.
-    const base0 = { x: s.app.x + foot(1).x, y: s.app.y + foot(1).y }
-    const q = (a: P, c: P, b: P, t: number) => mix(mix(a, c, t), mix(c, b, t), t)
-    const c2 = { x: (base0.x + land.x) / 2, y: Math.min(base0.y, land.y) - 12 }
-    const b = q(base0, c2, land, k)
-    const f = foot(sc)
-    out += isoStack({ x: b.x - f.x, y: b.y - f.y }, floors, { scale: sc })
+    const b = path.at(k), t = top(sc)
+    out += isoStack({ x: b.x - t.x, y: b.y - t.y }, floors, { scale: sc })
   }
   if (ctx.failed && ctx.p >= 1) out += cross({ x: s.cloud.x + 30, y: s.cloud.y - 26 })
   return g('deploy', out)
@@ -272,7 +282,8 @@ export const ANIMATORS: Record<string, Animator> = {
   'thinking': generic,
 }
 
-export const animatorFor = (scene: string): Animator => ANIMATORS[scene] ?? generic
+/** Own keys only: a scene id such as '__proto__' or 'toString' must not reach Object.prototype. */
+export const animatorFor = (scene: string): Animator => (Object.hasOwn(ANIMATORS, scene) ? ANIMATORS[scene]! : generic)
 
 /** How a scene's animator changes the static town this frame. */
 export function townState(ctx: SceneCtx): TownState {

@@ -39,9 +39,9 @@ export interface SceneCtx {
   slots: Slots
   frame: boolean
   readout?: Readout
-  /** The spec ends in an `error` beat. */
+  /** The spec has an `error` beat anywhere. */
   failed: boolean
-  /** The spec ends in a `success` beat. */
+  /** The spec has a `success` beat anywhere. */
   succeeded: boolean
 }
 
