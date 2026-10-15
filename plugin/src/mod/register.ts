@@ -36,6 +36,9 @@ let startedServer = false
 let pollTimer: { cancel(): void } | undefined
 let animTimer: { cancel(): void } | undefined
 let animTicks = 0
+/** The server's revision of the steps last fetched in full, and their print. */
+let rev = ''
+let stepsSeen = ''
 
 /** A new conversation (the first start, a /clear, a resume): forget what was shown for the last one. */
 function resetSession(id: string, now: number): void {
@@ -49,6 +52,8 @@ function resetSession(id: string, now: number): void {
   bandHidden = false
   offlinePolls = 0
   startedServer = false
+  rev = ''
+  stepsSeen = ''
 }
 
 async function locate($: Engine): Promise<void> {
@@ -67,6 +72,21 @@ async function get<T>($: Engine, path: string): Promise<T> {
   const res = await within($, $.http.fetch(`http://127.0.0.1:${state.port}${path}`, { headers: { 'x-sidecar-token': token } }), FETCH_TIMEOUT_MS)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return JSON.parse(res.text) as T
+}
+
+function header(res: { headers: Record<string, string> }, name: string): string {
+  for (const [k, v] of Object.entries(res.headers ?? {})) if (k.toLowerCase() === name) return v
+  return ''
+}
+
+/** The session's steps, or null when the server says they are unchanged since `rev`. */
+async function fetchSteps($: Engine): Promise<FeedStep[] | null> {
+  const path = `/api/sessions/${encodeURIComponent(sessionId)}/steps${rev ? `?rev=${encodeURIComponent(rev)}` : ''}`
+  const res = await within($, $.http.fetch(`http://127.0.0.1:${state.port}${path}`, { headers: { 'x-sidecar-token': token } }), FETCH_TIMEOUT_MS)
+  if (res.status === 304) return null
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  rev = header(res, 'x-sidecar-rev')
+  return JSON.parse(res.text) as FeedStep[]
 }
 
 /** Status line, the latest step's start time, and a redraw. */
@@ -95,14 +115,10 @@ async function poll($: Engine): Promise<void> {
     if (!due(cadence, now)) return
     const id = await $.session.id()
     if (id && id !== sessionId) resetSession(id, now)
-    let steps: FeedStep[]
-    let explainer: ExplainerState
+    let fresh: FeedStep[] | null = null
     try {
       if (!token || state.offline) await locate($)
-      ;[steps, explainer] = await Promise.all([
-        get<FeedStep[]>($, `/api/sessions/${encodeURIComponent(sessionId)}/steps`),
-        get<ExplainerState>($, '/api/explainer'),
-      ])
+      fresh = await fetchSteps($)
     } catch {
       cadence = recordPoll(cadence, now, 'offline')
       offlinePolls += 1
@@ -116,7 +132,12 @@ async function poll($: Engine): Promise<void> {
       }
       return
     }
-    const changed = state.offline || stepsPrint(steps) !== stepsPrint(state.steps) || explainerPrint(explainer) !== explainerPrint(state.explainer)
+    // Only the steps decide online or offline: a failing explainer keeps the last state it had.
+    const explainer = await get<ExplainerState>($, '/api/explainer').catch(() => state.explainer)
+    const steps = fresh ?? state.steps
+    const print = fresh ? stepsPrint(fresh) : stepsSeen
+    const changed = state.offline || print !== stepsSeen || explainerPrint(explainer) !== explainerPrint(state.explainer)
+    stepsSeen = print
     state = { ...state, steps, explainer, offline: false }
     offlinePolls = 0
     cadence = recordPoll(cadence, now, changed ? 'changed' : 'same')

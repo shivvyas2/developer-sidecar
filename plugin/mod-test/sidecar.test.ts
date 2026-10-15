@@ -22,13 +22,18 @@ interface World {
   sid: string
   hang: boolean
   renders: number
+  rev: string | null
+  explainerDown: boolean
+  stepFetches: number
   clock: { advance(ms: number): Promise<void>; settle(): Promise<void> }
 }
 
 // on is the test's registrar; its hooks stand beneath the mod.
 function world(on: any, steps: unknown[] = []): World {
-  const w = { steps, online: true, port: 7391, statuses: [], toasts: [], runs: [], urls: [], sid: 'S1', hang: false, renders: 0 } as unknown as World
+  const w = { steps, online: true, port: 7391, statuses: [], toasts: [], runs: [], urls: [], sid: 'S1', hang: false, renders: 0, rev: 'r1', explainerDown: false, stepFetches: 0 } as unknown as World
   w.clock = mock.clock(on)
+  let seen = ''
+  let version = 0
   on('session.start', async (_$: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
   on('session.id', async () => ({ value: w.sid }))
   on('command.register', async () => ({ value: undefined }))
@@ -49,10 +54,18 @@ function world(on: any, steps: unknown[] = []): World {
     // The mod treats a refused connection and a non-ok answer the same way; a non-ok answer keeps the test's hook from failing the test.
     if (!w.online) return { value: { status: 503, ok: false, headers: {}, text: '' } }
     expect(e.init?.headers?.['x-sidecar-token']).toBe('T')
-    const body = e.url.endsWith('/api/explainer')
-      ? { level: 'haiku', provider: 'api', status: 'ready', tokens: { input: 1000, output: 234 } }
-      : w.steps
-    return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify(body) } }
+    if (e.url.includes('/api/explainer')) {
+      if (w.explainerDown) return { value: { status: 500, ok: false, headers: {}, text: '' } }
+      return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ level: 'haiku', provider: 'api', status: 'ready', tokens: { input: 1000, output: 234 } }) } }
+    }
+    // Like the real server, the revision moves whenever the steps change.
+    const body = JSON.stringify(w.steps)
+    if (body !== seen) { seen = body; version += 1 }
+    const current = w.rev === null ? null : `${w.rev}.${version}`
+    const asked = new URL(e.url).searchParams.get('rev')
+    if (current !== null && asked === current) return { value: { status: 304, ok: false, headers: { 'x-sidecar-rev': current }, text: '' } }
+    w.stepFetches += 1
+    return { value: { status: 200, ok: true, headers: current === null ? {} : { 'x-sidecar-rev': current }, text: body } }
   })
   return w
 }
@@ -199,4 +212,55 @@ test('review I2: a server that never answers does not hold up the session or sto
   w.hang = false
   for (let i = 0; i < 4; i++) await w.clock.advance(5000)
   expect(w.statuses.at(-1)).toMatch(/^◢ 001 /)
+})
+
+test('plan 5: an unchanged revision is not downloaded again', async ($, on) => {
+  const w = world(on, [step(1, 'install', 'ok')])
+  await start($, w)
+  const after = w.stepFetches
+  for (let i = 0; i < 5; i++) await w.clock.advance(1000)
+  expect(w.stepFetches).toBe(after)
+  expect(w.urls.slice(-2).some((u) => u.includes('?rev=r1'))).toBe(true)
+  w.rev = 'r2'
+  w.steps = [step(1, 'install', 'ok'), step(2, 'install', 'running')]
+  await w.clock.advance(1000)
+  expect(w.stepFetches).toBe(after + 1)
+  expect(w.statuses.at(-1)).toMatch(/^◢ 002 /)
+})
+
+test('plan 5: no header, full fetch every time', async ($, on) => {
+  const w = world(on, [step(1, 'install', 'ok')])
+  w.rev = null
+  await start($, w)
+  const after = w.stepFetches
+  for (let i = 0; i < 3; i++) await w.clock.advance(1000)
+  expect(w.stepFetches).toBe(after + 3)
+  expect(w.urls.some((u) => u.includes('?rev='))).toBe(false)
+})
+
+test('plan 5: a failing explainer does not mark the mod offline', async ($, on) => {
+  const w = world(on, [step(1, 'install', 'ok')])
+  w.explainerDown = true
+  await start($, w)
+  expect(w.statuses.at(-1)).toMatch(/^◢ 001 /)
+  const band = await $.ui.mount({ plugin: PLUGIN, surface: 'terminal', component: 'AbovePrompt', props: { hasSurvey: false } as never })
+  expect(await band.find({ text: /Caption 1/ })).toBeDefined()
+})
+
+test('plan 5: offline for a minute slows to thirty seconds', async ($, on) => {
+  const w = world(on, [step(1, 'install', 'ok')])
+  await start($, w)
+  w.online = false
+  await w.clock.advance(65_000)
+  const locates = () => w.runs.filter((r) => r.some((a) => a.endsWith('locate.cjs'))).length
+  const before = locates()
+  await w.clock.advance(29_000)
+  expect(locates() - before).toBeLessThanOrEqual(1)
+})
+
+test('plan 5: a malformed earlier scene still draws the latest scene on desktop', async ($, on) => {
+  const w = world(on, [step(1, 'install', 'ok', { scene: { scene: 'x', cast: null, beats: [], caption: 'c' } }), step(2, 'install', 'running')])
+  await start($, w)
+  const pane = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', component: 'Pane', props: {} as never, requestId: 'sidecar', viewport: { columns: 80, rows: 30 } })
+  expect((await pane.findAll({ type: 'Svg' })).length).toBe(1)
 })

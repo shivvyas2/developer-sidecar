@@ -6,7 +6,7 @@ export interface Engine {
   process: {
     run(argv: readonly string[], init?: { stdin?: string; timeoutMs?: number }): Promise<{ exitCode: number; stdout: string; stderr: string }>
   }
-  http: { fetch(url: string, init?: { method?: string; headers?: Record<string, string> }): Promise<{ status: number; ok: boolean; text: string }> }
+  http: { fetch(url: string, init?: { method?: string; headers?: Record<string, string> }): Promise<{ status: number; ok: boolean; headers: Record<string, string>; text: string }> }
   command: { register(c: { name: string; description: string; argumentHint?: string }): Promise<unknown> }
   ui: {
     status(text: string | undefined): void
