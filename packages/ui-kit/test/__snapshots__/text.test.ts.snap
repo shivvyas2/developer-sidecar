@@ -1,0 +1,61 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`renderText > snapshot at 40 columns 1`] = `
+" DEVELOPER SIDECAR · SHOP-APP     ●LIVE 
+ ┌ STEP ──┬ FILES ┬ TOKENS ┬ ELAPSED ─┐
+ │ 042    │ 06    │ 4.3k   │ 02:14    │
+ └────────┴───────┴────────┴──────────┘
+ ╱042╲_________________________________
+ │ INSTALL · Stripe                 ● │
+ │ Added the Stripe toolkit so your   │
+ │ code can take payments.            │
+ │ WHY  hand-built card handling is…  │
+ └────────────────────────────────────┘
+ ╱041╲  NEW FILE · checkout.ts        ■
+ ▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕ 5 STEPS · src/ 6 FILES"
+`;
+
+exports[`renderText > snapshot at 60 columns 1`] = `
+" DEVELOPER SIDECAR · SHOP-APP                         ●LIVE 
+ ┌ STEP ──┬ FILES ┬ TOKENS ┬ ELAPSED ─────────────────────┐
+ │ 042    │ 06    │ 4.3k   │ 02:14                        │
+ └────────┴───────┴────────┴──────────────────────────────┘
+ ╱042╲_____________________________________________________
+ │ INSTALL · Stripe                                     ● │
+ │ Added the Stripe toolkit so your code can take         │
+ │ payments.                                              │
+ │ WHY  hand-built card handling is risky for money.…     │
+ └────────────────────────────────────────────────────────┘
+ ╱041╲  NEW FILE · checkout.ts                            ■
+ ▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕ 5 STEPS · src/ 6 FILES"
+`;
+
+exports[`renderText > snapshot at 80 columns 1`] = `
+" DEVELOPER SIDECAR · SHOP-APP                                             ●LIVE 
+ ┌ STEP ──┬ FILES ┬ TOKENS ┬ ELAPSED ─────────────────────────────────────────┐
+ │ 042    │ 06    │ 4.3k   │ 02:14                                            │
+ └────────┴───────┴────────┴──────────────────────────────────────────────────┘
+ ╱042╲_________________________________________________________________________
+ │ INSTALL · Stripe                                                         ● │
+ │ Added the Stripe toolkit so your code can take payments.                   │
+ │ WHY  hand-built card handling is risky for money.                          │
+ │ [npm package]                                                              │
+ └────────────────────────────────────────────────────────────────────────────┘
+ ╱041╲  NEW FILE · checkout.ts                                                ■
+ ▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕ 5 STEPS · src/ 6 FILES"
+`;
+
+exports[`renderText > snapshot at 120 columns 1`] = `
+" DEVELOPER SIDECAR · SHOP-APP                                                                                     ●LIVE 
+ ┌ STEP ──┬ FILES ┬ TOKENS ┬ ELAPSED ─────────────────────────────────────────────────────────────────────────────────┐
+ │ 042    │ 06    │ 4.3k   │ 02:14                                                                                    │
+ └────────┴───────┴────────┴──────────────────────────────────────────────────────────────────────────────────────────┘
+ ╱042╲_________________________________________________________________________________________________________________
+ │ INSTALL · Stripe                                                                                                 ● │
+ │ Added the Stripe toolkit so your code can take payments.                                                           │
+ │ WHY  hand-built card handling is risky for money.                                                                  │
+ │ [npm package]                                                                                                      │
+ └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ ╱041╲  NEW FILE · checkout.ts                                                                                        ■
+ ▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕▏▕ 5 STEPS · src/ 6 FILES"
+`;
