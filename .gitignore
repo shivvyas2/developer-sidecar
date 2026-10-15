@@ -5,6 +5,7 @@ dist/
 .env
 .env.*
 coverage/
+.mod-test/
 playwright-report/
 test-results/
 

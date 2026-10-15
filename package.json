@@ -34,7 +34,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc -p .",
     "build": "node scripts/build.mjs",
-    "smoke": "node scripts/smoke.mjs && node scripts/smoke-concurrent.mjs 3"
+    "smoke": "node scripts/smoke.mjs && node scripts/smoke-concurrent.mjs 3",
+    "test:mod": "node scripts/test-mod.mjs"
   },
   "devDependencies": {
     "@sidecar/shared": "workspace:*",

@@ -3,5 +3,5 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "dependencies": { "@sidecar/shared": "workspace:*" }
+  "dependencies": { "@sidecar/shared": "workspace:*", "@sidecar/ui-kit": "workspace:*" }
 }

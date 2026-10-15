@@ -277,6 +277,9 @@ importers:
       '@sidecar/shared':
         specifier: workspace:*
         version: link:../packages/shared
+      '@sidecar/ui-kit':
+        specifier: workspace:*
+        version: link:../packages/ui-kit
 
 packages:
 
