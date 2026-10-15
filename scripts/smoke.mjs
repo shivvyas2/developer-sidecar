@@ -46,6 +46,6 @@ try {
   console.log(`smoke OK: ${steps.length} steps, port ${port}`)
 } finally {
   if (pid) {
-    try { process.kill(pid, 'SIGTERM') } catch {}
+    try { process.kill(pid, 'SIGTERM') } catch { /* already gone */ }
   }
 }

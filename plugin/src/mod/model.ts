@@ -21,6 +21,7 @@ export const TEXT_STEPS = 50
 
 export const emptyState = (): ModState => ({ steps: [], explainer: null, offline: false, project: '', port: DEFAULT_PORT })
 
+// eslint-disable-next-line no-control-regex -- this pattern exists to find and strip terminal control characters
 const CONTROLS = /[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g
 /** One clean line: controls and bidi marks become spaces, whitespace collapses. */
 export const plain = (s: unknown): string => String(s ?? '').replace(CONTROLS, ' ').replace(/\s+/g, ' ').trim()

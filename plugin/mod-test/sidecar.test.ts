@@ -29,6 +29,7 @@ interface World {
 }
 
 // on is the test's registrar; its hooks stand beneath the mod.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- the engine test kit types live outside the repo build
 function world(on: any, steps: unknown[] = []): World {
   const w = { steps, online: true, port: 7391, statuses: [], toasts: [], runs: [], urls: [], sid: 'S1', hang: false, renders: 0, rev: 'r1', explainerDown: false, stepFetches: 0 } as unknown as World
   w.clock = mock.clock(on)
@@ -70,6 +71,7 @@ function world(on: any, steps: unknown[] = []): World {
   return w
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- the engine test kit types live outside the repo build
 async function start($: any, w: World) {
   await $.session.start({ source: 'startup', cwd: '/work/shop', surface: 'terminal' })
   await w.clock.settle()

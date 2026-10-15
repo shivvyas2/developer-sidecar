@@ -26,6 +26,7 @@ export interface RenderEvent {
 }
 
 // The engine's hook inputs and results are loosely typed here on purpose: the engine validates them.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- the engine validates hook inputs and results
 export type Hook = ($: Engine, e: any, next: (e: any) => Promise<any>) => unknown
 export interface Registration { catch(handler: Hook): unknown }
 export interface On {

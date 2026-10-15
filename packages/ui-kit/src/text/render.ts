@@ -26,6 +26,7 @@ const cut = (s: string, max: number): string => {
 }
 const sp = (n: number) => ' '.repeat(Math.max(0, n))
 /** C0 and C1 controls (ESC, BEL, CSI...) and bidi/zero-width controls: never sent to a terminal. */
+// eslint-disable-next-line no-control-regex -- this pattern exists to find and strip terminal control characters
 const CONTROLS = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g
 /** Every model string goes through this: whitespace becomes one space, controls go. */
 const clean = (s: string) => String(s ?? '').replace(/\s+/g, ' ').replace(CONTROLS, '').replace(/ {2,}/g, ' ').trim()
@@ -130,7 +131,7 @@ function card(s: TextStep, B: number, budget: number): Line[] {
   if (s.chip) body.push([seg(cut(`[${clean(s.chip)}]`, iw))])
 
   const keep = Math.max(0, budget - 3)
-  let shown = body.slice(0, keep)
+  const shown = body.slice(0, keep)
   if (body.length > keep && shown.length) shown[shown.length - 1] = ellipsize(shown[shown.length - 1]!, iw)
   const bottom: Line = [seg(' └' + '─'.repeat(B - 2) + '┘')]
   return [tabLine, titleLine, ...shown.map(boxed), bottom]
@@ -181,7 +182,7 @@ function trimTo(l: Line, cols: number): Line {
   const out: Line = []
   for (const s of l) {
     const t = [...s.text]
-    if (t.length <= left) { out.push(s); left -= t.length } else { if (left > 0) out.push({ ...s, text: t.slice(0, left).join('') }); left = 0; break }
+    if (t.length <= left) { out.push(s); left -= t.length } else { if (left > 0) out.push({ ...s, text: t.slice(0, left).join('') }); break }
   }
   return out
 }

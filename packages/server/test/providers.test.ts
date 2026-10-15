@@ -13,7 +13,7 @@ describe('anthropicProvider', () => {
   const text = (t: string, stop_reason = 'end_turn', usage: Record<string, number> = { input_tokens: 100, output_tokens: 20 }) =>
     ({ stop_reason, content: [{ type: 'text', text: t }], usage })
   test('sends the model, low effort, structured output and a plain system prompt; returns parsed output and usage', async () => {
-    let sent: Record<string, any> = {}
+    let sent: Record<string, unknown> & { output_config?: { effort?: unknown; format?: unknown } } = {}
     const p = anthropicProvider(client((params) => {
       sent = params
       return text(JSON.stringify(output), 'end_turn', { input_tokens: 100, output_tokens: 20, cache_read_input_tokens: 5, cache_creation_input_tokens: 0 })
@@ -21,8 +21,8 @@ describe('anthropicProvider', () => {
     const r = await p.explain(req, 'haiku')
     expect(sent.model).toBe(API_MODEL.haiku)
     expect(sent.model).toBe('claude-haiku-5-5')
-    expect(sent.output_config.effort).toBe('low')
-    expect(sent.output_config.format).toMatchObject({ type: 'json_schema' })
+    expect(sent.output_config?.effort).toBe('low')
+    expect(sent.output_config?.format).toMatchObject({ type: 'json_schema' })
     expect(sent.system).toBe('SYS')
     expect(JSON.stringify(sent)).not.toContain('cache_control')
     expect(sent.messages).toEqual([{ role: 'user', content: 'USER' }])

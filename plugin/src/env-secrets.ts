@@ -13,7 +13,7 @@ export function loadEnvSecrets(cwd: string): string[] {
   }
   const values = new Set<string>()
   for (const name of names) {
-    let text = ''
+    let text: string
     try {
       text = readFileSync(join(cwd, name), 'utf8')
     } catch {

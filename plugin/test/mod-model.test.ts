@@ -66,6 +66,7 @@ describe('statusLine', () => {
     expect(statusLine(state({ steps: [step(1)], offline: true }))).toBeUndefined()
   })
   test('hostile techLabel is cleaned', () => {
+    // eslint-disable-next-line no-control-regex -- asserts that no control character survives
     expect(statusLine(state({ steps: [step(1, { techLabel: 'Bash: echo \u001b]0;pwned\u0007' })] }))).not.toMatch(/[\u0000-\u001f]/)
   })
 })

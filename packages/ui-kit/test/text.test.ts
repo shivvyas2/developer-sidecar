@@ -95,6 +95,7 @@ describe('renderText', () => {
       steps: [{ num: 1, title: dirty('Read'), caption: dirty('a.ts'), status: 'running', plain: dirty('plain'), why: dirty('why'), chip: dirty('chip') }],
     }
     const out = plain(renderText(m, 120, 30))
+    // eslint-disable-next-line no-control-regex -- asserts that no control character survives
     expect(out).not.toMatch(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩]/)
     for (const t of ['PROJ', 'READ', 'a.ts', 'plain', 'why', 'chip', '00:01']) expect(out).toContain(t)
   })

@@ -17,7 +17,7 @@ function runStart(env, sid) {
   })
 }
 
-function sidecarPids(home) {
+function sidecarPids(_home) {
   return new Promise((resolve) => {
     const ps = spawn('ps', ['-Ao', 'pid=,command='])
     let out = ''
@@ -45,7 +45,7 @@ for (let i = 0; i < rounds; i++) {
     const sessions = await (await fetch(`http://127.0.0.1:${port}/api/sessions`, { headers: { 'x-sidecar-token': token } })).json()
     assert.equal(sessions.length, 2, `round ${i}: expected both sessions on the one server`)
   } finally {
-    for (const p of mine) { try { process.kill(p, 'SIGTERM') } catch {} }
+    for (const p of mine) { try { process.kill(p, 'SIGTERM') } catch { /* already gone */ } }
     await new Promise((r) => setTimeout(r, 200))
   }
 }
