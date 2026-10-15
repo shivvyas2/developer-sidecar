@@ -62,6 +62,11 @@ describe('cliProvider', () => {
     await expect(cliProvider(async () => ({ code: 0, stdout: JSON.stringify({ is_error: false, result: '{"items":[{"bad":1}]}' }), stderr: '' })).explain(req, 'haiku')).rejects.toMatchObject({ retryable: true })
     await expect(cliProvider(async () => { throw Object.assign(new Error('spawn claude ENOENT'), { code: 'ENOENT' }) }).explain(req, 'haiku')).rejects.toMatchObject({ retryable: false })
   })
+  test('a timed-out run is labelled as such and is retryable', async () => {
+    const err = await cliProvider(async () => ({ code: null, stdout: '', stderr: '', timedOut: true })).explain(req, 'haiku').catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ExplainError)
+    expect(err).toMatchObject({ message: 'claude took too long to answer.', retryable: true })
+  })
   test('extractJson finds the object inside prose and code fences', () => {
     expect(extractJson('```json\n{"a":1}\n```')).toEqual({ a: 1 })
     expect(extractJson('no json')).toBeNull()

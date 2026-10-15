@@ -66,17 +66,20 @@ export function anthropicProvider(client: ParseClient = new Anthropic({ maxRetri
 }
 
 export type Runner = (args: string[], input: string, o: { env: NodeJS.ProcessEnv; timeoutMs: number }) =>
-  Promise<{ code: number | null; stdout: string; stderr: string }>
+  Promise<{ code: number | null; stdout: string; stderr: string; timedOut?: boolean }>
 
 export const runClaude: Runner = (args, input, o) => new Promise((resolve, reject) => {
   const child = spawn('claude', args, { env: o.env, cwd: tmpdir(), stdio: ['pipe', 'pipe', 'pipe'] })
   let stdout = ''
   let stderr = ''
-  const timer = setTimeout(() => child.kill('SIGKILL'), o.timeoutMs)
+  let timedOut = false
+  const timer = setTimeout(() => { timedOut = true; child.kill('SIGKILL') }, o.timeoutMs)
   child.stdout.on('data', (d: Buffer) => { stdout += d.toString() })
   child.stderr.on('data', (d: Buffer) => { stderr += d.toString() })
   child.on('error', (err) => { clearTimeout(timer); reject(err) })
-  child.on('close', (code) => { clearTimeout(timer); resolve({ code, stdout, stderr }) })
+  child.on('close', (code) => { clearTimeout(timer); resolve({ code, stdout, stderr, timedOut }) })
+  // claude may exit before reading all input (EPIPE); the close handler reports the failure
+  child.stdin.on('error', () => undefined)
   child.stdin.end(input)
 })
 
@@ -111,6 +114,7 @@ export function cliProvider(run: Runner = runClaude, env: NodeJS.ProcessEnv = pr
         const missing = (err as NodeJS.ErrnoException).code === 'ENOENT'
         throw new ExplainError(missing ? 'The claude command is not installed.' : `Could not run claude: ${(err as Error).message}`, !missing)
       }
+      if (r.timedOut) throw new ExplainError('claude took too long to answer.', true)
       if (r.code !== 0) throw new ExplainError(`claude exited with code ${r.code}: ${r.stderr.trim().slice(0, 200)}`, true)
       let outer: { is_error?: boolean; result?: unknown; usage?: Record<string, number | undefined> }
       try {
