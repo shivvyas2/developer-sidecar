@@ -25,3 +25,12 @@ test('Your App gains a floor every 3 successful created files, capped at 5', () 
   expect(townFrom(Array.from({ length: 3 }, () => create('failed'))).appFloors).toBe(1)
   expect(townFrom(Array.from({ length: 100 }, () => create())).appFloors).toBe(5)
 })
+
+test('townFrom skips a step whose scene has no cast array', () => {
+  const ok = { category: 'external', status: 'ok', scene: { scene: 'connect-service', cast: ['claude', { place: 'service', label: 'Stripe' }], beats: [], caption: 'c' } }
+  const bad = { category: 'create', status: 'ok', scene: { scene: 'x', cast: null, beats: [], caption: 'c' } }
+  const missing = { category: 'create', status: 'ok' }
+  const t = townFrom([bad, missing, ok] as never)
+  expect(t.places).toContain('service')
+  expect(t.labels.service).toBe('Stripe')
+})

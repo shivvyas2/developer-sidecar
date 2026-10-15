@@ -8,7 +8,7 @@ import { renderText, type Line, type Tone } from '@sidecar/ui-kit'
 import { due, FAST_MS, newCadence, recordPoll, type Cadence } from './cadence'
 import { HELP, parseCommand } from './commands'
 import type { Engine, On, RenderEvent } from './engine'
-import { bandLine, basename, emptyState, fingerprint, plain, readoutOf, statusLine, textModel, workstationUrl, type ModState } from './model'
+import { bandLine, basename, emptyState, explainerPrint, plain, readoutOf, statusLine, stepsPrint, textModel, workstationUrl, type ModState } from './model'
 import { paneScene } from './scene'
 import { freshMemory, milestones, type ToastMemory } from './toasts'
 
@@ -116,7 +116,7 @@ async function poll($: Engine): Promise<void> {
       }
       return
     }
-    const changed = state.offline || fingerprint(steps, explainer) !== fingerprint(state.steps, state.explainer)
+    const changed = state.offline || stepsPrint(steps) !== stepsPrint(state.steps) || explainerPrint(explainer) !== explainerPrint(state.explainer)
     state = { ...state, steps, explainer, offline: false }
     offlinePolls = 0
     cadence = recordPoll(cadence, now, changed ? 'changed' : 'same')

@@ -19,7 +19,9 @@ export function townFrom(steps: readonly TownStep[]): Town {
   let created = 0
   for (const s of steps) {
     if (s.category === 'create' && s.status === 'ok') created++
-    for (const c of s.scene.cast) {
+    const cast: unknown = s.scene?.cast
+    if (!Array.isArray(cast)) continue
+    for (const c of cast as TownStep['scene']['cast']) {
       if (typeof c === 'string') continue
       if (!places.includes(c.place)) places.push(c.place)
       if (c.label) labels[c.place] = c.label

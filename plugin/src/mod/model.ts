@@ -21,7 +21,7 @@ export const TEXT_STEPS = 50
 
 export const emptyState = (): ModState => ({ steps: [], explainer: null, offline: false, project: '', port: DEFAULT_PORT })
 
-const CONTROLS = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩]/g
+const CONTROLS = /[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g
 /** One clean line: controls and bidi marks become spaces, whitespace collapses. */
 export const plain = (s: unknown): string => String(s ?? '').replace(CONTROLS, ' ').replace(/\s+/g, ' ').trim()
 
@@ -68,6 +68,18 @@ export function textModel(s: ModState): TextModel {
   }
 }
 
+const WIDE: ReadonlyArray<readonly [number, number]> = [
+  [0x1100, 0x115f], [0x2e80, 0x303e], [0x3041, 0x33ff], [0x3400, 0x4dbf], [0x4e00, 0x9fff], [0xa000, 0xa4cf],
+  [0xac00, 0xd7a3], [0xf900, 0xfaff], [0xfe30, 0xfe4f], [0xff00, 0xff60], [0xffe0, 0xffe6],
+  [0x1f300, 0x1f64f], [0x1f680, 0x1f6ff], [0x1f900, 0x1f9ff], [0x20000, 0x3fffd],
+]
+const charWidth = (ch: string): number => {
+  const cp = ch.codePointAt(0) ?? 0
+  return WIDE.some(([a, b]) => cp >= a && cp <= b) ? 2 : 1
+}
+/** Display columns: East Asian wide, fullwidth and common emoji count as two. */
+export const width = (s: string): number => [...s].reduce((n, ch) => n + charWidth(ch), 0)
+
 const MARK: Record<FeedStep['status'], string> = { running: '●', ok: '✓', failed: '✕', interrupted: '◌' }
 
 /** `◢ 042 INSTALL · STRIPE ●`, cut to `max` columns with the mark kept; undefined clears it. */
@@ -76,10 +88,15 @@ export function statusLine(s: ModState, max = 60): string | undefined {
   if (s.offline || !last) return undefined
   const head = `◢ ${pad3(s.steps.length)} `
   const tail = ` ${MARK[last.status]}`
-  const room = Math.max(1, max - [...head].length - [...tail].length)
-  const title = [...plain(stepTitle(last)).toUpperCase()]
-  const fitted = title.length <= room ? title.join('') : title.slice(0, room - 1).join('') + '…'
-  return head + fitted + tail
+  const room = Math.max(1, max - width(head) - width(tail))
+  const title = plain(stepTitle(last)).toUpperCase()
+  if (width(title) <= room) return head + title + tail
+  let fitted = ''
+  for (const ch of title) {
+    if (width(fitted) + charWidth(ch) + 1 > room) break
+    fitted += ch
+  }
+  return head + fitted + '…' + tail
 }
 
 /** The band's words: the latest plain explanation, else its caption. */
@@ -90,12 +107,11 @@ export function bandLine(s: ModState): string | undefined {
   return plain(e?.plain ?? last.caption) || undefined
 }
 
-/** Changes whenever anything a surface shows could change: a step, its status, its explanation, the token count. */
-export function fingerprint(steps: readonly FeedStep[], explainer: ExplainerState | null): string {
-  return JSON.stringify([
-    steps.map((st) => [st.id, st.status, st.caption, st.explanation ? JSON.stringify(st.explanation) : '']),
-    explainer ? [explainer.status, explainer.tokens.input, explainer.tokens.output] : null,
-  ])
-}
+/** Changes whenever a step, its status, caption or explanation changes. */
+export const stepsPrint = (steps: readonly FeedStep[]): string =>
+  JSON.stringify(steps.map((st) => [st.id, st.status, st.caption, st.explanation ? JSON.stringify(st.explanation) : '']))
+
+export const explainerPrint = (e: ExplainerState | null): string =>
+  e ? `${e.status}|${e.tokens.input}|${e.tokens.output}` : ''
 
 export const workstationUrl = (s: ModState): string => `http://localhost:${s.port}`

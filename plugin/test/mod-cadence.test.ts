@@ -29,6 +29,20 @@ describe('cadence', () => {
   })
 })
 
+describe('long offline', () => {
+  test('after a minute offline, polls every thirty seconds', () => {
+    let c = recordPoll(newCadence(0), 0, 'offline')
+    expect(interval(c, 1000)).toBe(5000)
+    c = recordPoll(c, 60_000, 'offline')
+    expect(interval(c, 60_000)).toBe(30_000)
+    expect(due(c, 85_000)).toBe(false)
+    expect(due(c, 90_000)).toBe(true)
+    c = recordPoll(c, 90_000, 'changed') // coming back online is a change: poll() records it so
+    expect(c.offlineSince).toBeNull()
+    expect(interval(c, 90_000)).toBe(1000)
+  })
+})
+
 describe('/sidecar arguments', () => {
   test.each([
     ['', { kind: 'open' }],

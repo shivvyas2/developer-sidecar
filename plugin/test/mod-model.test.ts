@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { ExplainerState, FeedStep } from '@sidecar/shared'
-import { bandLine, basename, emptyState, fingerprint, plain, readoutOf, statusLine, textModel, workstationUrl, type ModState } from '../src/mod/model'
+import { bandLine, basename, emptyState, explainerPrint, plain, stepsPrint, width, readoutOf, statusLine, textModel, workstationUrl, type ModState } from '../src/mod/model'
 
 const step = (n: number, over: Partial<FeedStep> = {}): FeedStep => ({
   id: `s${n}`, sessionId: 'S1', seq: n, toolName: 'Bash', input: {}, startedAt: 1_000 + n * 1_000, status: 'ok',
@@ -81,12 +81,31 @@ describe('bandLine', () => {
   })
 })
 
-test('fingerprint changes when an older step gets its explanation', () => {
+test('stepsPrint changes when an older step gets its explanation; explainerPrint tracks tokens', () => {
   const a = [step(1), step(2)]
   const b = [step(1, { explanation: { unavailable: 'off' } }), step(2)]
-  expect(fingerprint(a, null)).not.toBe(fingerprint(b, null))
-  expect(fingerprint(a, explainer(1, 1))).not.toBe(fingerprint(a, explainer(1, 2)))
-  expect(fingerprint(a, null)).toBe(fingerprint([...a], null))
+  expect(stepsPrint(a)).not.toBe(stepsPrint(b))
+  expect(stepsPrint(a)).toBe(stepsPrint([...a]))
+  expect(explainerPrint(explainer(1, 1))).not.toBe(explainerPrint(explainer(1, 2)))
+  expect(explainerPrint(null)).toBe(explainerPrint(null))
+})
+
+describe('width', () => {
+  test('wide and emoji count as two columns', () => {
+    expect(width('abc')).toBe(3)
+    expect(width('支付')).toBe(4)
+    expect(width('🚀x')).toBe(3)
+  })
+})
+
+test('statusLine fits wide titles by columns', () => {
+  const s = statusLine(state({ steps: [step(1, { techLabel: 'Bash: echo 支付支付支付支付支付支付支付支付' })] }), 24)!
+  expect(width(s)).toBeLessThanOrEqual(24)
+  expect(s.endsWith(' ✓')).toBe(true)
+})
+
+test('plain strips the Arabic letter mark', () => {
+  expect(plain('a\u061cb')).toBe('a b')
 })
 
 test('workstationUrl uses the located port', () => {

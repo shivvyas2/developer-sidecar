@@ -18,7 +18,7 @@ export function paneScene(steps: readonly FeedStep[], readout: Readout, sinceMs:
     if (!parsed.success) return undefined
     const timeline = compile(parsed.data)
     const t = Math.min(Math.max(0, sinceMs), timeline.duration)
-    const svg = themed(render(parsed.data, t, { frame: true, readout, timeline, town: townFrom(steps) }))
+    const svg = themed(render(parsed.data, t, { frame: true, readout, timeline, town: townFrom(steps.filter((st) => SceneSpecSchema.safeParse(st.scene).success)) }))
     const remainingMs = Math.max(0, timeline.duration - Math.max(0, sinceMs))
     return svg.length < SVG_LIMIT ? { svg, playing: remainingMs > 0, remainingMs } : undefined
   } catch {

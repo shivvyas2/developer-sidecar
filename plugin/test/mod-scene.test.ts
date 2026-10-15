@@ -43,3 +43,9 @@ test('a malformed scene draws no SVG and never throws', () => {
   expect(paneScene([step(undefined)], readout, 0)).toBeUndefined()
   expect(paneScene([], readout, 0)).toBeUndefined()
 })
+
+test('a malformed earlier step does not hide the latest scene', () => {
+  const spec = SAMPLE_SCENES[0]!.spec
+  const bad = { ...step({ scene: 'x', cast: null, beats: [], caption: 'c' }), id: 's0' }
+  expect(paneScene([bad, step(spec)], readout, 0)).toBeDefined()
+})
