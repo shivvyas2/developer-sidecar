@@ -44,3 +44,9 @@ describe('pieces', () => {
     for (const p of [0, 0.5, 1]) wellFormed(effect(id, p, 1000))
   })
 })
+
+describe('place label fallback', () => {
+  test('a whitespace-only label uses the default sign', () => {
+    expect(place('app', { floors: 1, label: '   ' })).toBe(place('app', { floors: 1 }))
+  })
+})

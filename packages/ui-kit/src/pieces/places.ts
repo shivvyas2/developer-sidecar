@@ -55,7 +55,7 @@ const DEFAULT_LABEL: Partial<Record<PlaceId, string>> = { app: 'Your App', servi
 export function place(id: PlaceId, o: { label?: string; floors: number }): string {
   const floors = Math.min(MAX_FLOORS, Math.max(1, Math.round(o.floors) || 1))
   const body = id === 'app' ? app(floors) : BODY[id]
-  const text = o.label ?? DEFAULT_LABEL[id]
+  const text = (o.label && truncate(o.label)) || DEFAULT_LABEL[id]
   const signY = -placeHeight(id, floors) + 18
   return `<g class="sk-place sk-place--${id}">${body}${text ? sign(text, signY) : ''}</g>`
 }
