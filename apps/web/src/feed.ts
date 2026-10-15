@@ -5,6 +5,7 @@ export interface FeedState {
   selected: string | null
   steps: Record<string, FeedStep[]>
   lastSeq: number
+  loaded: Record<string, boolean>
 }
 
 export type FeedAction =
@@ -13,7 +14,7 @@ export type FeedAction =
   | { type: 'sessions'; sessions: SessionSummary[] }
   | { type: 'steps'; sessionId: string; steps: FeedStep[] }
 
-export const initialFeed: FeedState = { sessions: [], selected: null, steps: {}, lastSeq: 0 }
+export const initialFeed: FeedState = { sessions: [], selected: null, steps: {}, lastSeq: 0, loaded: {} }
 
 const byLastAt = (a: SessionSummary, b: SessionSummary) => b.lastAt - a.lastAt
 const byStart = (a: FeedStep, b: FeedStep) => a.startedAt - b.startedAt || a.seq - b.seq
@@ -43,7 +44,12 @@ export function feedReducer(state: FeedState, action: FeedAction): FeedState {
         if (!existing || existing.seq < s.seq) merged.set(s.id, s)
       }
       const lastSeq = action.steps.reduce((m, s) => Math.max(m, s.seq), state.lastSeq)
-      return { ...state, steps: { ...state.steps, [action.sessionId]: [...merged.values()].sort(byStart) }, lastSeq }
+      return {
+        ...state,
+        steps: { ...state.steps, [action.sessionId]: [...merged.values()].sort(byStart) },
+        lastSeq,
+        loaded: { ...state.loaded, [action.sessionId]: true },
+      }
     }
     case 'select':
       return { ...state, selected: action.id }

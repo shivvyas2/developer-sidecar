@@ -9,6 +9,11 @@ const step = (id: string, seq: number, startedAt: number, sessionId = 's1'): Fee
 const session = (id: string, lastAt: number) => ({ id, cwd: `/${id}`, startedAt: 0, lastAt })
 
 describe('feedReducer', () => {
+  test('a steps snapshot marks that session loaded', () => {
+    expect(initialFeed.loaded).toEqual({})
+    const s = feedReducer(initialFeed, { type: 'steps', sessionId: 's1', steps: [] })
+    expect(s.loaded).toEqual({ s1: true })
+  })
   test('first session auto-selects; sessions sorted by lastAt desc', () => {
     let s = feedReducer(initialFeed, { type: 'session', session: session('a', 1) })
     s = feedReducer(s, { type: 'session', session: session('b', 2) })
