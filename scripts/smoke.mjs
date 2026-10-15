@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import assert from 'node:assert/strict'
 
 const home = mkdtempSync(join(tmpdir(), 'sidecar-smoke-'))
-const env = { ...process.env, SIDECAR_HOME: home }
+const env = { ...process.env, SIDECAR_HOME: home, SIDECAR_EXPLAINER: 'off' }
 const lines = readFileSync('packages/server/test/fixtures/session-basic.jsonl', 'utf8').trim().split('\n')
 
 const run = (script, input) => {
@@ -29,6 +29,10 @@ try {
   assert.deepEqual(steps.map((s) => [s.category, s.status]), [
     ['prompt', 'ok'], ['install', 'ok'], ['create', 'ok'], ['test', 'failed'],
   ])
+  const explainer = await (await fetch(`http://127.0.0.1:${port}/api/explainer`, { headers })).json()
+  // SIDECAR_EXPLAINER=off yields no provider; the state is 'unavailable' (status 'off' only reflects the user's setting)
+  assert.equal(explainer.provider, null, 'smoke must never call a model')
+  assert.equal(explainer.status, 'unavailable', 'smoke must never call a model')
   assert.ok(!JSON.stringify(steps).includes('sk-live-abc'), 'secret leaked into storage')
   const html = await (await fetch(`http://127.0.0.1:${port}/`)).text()
   assert.ok(html.includes('name="sidecar-token"'), 'web UI not served')

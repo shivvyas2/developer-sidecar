@@ -2,13 +2,19 @@ import { readFileSync, statSync } from 'node:fs'
 import { extname, join, normalize, sep } from 'node:path'
 import { Hono, type Context, type Next } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
-import { SIDECAR_NAME, SidecarEventSchema } from '@sidecar/shared'
+import { SIDECAR_NAME, SettingsSchema, SidecarEventSchema } from '@sidecar/shared'
+import type { Explainer } from './explainer/service'
+import type { Hub } from './hub'
 import type { Pipeline } from './pipeline'
+import type { SettingsStore } from './settings'
 import type { Store } from './store'
 
 export interface AppOptions {
   pipeline: Pipeline
   store: Store
+  hub: Hub
+  settings: SettingsStore
+  explainer: Pick<Explainer, 'state' | 'settingsChanged'>
   token: string
   port: () => number
   version: string
@@ -83,6 +89,31 @@ export function createApp(o: AppOptions): Hono {
 
   app.get('/api/sessions', (c) => c.json(o.store.listSessions()))
   app.get('/api/sessions/:id/steps', (c) => c.json(o.store.stepsForSession(c.req.param('id'))))
+
+  app.get('/api/settings', (c) => c.json(o.settings.get()))
+  app.put('/api/settings', async (c) => {
+    let body: unknown
+    try { body = await c.req.json() } catch { return c.text('invalid json', 400) }
+    const parsed = SettingsSchema.safeParse(body)
+    if (!parsed.success) return c.json({ error: 'invalid settings' }, 400)
+    const settings = o.settings.set(parsed.data)
+    o.explainer.settingsChanged()
+    return c.json({ settings, explainer: o.explainer.state() })
+  })
+  app.get('/api/explainer', (c) => c.json(o.explainer.state()))
+  app.get('/api/sessions/:id/decisions', (c) => c.json(o.store.listDecisions(c.req.param('id'))))
+  app.get('/api/sessions/:id/glossary', (c) => c.json(o.store.listGlossary(c.req.param('id'))))
+  app.delete('/api/sessions/:id', (c) => {
+    const id = c.req.param('id')
+    o.store.deleteSession(id)
+    o.hub.publish({ type: 'session_deleted', id })
+    return c.json({ ok: true })
+  })
+  app.delete('/api/sessions', (c) => {
+    o.store.deleteAll()
+    o.hub.publish({ type: 'reset' })
+    return c.json({ ok: true })
+  })
 
   app.get('/assets/*', (c) => {
     if (!o.staticDir) return c.notFound()

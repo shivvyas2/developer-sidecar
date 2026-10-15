@@ -17,7 +17,7 @@ const home = () => join(mkdtempSync(join(tmpdir(), 'sidecar-')), 'h')
 const basePort = () => 40000 + Math.floor(Math.random() * 20000)
 
 async function start(o: Parameters<typeof startServer>[0]) {
-  const s = await startServer(o)
+  const s = await startServer({ provider: null, ...o })
   running.push(s)
   return s
 }
@@ -35,7 +35,9 @@ function collect(url: string, n: number): Promise<ServerMessage[]> {
     const ws = new WebSocket(url)
     const got: ServerMessage[] = []
     ws.on('message', (d) => {
-      got.push(JSON.parse(String(d)))
+      const m = JSON.parse(String(d)) as ServerMessage
+      if (m.type === 'explainer') return
+      got.push(m)
       if (got.length >= n) { ws.close(); resolve(got) }
     })
     ws.on('error', reject)
@@ -64,12 +66,12 @@ describe('startServer', () => {
   test('second start on the same home fails with already running', async () => {
     const h = home()
     await start({ home: h, preferredPort: basePort() })
-    await expect(startServer({ home: h, preferredPort: basePort() })).rejects.toThrow('already running')
+    await expect(startServer({ home: h, preferredPort: basePort(), provider: null })).rejects.toThrow('already running')
   })
 
   test('close releases the lock so a new server can start', async () => {
     const h = home()
-    const s = await startServer({ home: h, preferredPort: basePort() })
+    const s = await startServer({ home: h, preferredPort: basePort(), provider: null })
     await s.close()
     await start({ home: h, preferredPort: basePort() })
   })
@@ -92,9 +94,17 @@ describe('startServer', () => {
     expect(msgs.map((m) => m.type)).toEqual(['session', 'step'])
   })
 
+  test('websocket sends the explainer state first', async () => {
+    const s = await start({ home: home(), preferredPort: basePort() })
+    const ws = new WebSocket(`ws://127.0.0.1:${s.port}/ws?token=${s.token}&after=0`)
+    const first = await new Promise<ServerMessage>((resolve) => ws.once('message', (d) => resolve(JSON.parse(String(d)) as ServerMessage)))
+    ws.close()
+    expect(first).toMatchObject({ type: 'explainer', state: { status: 'unavailable', provider: null } })
+  })
+
   test('idle shutdown closes the server', async () => {
     const h = home()
-    const s = await startServer({ home: h, preferredPort: basePort(), idleMs: 50, sweepMs: 20 })
+    const s = await startServer({ home: h, preferredPort: basePort(), provider: null, idleMs: 50, sweepMs: 20 })
     await new Promise((r) => setTimeout(r, 200))
     await expect(fetch(`http://127.0.0.1:${s.port}/health`)).rejects.toThrow()
     await start({ home: h, preferredPort: basePort() })
@@ -104,7 +114,7 @@ describe('startServer', () => {
 describe('single instance hardening', () => {
   test('two concurrent starts on one home → exactly one server', async () => {
     const h = home(); const p = basePort()
-    const results = await Promise.allSettled([startServer({ home: h, preferredPort: p }), startServer({ home: h, preferredPort: p })])
+    const results = await Promise.allSettled([startServer({ home: h, preferredPort: p, provider: null }), startServer({ home: h, preferredPort: p, provider: null })])
     const ok = results.filter((r): r is PromiseFulfilledResult<RunningServer> => r.status === 'fulfilled')
     ok.forEach((r) => running.push(r.value))
     expect(ok).toHaveLength(1)

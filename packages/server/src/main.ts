@@ -6,8 +6,12 @@ import {
   DEFAULT_PORT, acquireLock, ensureHome, ensureToken, forceLock, logLine, readPort, releaseLock, writePort,
 } from '@sidecar/shared/home'
 import { createApp } from './app'
+import type { Provider } from './explainer/providers'
+import { claudeAvailable, pickProvider } from './explainer/providers'
+import { createExplainer } from './explainer/service'
 import { Hub } from './hub'
 import { createPipeline } from './pipeline'
+import { fileSettings } from './settings'
 import { openStore } from './store'
 import { attachWs } from './ws'
 
@@ -26,6 +30,8 @@ export interface StartOptions {
   version?: string
   /** How long to wait for a lock holder to answer /health before treating the lock as stale. */
   lockWaitMs?: number
+  /** Explanation provider. Omit to auto-detect (API key, then the claude CLI); pass null to disable (tests). */
+  provider?: Provider | null
 }
 
 function listen(server: Server, port: number): Promise<boolean> {
@@ -82,9 +88,12 @@ export async function startServer(o: StartOptions): Promise<RunningServer> {
     throw err
   }
   const hub = new Hub()
+  const settings = fileSettings(o.home)
+  const provider = 'provider' in o ? o.provider ?? null : await pickProvider({ env: process.env, hasClaude: claudeAvailable() })
+  const explainer = createExplainer({ hub, store, settings, provider })
   const pipeline = createPipeline({ store, hub })
   let port = o.preferredPort ?? DEFAULT_PORT
-  const app = createApp({ pipeline, store, token, port: () => port, version: o.version ?? '0.1.0', staticDir: o.staticDir })
+  const app = createApp({ pipeline, store, hub, settings, explainer, token, port: () => port, version: o.version ?? '0.1.0', staticDir: o.staticDir })
   const server = createAdaptorServer({ fetch: app.fetch }) as Server
 
   const first = port
@@ -104,14 +113,16 @@ export async function startServer(o: StartOptions): Promise<RunningServer> {
     throw new Error(`no free port in ${first}-${first + 10}`)
   }
   writePort(o.home, port)
-  const ws = attachWs(server, { hub, store, token, port: () => port })
+  const ws = attachWs(server, { hub, store, token, port: () => port, explainerState: explainer.state })
   logLine(o.home, 'server.log', `listening on 127.0.0.1:${port}`)
+  logLine(o.home, 'server.log', `explanations: ${explainer.state().status}${provider ? ` via ${provider.id}` : ''}`)
 
   let closed = false
   const close = async () => {
     if (closed) return
     closed = true
     clearInterval(timer)
+    explainer.stop()
     ws.close()
     server.closeAllConnections?.()
     await new Promise<void>((r) => server.close(() => r()))

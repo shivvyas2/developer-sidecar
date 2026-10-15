@@ -32,7 +32,7 @@ function sidecarPids(home) {
 const rounds = Number(process.argv[2] ?? 5)
 for (let i = 0; i < rounds; i++) {
   const home = mkdtempSync(join(tmpdir(), 'sidecar-race-'))
-  const env = { ...process.env, SIDECAR_HOME: home }
+  const env = { ...process.env, SIDECAR_HOME: home, SIDECAR_EXPLAINER: 'off' }
   const before = new Set(await sidecarPids(home))
   const outs = await Promise.all([runStart(env, `a${i}`), runStart(env, `b${i}`)])
   await new Promise((r) => setTimeout(r, 500))

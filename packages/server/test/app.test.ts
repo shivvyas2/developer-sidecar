@@ -4,8 +4,11 @@ import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import { createApp, isAllowedHost, isAllowedOrigin } from '../src/app'
 import { Hub } from '../src/hub'
+import { createExplainer } from '../src/explainer/service'
 import { createPipeline } from '../src/pipeline'
+import { memorySettings } from '../src/settings'
 import { openStore } from '../src/store'
+import type { ServerMessage } from '@sidecar/shared'
 
 const TOKEN = 'a'.repeat(64)
 const PORT = 7377
@@ -16,8 +19,12 @@ const AUTH = { 'x-sidecar-token': TOKEN, 'content-type': 'application/json' }
 
 function make(staticDir?: string) {
   const store = openStore(':memory:')
-  const pipeline = createPipeline({ store, hub: new Hub() })
-  return createApp({ pipeline, store, token: TOKEN, port: () => PORT, version: '0.1.0', staticDir })
+  const hub = new Hub()
+  const settings = memorySettings()
+  const explainer = createExplainer({ hub, store, settings, provider: null })
+  const pipeline = createPipeline({ store, hub })
+  const app = createApp({ pipeline, store, hub, settings, explainer, token: TOKEN, port: () => PORT, version: '0.1.0', staticDir })
+  return Object.assign(app, { store, hub })
 }
 const event = { id: 'e1', sessionId: 's1', ts: 1, cwd: '/p', kind: 'prompt', prompt: 'hello' }
 
@@ -88,5 +95,40 @@ describe('routes', () => {
     const r = await make().request(U('/'), { headers: H })
     expect(r.status).toBe(200)
     expect(await r.text()).toContain('developer-sidecar')
+  })
+})
+
+describe('explainer routes', () => {
+  test('settings round-trip, validation and explainer state', async () => {
+    const app = make()
+    expect(await (await app.request(U('/api/settings'), { headers: AUTH })).json()).toEqual({ explanations: 'haiku' })
+    const bad = await app.request(U('/api/settings'), { method: 'PUT', headers: AUTH, body: JSON.stringify({ explanations: 'gpt' }) })
+    expect(bad.status).toBe(400)
+    const put = await app.request(U('/api/settings'), { method: 'PUT', headers: AUTH, body: JSON.stringify({ explanations: 'off' }) })
+    expect(await put.json()).toMatchObject({ settings: { explanations: 'off' }, explainer: { status: 'off' } })
+    expect(await (await app.request(U('/api/explainer'), { headers: AUTH })).json()).toMatchObject({ level: 'off', status: 'off' })
+  })
+  test('mutating routes need the token and a same-origin request', async () => {
+    const app = make()
+    expect((await app.request(U('/api/settings'), { method: 'PUT', body: '{}' })).status).toBe(401)
+    expect((await app.request(U('/api/sessions'), { method: 'DELETE', headers: { ...AUTH, origin: 'http://evil.com' } })).status).toBe(403)
+  })
+  test('decisions and glossary per session', async () => {
+    const app = make()
+    app.store.addDecision({ id: 'd1', sessionId: 's1', stepId: 'a', at: 1, title: 't', choice: 'c', alternatives: [], reason: 'r' })
+    app.store.addConcept({ term: 'SDK', definition: 'd', sessionId: 's1', stepId: 'a', at: 1 })
+    expect(await (await app.request(U('/api/sessions/s1/decisions'), { headers: AUTH })).json()).toHaveLength(1)
+    expect(await (await app.request(U('/api/sessions/s1/glossary'), { headers: AUTH })).json()).toEqual([expect.objectContaining({ term: 'SDK' })])
+  })
+  test('deleting a session or everything publishes and removes data', async () => {
+    const app = make()
+    const got: ServerMessage[] = []
+    app.hub.subscribe((m) => got.push(m))
+    await app.request(U('/events'), { method: 'POST', headers: AUTH, body: JSON.stringify(event) })
+    expect((await app.request(U('/api/sessions/s1'), { method: 'DELETE', headers: AUTH })).status).toBe(200)
+    expect(app.store.listSessions()).toEqual([])
+    expect(got).toContainEqual({ type: 'session_deleted', id: 's1' })
+    await app.request(U('/api/sessions'), { method: 'DELETE', headers: AUTH })
+    expect(got).toContainEqual({ type: 'reset' })
   })
 })
