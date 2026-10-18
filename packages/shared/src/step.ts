@@ -27,11 +27,18 @@ export interface Translation {
 
 export type FeedStep = Step & Translation & { seq: number; explanation?: StepExplanation }
 
+/** What the session needs from its person: nothing (working), an answer (permission, idle), or its turn is over (done). */
+export type Attention = 'working' | 'permission' | 'idle' | 'done'
+
 export interface SessionSummary {
   id: string
   cwd: string
   startedAt: number
   lastAt: number
+  attention?: Attention
+  attentionAt?: number
+  /** Claude Code's own words for a permission or idle notice, scrubbed and clipped. */
+  attentionText?: string
 }
 
 export type ServerMessage =

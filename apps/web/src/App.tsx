@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { saveSettings } from './api'
+import { attentionNotice, liveTag, sessionMark, titleFor } from './attention'
 import { DecisionsView } from './DecisionsView'
 import { FolderTabs, StatusStrip, ThemeToggle, type FolderTab } from './ds'
 import { formatTokens } from './format'
@@ -52,6 +53,8 @@ export function App() {
   const setTab = (t: Tab) => { setPickRequest(null); setTabRaw(t) }
   const pickStep = (id: string) => { setPickRequest(id); setTabRaw('stage') }
   const [theme, setTheme] = useTheme()
+  const title = titleFor(state.sessions)
+  useEffect(() => { document.title = title }, [title])
   if (hash === '#/kit') return <Kit />
   const sid = state.selected
   const steps = sid ? state.steps[sid] ?? [] : []
@@ -59,6 +62,8 @@ export function App() {
   const status = explainer?.status ?? null
   const selectedSession = state.sessions.find((x) => x.id === sid) ?? null
   const project = selectedSession ? projectName(selectedSession.cwd, selectedSession.id) : undefined
+  const notice = attentionNotice(selectedSession)
+  const tag = liveTag(selectedSession, connection === 'offline')
   const resume = () => {
     if (!explainer) return
     saveSettings({ explanations: explainer.level }).then((r) => dispatch({ type: 'explainer', state: r.explainer })).catch(() => undefined)
@@ -81,7 +86,7 @@ export function App() {
               >
                 {state.sessions.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {projectName(s.cwd, s.id)} · {new Date(s.lastAt).toLocaleTimeString()}
+                    {projectName(s.cwd, s.id)} · {new Date(s.lastAt).toLocaleTimeString()}{sessionMark(s)}
                   </option>
                 ))}
               </select>
@@ -100,6 +105,11 @@ export function App() {
         </div>
       </header>
       <FolderTabs tabs={TABS} active={tab} onSelect={(id) => setTab(id as Tab)} />
+      {notice ? (
+        <StatusStrip tag={notice.tag} {...(selectedSession?.attention === 'permission' ? { tone: 'alert' as const } : {})}>
+          {notice.text}
+        </StatusStrip>
+      ) : null}
       {status === 'paused' ? (
         <StatusStrip tag="PAUSED" action={{ label: '↻', title: 'Try again', onPress: resume }}>
           Explanations paused: {explainer?.reason}
@@ -119,6 +129,7 @@ export function App() {
             explainer={explainer}
             readySince={state.readySince}
             pickRequest={pickRequest}
+            {...(tag ? { liveTag: tag } : {})}
             {...(project ? { project } : {})}
           />
         )}

@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'vitest'
 import type { DecisionEntry, FeedStep, GlossaryEntry, SidecarEvent } from '@sidecar/shared'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { openStore } from '../src/store'
 
 const ev = (id: string, over: Partial<SidecarEvent> = {}): SidecarEvent =>
@@ -155,5 +159,30 @@ describe('revision', () => {
   })
   test('revision differs across store instances (a server restart)', () => {
     expect(openTemp().revision('S1')).not.toBe(openTemp().revision('S1'))
+  })
+})
+
+describe('session attention', () => {
+  test('round-trips and is kept by touches that carry none', () => {
+    const s = openStore(':memory:')
+    s.touchSession('s1', '/a', 10, { state: 'permission', text: 'Claude needs your permission to use Bash' })
+    expect(s.touchSession('s1', '/a', 20)).toEqual({
+      id: 's1', cwd: '/a', startedAt: 10, lastAt: 20,
+      attention: 'permission', attentionAt: 10, attentionText: 'Claude needs your permission to use Bash',
+    })
+    expect(s.touchSession('s1', '/a', 30, { state: 'working' })).toMatchObject({ attention: 'working', attentionAt: 30 })
+    expect(s.getSession('s1')?.attentionText).toBeUndefined()
+  })
+  test('a database from 0.1.0 gains the attention columns on open', () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'sidecar-store-')), 'old.db')
+    const old = new DatabaseSync(path)
+    old.exec('CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT NOT NULL, started_at INTEGER NOT NULL, last_at INTEGER NOT NULL)')
+    old.prepare('INSERT INTO sessions VALUES (?, ?, ?, ?)').run('s1', '/a', 1, 2)
+    old.close()
+    const s = openStore(path)
+    expect(s.listSessions()).toEqual([{ id: 's1', cwd: '/a', startedAt: 1, lastAt: 2 }])
+    expect(s.touchSession('s1', '/a', 3, { state: 'done' }).attention).toBe('done')
+    s.close()
+    expect(() => openStore(path).close()).not.toThrow()
   })
 })

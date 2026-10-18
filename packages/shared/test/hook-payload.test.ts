@@ -38,6 +38,10 @@ describe('fromHookPayload', () => {
   ])('%s → %s', (hook, kind) => {
     expect(fromHookPayload({ ...base, hook_event_name: hook }, opts)?.kind).toBe(kind)
   })
+  test('Notification keeps its message and notification type', () => {
+    const e = fromHookPayload({ ...base, hook_event_name: 'Notification', message: 'Claude needs your permission to use Bash', notification_type: 'permission_prompt', title: 'x' }, opts)
+    expect(e?.raw).toEqual({ message: 'Claude needs your permission to use Bash', notification_type: 'permission_prompt' })
+  })
   test('unknown hook name → notice with raw payload', () => {
     const e = fromHookPayload({ ...base, hook_event_name: 'FutureHook', foo: 1 }, opts)
     expect(e?.kind).toBe('notice')

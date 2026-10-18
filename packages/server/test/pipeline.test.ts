@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import type { ServerMessage, SidecarEvent } from '@sidecar/shared'
 import { Hub } from '../src/hub'
-import { createPipeline } from '../src/pipeline'
+import { attentionOf, createPipeline } from '../src/pipeline'
 import { openStore } from '../src/store'
 
 const ev = (id: string, kind: SidecarEvent['kind'], over: Partial<SidecarEvent> = {}): SidecarEvent =>
@@ -70,5 +70,44 @@ describe('closing open steps', () => {
     p.ingest(ev('c', 'prompt', { prompt: 'next' }))
     expect(store.stepsForSession('s1').find((s) => s.id === 'x')?.status).toBe('interrupted')
     expect(store.stepsForSession('s2')[0]?.status).toBe('running')
+  })
+})
+
+describe('attention', () => {
+  const notice = (id: string, raw: unknown, ts = 1000) => ev(id, 'notice', { raw, ts })
+  const lastSession = (got: ServerMessage[]) => got.flatMap((m) => (m.type === 'session' ? [m.session] : [])).at(-1)
+
+  test('a permission notice, the next tool call and the end of the turn move the session along', () => {
+    const { store, got, p } = setup()
+    p.ingest(ev('a', 'prompt', { prompt: 'hi', ts: 900 }))
+    expect(lastSession(got)?.attention).toBe('working')
+    p.ingest(notice('b', { message: 'Claude needs your permission to use Bash', notification_type: 'permission_prompt' }, 1000))
+    expect(lastSession(got)).toMatchObject({ attention: 'permission', attentionAt: 1000, attentionText: 'Claude needs your permission to use Bash' })
+    p.ingest(ev('c', 'tool_end', { ts: 1100, tool: { name: 'Bash', useId: 'u', input: {}, ok: true } }))
+    expect(lastSession(got)?.attention).toBe('working')
+    expect(lastSession(got)?.attentionText).toBeUndefined()
+    p.ingest(ev('d', 'turn_end', { ts: 1200 }))
+    expect(store.listSessions()[0]?.attention).toBe('done')
+  })
+  test('an idle notice asks for the next message', () => {
+    const { got, p } = setup()
+    p.ingest(notice('a', { message: 'Claude is waiting for your input', notification_type: 'idle_prompt' }))
+    expect(lastSession(got)?.attention).toBe('idle')
+  })
+  test('an older event does not overwrite newer attention', () => {
+    const { store, p } = setup()
+    p.ingest(ev('a', 'turn_end', { ts: 2000 }))
+    p.ingest(ev('b', 'tool_end', { ts: 1500, tool: { name: 'Bash', input: {}, ok: true } }))
+    expect(store.listSessions()[0]?.attention).toBe('done')
+  })
+  test('notices without a type fall back to their wording; other notices change nothing', () => {
+    expect(attentionOf(notice('a', { message: 'Claude needs your permission to use Write' }))?.state).toBe('permission')
+    expect(attentionOf(notice('b', { message: 'Claude is waiting for your input' }))?.state).toBe('idle')
+    expect(attentionOf(notice('c', { message: 'Auth refreshed', notification_type: 'auth_success' }))).toBeUndefined()
+    expect(attentionOf(ev('d', 'session_start'))).toBeUndefined()
+  })
+  test('long notice text is clipped', () => {
+    const a = attentionOf(notice('a', { message: 'x'.repeat(500), notification_type: 'permission_prompt' }))
+    expect(a?.text).toHaveLength(200)
   })
 })

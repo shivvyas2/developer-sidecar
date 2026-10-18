@@ -14,6 +14,8 @@ export interface Readout {
   now: string
   elapsed: string
   live: boolean
+  /** Replaces the strip's LIVE or REPLAY block, e.g. DONE, NEEDS YOU or OFFLINE. */
+  tag?: string
   /** Session progress, 0..1, for the session arc. */
   session?: number
   /** The project name in the header. */

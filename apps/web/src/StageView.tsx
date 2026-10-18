@@ -22,10 +22,12 @@ export interface StageTabProps {
   project?: string
   /** Select this step on arrival (from a Decisions link). */
   pickRequest?: string | null
+  /** Shown in place of LIVE while following the newest step, e.g. DONE or NEEDS YOU. */
+  liveTag?: string
 }
 
 /** Layout B: the step drawer on the left; the framed stage, replay ruler and pulled-out card on the right. */
-export function StageTab({ sessionId, loaded, steps, explanations, explainer, readySince, project, pickRequest }: StageTabProps) {
+export function StageTab({ sessionId, loaded, steps, explanations, explainer, readySince, project, pickRequest, liveTag }: StageTabProps) {
   const [stage, dispatch] = useReducer(stageReducer, initialStage)
   const [selection, select] = useReducer(selectionReducer, initialSelection)
   const [replay, setReplay] = useState<Replay | null>(null)
@@ -65,11 +67,13 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
   const framed = useFramed()
   const count = steps.length
   // Built from primitives so the SVG only re-renders when a number on the frame changes.
+  const tag = live ? liveTag : undefined
   const readout = useMemo<Readout>(() => ({
     step: index + 1, files, tokens, now, elapsed, live,
     session: count > 0 ? (index + 1) / count : 0,
     ...(project ? { project } : {}),
-  }), [index, files, tokens, now, elapsed, live, count, project])
+    ...(tag ? { tag } : {}),
+  }), [index, files, tokens, now, elapsed, live, count, project, tag])
 
   const goLive = () => { dispatch({ type: 'reset', ids }); setReplay(null); select({ type: 'live' }) }
   const pick = (id: string) => {
@@ -122,7 +126,7 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
       </div>
       <div className="stagetab__main">
         {!framed && shown ? (
-          <ReadoutPanel label="Stage readout" fields={readoutFields(readout)} note={`${live ? 'LIVE' : 'REPLAY'} · ${now}`} />
+          <ReadoutPanel label="Stage readout" fields={readoutFields(readout)} note={`${tag ?? (live ? 'LIVE' : 'REPLAY')} · ${now}`} />
         ) : null}
         <section className="stagetab__stage" aria-label="Stage">
           {shown && parsed?.success ? (

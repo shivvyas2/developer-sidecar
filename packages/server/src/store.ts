@@ -1,11 +1,12 @@
 import { DatabaseSync } from 'node:sqlite'
 import type {
-  DecisionEntry, FeedStep, GlossaryEntry, SessionSummary, SidecarEvent, StepExplanation, TokenUsage,
+  Attention, DecisionEntry, FeedStep, GlossaryEntry, SessionSummary, SidecarEvent, StepExplanation, TokenUsage,
 } from '@sidecar/shared'
 
 export interface Store {
   insertEvent(e: SidecarEvent): number | null
-  touchSession(id: string, cwd: string, ts: number): SessionSummary
+  /** `attention`, when given, replaces the session's attention unless a newer one is already stored. */
+  touchSession(id: string, cwd: string, ts: number, attention?: { state: Attention; text?: string }): SessionSummary
   listSessions(): SessionSummary[]
   saveStep(s: FeedStep): void
   stepsForSession(sessionId: string): FeedStep[]
@@ -27,10 +28,20 @@ export interface Store {
   close(): void
 }
 
-interface SessionRow { id: string; cwd: string; started_at: number; last_at: number }
+interface SessionRow {
+  id: string; cwd: string; started_at: number; last_at: number
+  attention: Attention | null; attention_at: number | null; attention_text: string | null
+}
 
-const toSession = (r: SessionRow): SessionSummary =>
-  ({ id: r.id, cwd: r.cwd, startedAt: r.started_at, lastAt: r.last_at })
+const toSession = (r: SessionRow): SessionSummary => ({
+  id: r.id, cwd: r.cwd, startedAt: r.started_at, lastAt: r.last_at,
+  ...(r.attention ? { attention: r.attention } : {}),
+  ...(r.attention_at !== null ? { attentionAt: r.attention_at } : {}),
+  ...(r.attention_text ? { attentionText: r.attention_text } : {}),
+})
+
+/** Columns added after 0.1.0, so databases created by it gain them on open. */
+const SESSION_COLUMNS = [['attention', 'TEXT'], ['attention_at', 'INTEGER'], ['attention_text', 'TEXT']] as const
 
 export function openStore(path: string): Store {
   const db = new DatabaseSync(path)
@@ -69,12 +80,26 @@ export function openStore(path: string): Store {
     );
     CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
   `)
+  const sessionCols = new Set((db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[]).map((c) => c.name))
+  for (const [name, type] of SESSION_COLUMNS) {
+    if (sessionCols.has(name)) continue
+    try {
+      db.exec(`ALTER TABLE sessions ADD COLUMN ${name} ${type}`)
+    } catch (err) {
+      // another sidecar process may have added it first
+      if (!/duplicate column/i.test((err as Error).message)) throw err
+    }
+  }
 
+  const NEWER = 'excluded.attention IS NOT NULL AND excluded.attention_at >= COALESCE(sessions.attention_at, 0)'
   const insEvent = db.prepare('INSERT OR IGNORE INTO events (id, session_id, ts, kind, json) VALUES (?, ?, ?, ?, ?)')
   const upSession = db.prepare(`
-    INSERT INTO sessions (id, cwd, started_at, last_at) VALUES (?, ?, ?, ?)
+    INSERT INTO sessions (id, cwd, started_at, last_at, attention, attention_at, attention_text) VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET last_at = MAX(sessions.last_at, excluded.last_at),
-      cwd = CASE WHEN excluded.cwd <> '' THEN excluded.cwd ELSE sessions.cwd END`)
+      cwd = CASE WHEN excluded.cwd <> '' THEN excluded.cwd ELSE sessions.cwd END,
+      attention = CASE WHEN ${NEWER} THEN excluded.attention ELSE sessions.attention END,
+      attention_text = CASE WHEN ${NEWER} THEN excluded.attention_text ELSE sessions.attention_text END,
+      attention_at = CASE WHEN ${NEWER} THEN excluded.attention_at ELSE sessions.attention_at END`)
   const getSession = db.prepare('SELECT * FROM sessions WHERE id = ?')
   const allSessions = db.prepare('SELECT * FROM sessions ORDER BY last_at DESC')
   const upStep = db.prepare(`
@@ -126,8 +151,8 @@ export function openStore(path: string): Store {
       const r = insEvent.run(e.id, e.sessionId, e.ts, e.kind, JSON.stringify(e))
       return r.changes === 0 ? null : Number(r.lastInsertRowid)
     },
-    touchSession(id, cwd, ts) {
-      upSession.run(id, cwd, ts, ts)
+    touchSession(id, cwd, ts, attention) {
+      upSession.run(id, cwd, ts, ts, attention?.state ?? null, attention ? ts : null, attention?.text ?? null)
       return toSession(getSession.get(id) as unknown as SessionRow)
     },
     listSessions() {

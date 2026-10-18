@@ -6,6 +6,14 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Claude is waiting for you.** When Claude Code asks for permission, the
+  workstation shows a banner with Claude's own words and says to answer in the
+  Claude Code window. The tab title starts with "(waiting)", the session picker
+  marks the session, and the stage reads NEEDS YOU, then DONE once Claude's turn
+  ends. Older databases gain the new session columns on open.
+
 ## [0.1.0] - 2026-10-15
 
 ### Changed
