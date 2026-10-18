@@ -132,7 +132,7 @@ export function createExplainer(o: ExplainerOptions): Explainer {
 
   function settle(sessionId: string, steps: FeedStep[], result: ProviderResult | null, error: ExplainError | null): void {
     if (result) {
-      const explained = normalize(result.output, steps.map((s) => s.id))
+      const explained = normalize(result.output, steps.map((s) => s.id), new Set(steps.filter((s) => s.status === 'failed').map((s) => s.id)))
       for (const s of steps) {
         const e = explained.get(s.id)
         if (!e) { mark(sessionId, s.id, { unavailable: MISSING }); continue }

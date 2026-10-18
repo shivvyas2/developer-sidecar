@@ -6,7 +6,7 @@ import {
 } from '../src/explainer/providers'
 
 const req = { system: 'SYS', user: 'USER' }
-const output = { items: [{ stepId: 'a', plain: 'p', why: 'w', concept: null, decision: null }] }
+const output = { items: [{ stepId: 'a', plain: 'p', why: 'w', concept: null, decision: null, next: null }] }
 
 describe('anthropicProvider', () => {
   const client = (impl: (p: Record<string, unknown>) => unknown): MessagesClient => ({ messages: { create: async (p) => impl(p) } })

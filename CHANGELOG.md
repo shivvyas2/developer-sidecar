@@ -13,6 +13,10 @@ All notable changes to Developer Sidecar are recorded here. The format follows
   Claude Code window. The tab title starts with "(waiting)", the session picker
   marks the session, and the stage reads NEEDS YOU, then DONE once Claude's turn
   ends. Older databases gain the new session columns on open.
+- **A next step for every failure.** A failed step now shows "What to do
+  next": a request to copy into Claude Code, suggested by the explainer from
+  the step's output (or a plain one naming the step when explanations are
+  off), and a reminder that Esc twice or /rewind undoes Claude's changes.
 
 ## [0.1.0] - 2026-10-15
 

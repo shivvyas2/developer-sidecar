@@ -74,6 +74,21 @@ body {
 .detail__concept { color: var(--sk-ink2); font-size: 13px; }
 .detail__note { color: var(--sk-ink2); font-size: 13px; }
 .detail__note--pending { font-style: italic; }
+.detail__next {
+  display: flex; flex-direction: column; gap: 8px; padding: 10px 12px;
+  border: 1px solid var(--sk-accent); background: var(--sk-paper);
+}
+.detail__ask { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.detail__ask code {
+  flex: 1 1 240px; min-width: 0; padding: 8px 10px; border: 1px dashed var(--sk-ink); background: var(--sk-card);
+  font: 400 12px/1.45 var(--ds-mono); overflow-wrap: anywhere;
+}
+.detail__copy {
+  padding: 8px 10px; border: 1px solid var(--sk-ink); background: var(--sk-ink); color: var(--sk-paper); cursor: pointer;
+  font: 700 9px/1 var(--ds-mono); letter-spacing: 1.4px;
+}
+.detail__copy:focus-visible { outline: 2px solid var(--sk-ink); outline-offset: 2px; }
+.detail__undo { margin: 0; color: var(--sk-ink2); font-size: 13px; }
 .detail__toggle {
   align-self: flex-start; padding: 0; border: 0; border-bottom: 1px dotted var(--sk-ink); background: none; cursor: pointer;
   color: var(--sk-ink); font: 700 9px/1.4 var(--ds-mono); letter-spacing: 1.4px;

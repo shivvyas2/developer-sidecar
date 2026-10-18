@@ -7,6 +7,8 @@ test('ExplanationSchema accepts a full explanation and rejects empty text', () =
   expect(ExplanationSchema.safeParse(ok).success).toBe(true)
   expect(ExplanationSchema.safeParse({ ...ok, plain: '' }).success).toBe(false)
   expect(ExplanationSchema.safeParse({ ...ok, concept: null }).success).toBe(true)
+  expect(ExplanationSchema.safeParse({ ...ok, next: 'Fix the failing test.' }).success).toBe(true)
+  expect(ExplanationSchema.safeParse({ ...ok, next: '' }).success).toBe(false)
   expect(ExplanationSchema.safeParse({ ...ok, decision: { title: 'Payments', choice: 'Stripe', alternatives: ['Paddle'], reason: 'Popular' } }).success).toBe(true)
 })
 

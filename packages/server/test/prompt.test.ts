@@ -48,7 +48,7 @@ describe('buildRequest', () => {
 describe('normalize', () => {
   const item = (stepId: string, over: object = {}) => ({
     stepId, plain: 'Claude added the Stripe library.', why: 'You need it to take payments.',
-    concept: { term: 'Package', definition: 'Code someone else wrote that your app reuses.' }, decision: null, ...over,
+    concept: { term: 'Package', definition: 'Code someone else wrote that your app reuses.' }, decision: null, next: null, ...over,
   })
   test('keeps only requested ids', () => {
     const m = normalize({ items: [item('st1'), item('ghost')] }, ['st1'])
@@ -72,5 +72,17 @@ describe('normalize', () => {
     expect(m.get('a')!.concept).toBeNull()
     expect(m.get('a')!.decision).toBeNull()
     expect(m.has('b')).toBe(false)
+  })
+  test('next is kept, clipped, only for failed steps', () => {
+    const ask = 'Fix the failing checkout test: the total leaves out shipping.'
+    const m = normalize({ items: [item('ok', { next: ask }), item('bad', { next: ask }), item('long', { next: 'n'.repeat(900) }), item('blank', { next: '  ' })] },
+      ['ok', 'bad', 'long', 'blank'], new Set(['bad', 'long', 'blank']))
+    expect(m.get('ok')!.next).toBeUndefined()
+    expect(m.get('bad')!.next).toBe(ask)
+    expect(m.get('long')!.next).toHaveLength(LIMITS.next)
+    expect(m.get('blank')).not.toHaveProperty('next')
+  })
+  test('the system prompt asks for next only on failure', () => {
+    expect(SYSTEM_PROMPT).toMatch(/- next: only when the step failed/)
   })
 })
