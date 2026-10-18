@@ -19,6 +19,9 @@ All notable changes to Developer Sidecar are recorded here. The format follows
   off), and a reminder that Esc twice or /rewind undoes Claude's changes.
 - **New sessions are offered.** When a Claude Code session starts while you are
   watching another one, a banner names its project with a button to switch.
+- **Clear offline state.** When the workstation loses its server for more than
+  a few seconds, a banner says so, explains how Sidecar comes back, and offers
+  to try again now. The last steps stay on screen and the stage reads OFFLINE.
 
 ## [0.1.0] - 2026-10-15
 

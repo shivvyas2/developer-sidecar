@@ -12,6 +12,7 @@ export function useFeed() {
   lastSeq.current = state.lastSeq
   const selected = useRef<string | null>(null)
   selected.current = state.selected
+  const reconnect = useRef<() => void>(() => undefined)
 
   useEffect(() => {
     fetchSessions().then((sessions) => dispatch({ type: 'sessions', sessions })).catch(() => setConnection('offline'))
@@ -48,10 +49,17 @@ export function useFeed() {
       }
     }
     connect()
+    // Try now instead of waiting out the backoff; a socket that is still open or opening is left alone.
+    reconnect.current = () => {
+      if (stopped || (ws && ws.readyState !== WebSocket.CLOSED)) return
+      clearTimeout(timer)
+      retry = 1000
+      connect()
+    }
     return () => { stopped = true; clearTimeout(timer); ws?.close() }
   }, [])
 
-  return { state, dispatch, connection }
+  return { state, dispatch, connection, retry: () => reconnect.current() }
 }
 
 function loadSession(id: string, dispatch: (a: FeedAction) => void) {

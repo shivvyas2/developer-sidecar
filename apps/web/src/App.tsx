@@ -22,6 +22,21 @@ const TABS: FolderTab[] = [
 ]
 const WHITEBOARD = 'A live diagram of how your app fits together. Coming in v2.'
 const CONNECTION = { connecting: 'CONNECTING', live: 'LIVE', offline: 'OFFLINE' } as const
+/** A blip shorter than this (a reload of the server, a brief sleep) does not raise the offline banner. */
+const OFFLINE_GRACE_MS = 3000
+const OFFLINE_TEXT = 'Lost the connection to Sidecar, trying again every few seconds. An open Claude Code session usually restarts it; '
+  + 'if not, starting a new Claude Code session will. What you see below is from before the connection dropped.'
+
+/** True once `on` has held for `ms`; false again as soon as it stops. */
+function useHeld(on: boolean, ms: number): boolean {
+  const [held, setHeld] = useState(false)
+  useEffect(() => {
+    if (!on) { setHeld(false); return }
+    const t = setTimeout(() => setHeld(true), ms)
+    return () => clearTimeout(t)
+  }, [on, ms])
+  return held
+}
 
 export function useHash() {
   const [hash, setHash] = useState(location.hash)
@@ -47,7 +62,8 @@ const projectName = (cwd: string, id: string) => cwd.split('/').filter(Boolean).
 
 export function App() {
   const hash = useHash()
-  const { state, dispatch, connection } = useFeed()
+  const { state, dispatch, connection, retry } = useFeed()
+  const offline = useHeld(connection === 'offline', OFFLINE_GRACE_MS)
   const [tab, setTabRaw] = useState<Tab>(() => tabFromSearch(location.search, TABS.map((t) => t.id as Tab), 'stage'))
   const [pickRequest, setPickRequest] = useState<string | null>(null)
   const setTab = (t: Tab) => { setPickRequest(null); setTabRaw(t) }
@@ -63,7 +79,7 @@ export function App() {
   const selectedSession = state.sessions.find((x) => x.id === sid) ?? null
   const project = selectedSession ? projectName(selectedSession.cwd, selectedSession.id) : undefined
   const notice = attentionNotice(selectedSession)
-  const tag = liveTag(selectedSession, connection === 'offline')
+  const tag = liveTag(selectedSession, offline)
   const fresh = state.sessions.find((x) => x.id === state.newSession) ?? null
   const resume = () => {
     if (!explainer) return
@@ -106,7 +122,12 @@ export function App() {
         </div>
       </header>
       <FolderTabs tabs={TABS} active={tab} onSelect={(id) => setTab(id as Tab)} />
-      {notice ? (
+      {offline ? (
+        <StatusStrip tag="OFFLINE" tone="alert" action={{ label: '↻', title: 'Try now', onPress: retry }}>
+          {OFFLINE_TEXT}
+        </StatusStrip>
+      ) : null}
+      {notice && !offline ? (
         <StatusStrip tag={notice.tag} {...(selectedSession?.attention === 'permission' ? { tone: 'alert' as const } : {})}>
           {notice.text}
         </StatusStrip>
