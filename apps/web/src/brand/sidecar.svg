@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none" shape-rendering="crispEdges" role="img" aria-label="Developer Sidecar">
+  <title>Developer Sidecar</title>
+  <!--
+    The Sidecar mark: a pixel robot driving a yellow cab, on a 128 x 128 grid.
+    Classes name the parts the workstation animates (sc-*); the file itself never moves,
+    so it stays still as a favicon and in the README.
+    sc-ink parts follow the page's ink colour when the mark is drawn inline.
+  -->
+  <style>@media (prefers-color-scheme: dark) { .sc-ink { fill: #C9D6E1 } }</style>
+
+  <g class="sc-speed sc-ink" fill="#172B46">
+    <rect x="4" y="54" width="13" height="3"/>
+    <rect x="8" y="61" width="17" height="3"/>
+    <rect x="3" y="68" width="11" height="3"/>
+    <rect x="11" y="75" width="10" height="3"/>
+  </g>
+
+  <g class="sc-shadow sc-ink" fill="#172B46">
+    <rect x="25" y="108" width="29" height="2"/>
+    <rect x="69" y="108" width="35" height="2"/>
+  </g>
+
+  <g class="sc-wheel sc-wheel--rear">
+    <path d="M34 91H51V95H55V105H51V109H34V105H30V95H34Z" fill="#172B46"/>
+    <path d="M37 95H48V98H51V104H48V107H37V104H34V98H37Z" fill="#304967"/>
+    <path d="M39 98H46V100H48V104H46V106H39V104H37V100H39Z" fill="#A9BCCD"/>
+    <g class="sc-spokes sc-spokes--a" fill="#304967">
+      <rect x="41" y="98" width="3" height="8"/>
+      <rect x="37" y="101" width="11" height="2"/>
+    </g>
+    <g class="sc-spokes sc-spokes--b" fill="#304967">
+      <rect x="39" y="99" width="2" height="2"/>
+      <rect x="44" y="99" width="2" height="2"/>
+      <rect x="39" y="103" width="2" height="2"/>
+      <rect x="44" y="103" width="2" height="2"/>
+    </g>
+    <rect x="41" y="101" width="3" height="2" fill="#FFFFFF"/>
+  </g>
+
+  <g class="sc-wheel sc-wheel--front">
+    <path d="M86 91H103V95H107V105H103V109H86V105H82V95H86Z" fill="#172B46"/>
+    <path d="M89 95H100V98H103V104H100V107H89V104H86V98H89Z" fill="#304967"/>
+    <path d="M91 98H98V100H100V104H98V106H91V104H89V100H91Z" fill="#A9BCCD"/>
+    <g class="sc-spokes sc-spokes--a" fill="#304967">
+      <rect x="93" y="98" width="3" height="8"/>
+      <rect x="89" y="101" width="11" height="2"/>
+    </g>
+    <g class="sc-spokes sc-spokes--b" fill="#304967">
+      <rect x="91" y="99" width="2" height="2"/>
+      <rect x="96" y="99" width="2" height="2"/>
+      <rect x="91" y="103" width="2" height="2"/>
+      <rect x="96" y="103" width="2" height="2"/>
+    </g>
+    <rect x="93" y="101" width="3" height="2" fill="#FFFFFF"/>
+  </g>
+
+  <g class="sc-car">
+    <!-- Body outline, paint, highlight and lower shading -->
+    <path d="M26 73H32V69H46V66H69V69H88V72H108V76H114V80H119V91H115V97H108V94H105V91H84V94H81V97H56V94H53V91H32V94H29V97H22V93H19V82H22V77H26Z" fill="#172B46"/>
+    <path d="M27 76H34V72H48V69H68V72H88V75H108V79H114V83H116V91H109V88H105V86H84V89H81V94H56V89H53V86H32V89H29V93H23V82H27Z" fill="#F5B91D"/>
+    <path d="M29 76H35V73H48V71H69V74H88V77H108V80H113V83H92V80H60V77H29Z" fill="#FFD64A"/>
+    <path d="M24 88H31V85H55V90H81V85H107V89H115V93H108V90H104V88H85V92H80V94H57V91H52V88H33V92H29V94H24Z" fill="#E58B13"/>
+
+    <!-- Rear bumper and taillight, drawn over the body so they show -->
+    <path d="M20 89H26V98H18V94H16V91H20Z" fill="#172B46"/>
+    <path d="M18 91H24V95H18Z" fill="#AABCCB"/>
+    <rect x="20" y="77" width="5" height="11" fill="#172B46"/>
+    <rect x="21" y="79" width="3" height="7" fill="#F04448"/>
+
+    <!-- Door -->
+    <path d="M55 77H82V91H79V93H58V90H55Z" fill="#FFC52B"/>
+    <path d="M56 78H80V89H78V91H59V89H56Z" fill="#FFD13B"/>
+
+    <!-- Checker stripe -->
+    <rect x="27" y="80" width="85" height="7" fill="#172B46"/>
+    <g fill="#F0F4F6">
+      <rect x="29" y="80" width="5" height="3"/>
+      <rect x="39" y="80" width="5" height="3"/>
+      <rect x="49" y="80" width="5" height="3"/>
+      <rect x="59" y="80" width="5" height="3"/>
+      <rect x="69" y="80" width="5" height="3"/>
+      <rect x="79" y="80" width="5" height="3"/>
+      <rect x="89" y="80" width="5" height="3"/>
+      <rect x="99" y="80" width="5" height="3"/>
+      <rect x="109" y="80" width="3" height="3"/>
+      <rect x="34" y="84" width="5" height="3"/>
+      <rect x="44" y="84" width="5" height="3"/>
+      <rect x="54" y="84" width="5" height="3"/>
+      <rect x="64" y="84" width="5" height="3"/>
+      <rect x="74" y="84" width="5" height="3"/>
+      <rect x="84" y="84" width="5" height="3"/>
+      <rect x="94" y="84" width="5" height="3"/>
+      <rect x="104" y="84" width="5" height="3"/>
+    </g>
+
+    <!-- Door handle -->
+    <rect x="63" y="75" width="9" height="4" fill="#172B46"/>
+    <rect x="65" y="76" width="5" height="2" fill="#B5C7D4"/>
+
+    <!-- Open cabin and seat -->
+    <path d="M43 67H50V64H76V68H84V73H43Z" fill="#172B46"/>
+    <path d="M48 64H54V69H59V74H46V69H48Z" fill="#304967"/>
+
+    <!-- Robot torso, chest panel and neck -->
+    <path d="M56 56H74V59H78V70H75V74H55V70H52V60H56Z" fill="#172B46"/>
+    <path d="M58 58H72V61H75V70H72V72H58V69H55V61H58Z" fill="#C9D6E1"/>
+    <path d="M59 59H68V61H58V69H56V61H59Z" fill="#F1F5F8"/>
+    <rect x="61" y="64" width="10" height="7" fill="#91A8BA"/>
+    <rect x="63" y="65" width="6" height="5" fill="#E7EEF3"/>
+    <rect x="65" y="68" width="3" height="2" fill="#B5C6D4"/>
+    <rect x="62" y="53" width="9" height="6" fill="#172B46"/>
+    <rect x="64" y="54" width="5" height="4" fill="#AABECB"/>
+
+    <!-- Waving arm and open palm -->
+    <g class="sc-arm">
+      <path d="M55 64H50V61H47V56H43V49H47V54H51V57H56V60H59V64Z" fill="#172B46"/>
+      <path d="M53 61H49V58H46V54H49V57H53V59H56V62H53Z" fill="#B7C9D6"/>
+      <rect x="49" y="57" width="4" height="3" fill="#E7EDF2"/>
+      <path d="M36 47H39V42H42V47H45V40H48V48H51V44H54V52H51V56H47V59H39V56H36V53H33V48H36Z" fill="#172B46"/>
+      <path d="M38 48H41V44H42V50H46V42H47V51H50V47H52V52H49V55H46V57H40V54H37V51H35V49H38Z" fill="#D4DFE8"/>
+      <rect x="39" y="49" width="4" height="4" fill="#F0F4F7"/>
+    </g>
+
+    <!-- Steering arm and wheel -->
+    <path d="M74 61H79V64H83V68H87V73H83V71H78V68H74Z" fill="#172B46"/>
+    <path d="M76 62H79V65H83V69H85V71H82V69H78V66H76Z" fill="#CAD8E2"/>
+    <path d="M83 64H89V66H91V73H89V75H83V73H81V66H83Z" fill="#172B46"/>
+    <path d="M84 67H88V69H89V72H87V73H84V71H83V69H84Z" fill="#304967"/>
+    <rect x="85" y="69" width="3" height="3" fill="#B8C8D4"/>
+
+    <!-- Head, faceplate, eyes and smile -->
+    <path d="M57 29H73V31H78V34H82V39H85V51H82V56H78V59H57V56H53V52H50V39H53V34H57Z" fill="#172B46"/>
+    <path d="M58 32H73V34H78V38H81V51H78V55H74V57H58V54H55V50H53V40H56V35H58Z" fill="#D6E1EA"/>
+    <path d="M59 33H72V35H77V38H59V41H56V50H54V40H57V35H59Z" fill="#F5F8FA"/>
+    <path d="M53 42H57V53H60V56H58V54H55V50H53Z" fill="#91AABD"/>
+    <path d="M61 39H75V41H78V49H75V51H61V49H59V41H61Z" fill="#172B46"/>
+    <g class="sc-eyes" fill="#24E0F1">
+      <path d="M63 42H66V43H67V48H66V49H63V48H62V43H63Z"/>
+      <path d="M72 42H75V43H76V48H75V49H72V48H71V43H72Z"/>
+    </g>
+    <rect x="64" y="43" width="1" height="2" fill="#A8FAFF"/>
+    <rect x="73" y="43" width="1" height="2" fill="#A8FAFF"/>
+    <path d="M64 52H66V54H72V52H74V55H72V57H66V55H64Z" fill="#172B46"/>
+
+    <!-- Windshield and its glint -->
+    <path d="M88 58H92V61H95V66H98V73H93V67H90V63H88Z" fill="#172B46"/>
+    <path d="M89 59H91V62H94V67H96V71H94V66H91V63H89Z" fill="#5ACDE9"/>
+    <g fill="#C5F4FF">
+      <rect x="90" y="60" width="1" height="3"/>
+      <rect x="92" y="63" width="1" height="3"/>
+      <rect x="94" y="67" width="1" height="3"/>
+    </g>
+
+    <!-- Hood, headlight, grille and front bumper -->
+    <path d="M97 73H108V76H113V79H117V83H112V80H107V77H97Z" fill="#FFD64A"/>
+    <path d="M113 81H119V84H121V91H119V94H113V91H111V84H113Z" fill="#172B46"/>
+    <path d="M114 83H118V85H119V90H118V92H114V90H113V85H114Z" fill="#F2F1D8"/>
+    <rect x="114" y="85" width="2" height="5" fill="#FFFFFF"/>
+    <path d="M108 91H119V101H108Z" fill="#172B46"/>
+    <g fill="#8EA8BC">
+      <rect x="110" y="93" width="8" height="2"/>
+      <rect x="110" y="97" width="8" height="2"/>
+    </g>
+    <path d="M106 100H123V103H125V107H121V109H106V106H103V103H106Z" fill="#172B46"/>
+    <path d="M107 102H122V104H123V106H120V107H107V105H105V104H107Z" fill="#B5C6D3"/>
+    <rect x="109" y="102" width="11" height="2" fill="#EDF3F7"/>
+  </g>
+</svg>

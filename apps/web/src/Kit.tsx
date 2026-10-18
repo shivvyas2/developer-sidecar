@@ -7,6 +7,7 @@ import {
   type BlockTone,
 } from '@sidecar/ui-kit/primitives'
 import { Scene } from '@sidecar/ui-kit/react'
+import { SidecarMark } from './brand/Brand'
 import {
   CardCatalog, Chip, FolderTabs, PulledCard, ReadoutPanel, RotarySelect, RoundButton, SpecCard, StatusStrip,
   StepCard, StepDrawer, ThemeToggle, TickRuler,
@@ -240,6 +241,20 @@ function SceneTheme({ theme, children }: { theme: 'light' | 'dark'; children: Re
   return <div className="kit__half kit__half--scenes" data-theme={theme}><span className="kit__tag">{theme}</span>{children}</div>
 }
 
+/** The mark at the sizes the product uses it, still and driving. */
+function Brand() {
+  return (
+    <div className="kit__row">
+      {[16, 32, 64, 128].map((n) => (
+        <figure key={n} className="kit__spec"><SidecarMark size={n} label={`Sidecar mark, ${n} pixels`} /><figcaption>{n}px · favicon grid</figcaption></figure>
+      ))}
+      <figure className="kit__spec"><SidecarMark size={52} tight /><figcaption>header · tight</figcaption></figure>
+      <figure className="kit__spec"><SidecarMark size={200} tight className="sc-logo--driving" /><figcaption>driving · intro</figcaption></figure>
+      <p><a className="kit__back" href="?intro=1#/kit">Replay the intro</a></p>
+    </div>
+  )
+}
+
 export function Kit() {
   const css = useMemo(kitScopeCss, [])
   return (
@@ -247,6 +262,8 @@ export function Kit() {
       <style>{css}</style>
       <p><a className="kit__back" href="#/">← Back to the workstation</a></p>
       <h1 className="kit__h1">Kit · drafting instrument</h1>
+      <h2>Brand</h2>
+      <Pair>{() => <Brand />}</Pair>
       <h2>Tokens</h2><Tokens />
       <h2>Type</h2><TypeSamples />
       <h2>Primitives</h2>

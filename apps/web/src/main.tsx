@@ -8,6 +8,7 @@ import '@fontsource/dotgothic16/400.css'
 import '@fontsource-variable/inter'
 import './ds'
 import { App } from './App'
+import { Intro } from './brand/Brand'
 import { applyTheme, initialTheme, safeStorage } from './theme'
 import './styles.css'
 
@@ -17,4 +18,4 @@ document.head.append(theme)
 // Before first paint, so a forced light or dark theme never flashes the OS one.
 applyTheme(document.documentElement, initialTheme(location.search, safeStorage()))
 
-createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>)
+createRoot(document.getElementById('root')!).render(<StrictMode><Intro /><App /></StrictMode>)

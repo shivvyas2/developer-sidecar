@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { saveSettings } from './api'
 import { attentionNotice, liveTag, sessionMark, titleFor } from './attention'
+import { SidecarMark } from './brand/Brand'
 import { DecisionsView } from './DecisionsView'
 import { FolderTabs, StatusStrip, ThemeToggle, type FolderTab } from './ds'
 import { formatTokens } from './format'
@@ -88,26 +89,29 @@ export function App() {
   return (
     <div className="app">
       <header className="hdr">
-        <div className="hdr__id">
-          <h1 className="hdr__title">DEVELOPER SIDECAR</h1>
-          <div className="hdr__meta">
-            <span className="hdr__pip" data-state={connection} title={`Connection: ${connection}`}>
-              <span aria-hidden>●</span> {CONNECTION[connection]}
-            </span>
-            {state.sessions.length > 0 ? (
-              <select
-                className="hdr__session"
-                aria-label="Session"
-                value={sid ?? ''}
-                onChange={(e) => dispatch({ type: 'select', id: e.target.value })}
-              >
-                {state.sessions.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {projectName(s.cwd, s.id)} · {new Date(s.lastAt).toLocaleTimeString()}{sessionMark(s)}
-                  </option>
-                ))}
-              </select>
-            ) : null}
+        <div className="hdr__brand">
+          <SidecarMark size={52} tight />
+          <div className="hdr__id">
+            <h1 className="hdr__title">DEVELOPER SIDECAR</h1>
+            <div className="hdr__meta">
+              <span className="hdr__pip" data-state={connection} title={`Connection: ${connection}`}>
+                <span aria-hidden>●</span> {CONNECTION[connection]}
+              </span>
+              {state.sessions.length > 0 ? (
+                <select
+                  className="hdr__session"
+                  aria-label="Session"
+                  value={sid ?? ''}
+                  onChange={(e) => dispatch({ type: 'select', id: e.target.value })}
+                >
+                  {state.sessions.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {projectName(s.cwd, s.id)} · {new Date(s.lastAt).toLocaleTimeString()}{sessionMark(s)}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+            </div>
           </div>
         </div>
         <div className="hdr__tools">
