@@ -26,6 +26,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   if (port !== String(wanted)) throw new Error(`e2e server took port ${port}, not the free port ${wanted}`)
   const pid = Number(readFileSync(join(home, 'server.pid'), 'utf8'))
   process.env.SIDECAR_E2E_URL = `http://127.0.0.1:${port}/`
+  process.env.SIDECAR_E2E_HOME = home
   return async () => {
     try { process.kill(pid, 'SIGTERM') } catch { /* already gone */ }
   }
