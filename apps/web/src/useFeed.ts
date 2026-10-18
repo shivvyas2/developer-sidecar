@@ -36,6 +36,8 @@ export function useFeed() {
         retry = 1000
         // after a reconnect, catch up on anything missed while offline (explanations ride along with steps)
         if (opened) {
+          // sessions carry whether Claude is waiting, which no replayed step would update
+          fetchSessions().then((sessions) => dispatch({ type: 'sessions', sessions })).catch(() => undefined)
           if (selected.current) loadSession(selected.current, dispatch)
           fetchExplainer().then((state) => dispatch({ type: 'explainer', state })).catch(() => undefined)
         }
