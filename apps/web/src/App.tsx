@@ -64,6 +64,7 @@ export function App() {
   const project = selectedSession ? projectName(selectedSession.cwd, selectedSession.id) : undefined
   const notice = attentionNotice(selectedSession)
   const tag = liveTag(selectedSession, connection === 'offline')
+  const fresh = state.sessions.find((x) => x.id === state.newSession) ?? null
   const resume = () => {
     if (!explainer) return
     saveSettings({ explanations: explainer.level }).then((r) => dispatch({ type: 'explainer', state: r.explainer })).catch(() => undefined)
@@ -108,6 +109,11 @@ export function App() {
       {notice ? (
         <StatusStrip tag={notice.tag} {...(selectedSession?.attention === 'permission' ? { tone: 'alert' as const } : {})}>
           {notice.text}
+        </StatusStrip>
+      ) : null}
+      {fresh ? (
+        <StatusStrip tag="NEW SESSION" action={{ label: '→', title: 'Switch to it', onPress: () => dispatch({ type: 'select', id: fresh.id }) }}>
+          {projectName(fresh.cwd, fresh.id)} started in another Claude Code window.
         </StatusStrip>
       ) : null}
       {status === 'paused' ? (

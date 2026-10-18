@@ -17,6 +17,8 @@ All notable changes to Developer Sidecar are recorded here. The format follows
   next": a request to copy into Claude Code, suggested by the explainer from
   the step's output (or a plain one naming the step when explanations are
   off), and a reminder that Esc twice or /rewind undoes Claude's changes.
+- **New sessions are offered.** When a Claude Code session starts while you are
+  watching another one, a banner names its project with a button to switch.
 
 ## [0.1.0] - 2026-10-15
 

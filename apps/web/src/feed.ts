@@ -12,6 +12,8 @@ export interface FeedState {
   explainer: ExplainerState | null
   /** When (Date.now()) the explainer last became ready in this page; steps that ended earlier may never be explained. */
   readySince: number
+  /** A session that started while another was being watched, offered until the person switches. */
+  newSession: string | null
 }
 
 export type FeedAction =
@@ -23,7 +25,7 @@ export type FeedAction =
   | { type: 'glossary'; sessionId: string; entries: GlossaryEntry[] }
 
 export const initialFeed: FeedState = { sessions: [], selected: null, steps: {}, lastSeq: 0, loaded: {},
-  explanations: {}, decisions: {}, glossary: {}, explainer: null, readySince: 0,
+  explanations: {}, decisions: {}, glossary: {}, explainer: null, readySince: 0, newSession: null,
 }
 
 const byLastAt = (a: SessionSummary, b: SessionSummary) => b.lastAt - a.lastAt
@@ -35,8 +37,10 @@ const byStart = (a: FeedStep, b: FeedStep) => a.startedAt - b.startedAt || a.seq
 export function feedReducer(state: FeedState, action: FeedAction): FeedState {
   switch (action.type) {
     case 'session': {
-      const sessions = [...state.sessions.filter((s) => s.id !== action.session.id), action.session].sort(byLastAt)
-      return { ...state, sessions, selected: state.selected ?? action.session.id }
+      const id = action.session.id
+      const sessions = [...state.sessions.filter((s) => s.id !== id), action.session].sort(byLastAt)
+      const fresh = !state.sessions.some((s) => s.id === id) && state.selected !== null && state.selected !== id
+      return { ...state, sessions, selected: state.selected ?? id, newSession: fresh ? id : state.newSession }
     }
     case 'sessions':
       return { ...state, sessions: [...action.sessions].sort(byLastAt), selected: state.selected ?? action.sessions[0]?.id ?? null }
@@ -73,7 +77,7 @@ export function feedReducer(state: FeedState, action: FeedAction): FeedState {
       }
     }
     case 'select':
-      return { ...state, selected: action.id }
+      return { ...state, selected: action.id, newSession: null }
     case 'explanation':
       return { ...state, explanations: { ...state.explanations, [action.stepId]: action.explanation } }
     case 'decision': {
@@ -111,6 +115,7 @@ export function feedReducer(state: FeedState, action: FeedAction): FeedState {
         ...state,
         sessions,
         selected: state.selected === action.id ? (sessions[0]?.id ?? null) : state.selected,
+        newSession: state.newSession === action.id ? null : state.newSession,
         steps: omit(state.steps),
         decisions: omit(state.decisions),
         glossary: omit(state.glossary),

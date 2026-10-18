@@ -20,6 +20,23 @@ describe('feedReducer', () => {
     expect(s.selected).toBe('a')
     expect(s.sessions.map((x) => x.id)).toEqual(['b', 'a'])
   })
+  test('a session that starts while another is watched is offered, not switched to', () => {
+    let s = feedReducer(initialFeed, { type: 'sessions', sessions: [session('a', 1)] })
+    s = feedReducer(s, { type: 'session', session: session('a', 5) })
+    expect(s.newSession).toBeNull()
+    s = feedReducer(s, { type: 'session', session: session('b', 6) })
+    expect(s.selected).toBe('a')
+    expect(s.newSession).toBe('b')
+    s = feedReducer(s, { type: 'session', session: session('b', 7) })
+    expect(s.newSession).toBe('b')
+    expect(feedReducer(s, { type: 'select', id: 'b' })).toMatchObject({ selected: 'b', newSession: null })
+    expect(feedReducer(s, { type: 'select', id: 'a' }).newSession).toBeNull()
+    expect(feedReducer(s, { type: 'session_deleted', id: 'b' }).newSession).toBeNull()
+  })
+  test('the first session is selected, not offered', () => {
+    const s = feedReducer(initialFeed, { type: 'session', session: session('a', 1) })
+    expect(s).toMatchObject({ selected: 'a', newSession: null })
+  })
   test('step upserts by id, keeps startedAt order, tracks lastSeq', () => {
     let s = feedReducer(initialFeed, { type: 'step', step: step('x', 1, 20) })
     s = feedReducer(s, { type: 'step', step: step('y', 2, 10) })
