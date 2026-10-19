@@ -23,4 +23,8 @@ describe('isPendingExplanation (final fix 3)', () => {
     expect(isPendingExplanation(step(), undefined, ex('ready'), 201)).toBe(false)
     expect(isPendingExplanation(step({ endedAt: undefined }), undefined, ex('ready'), 0)).toBe(false)
   })
+  test('not pending: a routine step, which the server never explains', () => {
+    expect(isPendingExplanation(step({ category: 'read', toolName: 'Read' }), undefined, ex('ready'), 0, true)).toBe(false)
+    expect(isPendingExplanation(step({ category: 'read', toolName: 'Read' }), undefined, ex('ready'), 0, false)).toBe(true)
+  })
 })

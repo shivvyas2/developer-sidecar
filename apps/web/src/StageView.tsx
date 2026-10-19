@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useState } from 'react'
-import { isExplained, SceneSpecSchema, type ExplainerState, type FeedStep, type StepExplanation } from '@sidecar/shared'
+import { isExplained, routineIds, SceneSpecSchema, type ExplainerState, type FeedStep, type StepExplanation } from '@sidecar/shared'
 import { townFrom, type Readout } from '@sidecar/ui-kit'
 import { forStatus } from '@sidecar/ui-kit/catalog'
 import { Scene } from '@sidecar/ui-kit/react'
@@ -51,6 +51,7 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
   const card = cardIndex >= 0 ? steps[cardIndex] : undefined
 
   const town = useMemo(() => townFrom(steps.slice(0, index + 1)), [steps, index])
+  const routine = useMemo(() => routineIds(steps), [steps])
 
   const tokens = explainer ? explainer.tokens.input + explainer.tokens.output : 0
   const files = useMemo(
@@ -158,7 +159,7 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
             step={card}
             num={cardIndex + 1}
             explanation={explanations[card.id]}
-            pending={isPendingExplanation(card, explanations[card.id], explainer, readySince)}
+            pending={isPendingExplanation(card, explanations[card.id], explainer, readySince, routine.has(card.id))}
           />
         ) : null}
       </div>
