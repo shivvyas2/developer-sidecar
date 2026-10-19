@@ -34,6 +34,15 @@ export function stepTitle(step: Pick<FeedStep, 'category' | 'techLabel'>): strin
   return subject ? `${cat} · ${subject}` : cat
 }
 
+/** What a step is, in plain words for someone who doesn't code. The command or file stays under SHOW TECHNICAL. */
+export const STEP_KIND: Record<Category, string> = {
+  prompt: 'YOU ASKED', read: 'LOOKING', create: 'NEW FILE', edit: 'CHANGE', install: 'BUILDING BLOCKS',
+  test: 'CHECKS', run: 'RUNNING YOUR APP', external: 'OUTSIDE SERVICE', mcp: 'TOOL', git: 'CHECKPOINT',
+  data: 'YOUR DATA', deploy: 'GOING LIVE', subagent: 'HELPER', fallback: 'STEP',
+}
+
+export const stepKind = (step: Pick<FeedStep, 'category'>): string => STEP_KIND[step.category] ?? 'STEP'
+
 /** Milliseconds as mm:ss; minutes keep growing past 99. */
 export function formatElapsed(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000))

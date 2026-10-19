@@ -3,7 +3,7 @@
  * Pure: no engine, no Node, no DOM.
  */
 import { isExplained, type ExplainerState, type FeedStep } from '@sidecar/shared'
-import { checksOf, formatElapsed, HEALTH_LIGHT, HEALTH_WORD, healthOf, stepTitle, type Readout, type TextModel, type TextStep } from '@sidecar/ui-kit'
+import { checksOf, formatElapsed, HEALTH_LIGHT, HEALTH_WORD, healthOf, stepKind, stepTitle, type Readout, type TextModel, type TextStep } from '@sidecar/ui-kit'
 
 export interface ModState {
   /** Every step of this session, oldest first. */
@@ -43,7 +43,7 @@ export function readoutOf(s: ModState): Readout {
     checks: checksOf(s.steps),
     status: HEALTH_WORD[health],
     light: HEALTH_LIGHT[health],
-    now: last ? stepTitle(last) : '',
+    now: last ? stepKind(last) : '',
     elapsed: first && last ? formatElapsed(last.startedAt - first.startedAt) : '00:00',
     live: !s.offline,
     session: s.steps.length > 0 ? 1 : 0,

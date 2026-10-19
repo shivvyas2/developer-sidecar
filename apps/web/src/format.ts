@@ -5,4 +5,4 @@ export function formatTokens(n: number): string {
   return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
 }
 
-export { formatElapsed, stepSubject, stepTitle } from '@sidecar/ui-kit'
+export { formatElapsed, stepKind, stepSubject, stepTitle } from '@sidecar/ui-kit'

@@ -5,7 +5,7 @@ import { forStatus } from '@sidecar/ui-kit/catalog'
 import { Scene } from '@sidecar/ui-kit/react'
 import { Chip, PulledCard, ReadoutPanel, RoundButton, StepCard, StepDrawer, TickRuler } from './ds'
 import { readoutFields, useFramed } from './framed'
-import { formatElapsed, stepTitle } from './format'
+import { formatElapsed, stepKind } from './format'
 import { nextAsk, UNDO_HINT } from './next'
 import { isPendingExplanation } from './pending'
 import { initialSelection, selectedId, selectionReducer, stepNumber } from './selection'
@@ -64,7 +64,7 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
   const upTo = useMemo(() => steps.slice(0, index + 1), [steps, index])
   const files = useMemo(() => upTo.filter((s) => s.category === 'create' && s.status === 'ok').length, [upTo])
   const checks = useMemo(() => checksOf(upTo), [upTo])
-  const now = shown ? stepTitle(shown) : ''
+  const now = shown ? stepKind(shown) : ''
   const firstAt = steps[0]?.startedAt ?? 0
   const elapsed = shown ? formatElapsed(shown.startedAt - firstAt) : '00:00'
   // LIVE only while following the newest step; a replay or an older pick reads REPLAY.
@@ -121,7 +121,7 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
               <StepCard
                 key={s.id}
                 num={i + 1}
-                title={stepTitle(s)}
+                title={stepKind(s)}
                 caption={s.caption}
                 status={s.status}
                 selected={i === cardIndex}
@@ -181,7 +181,7 @@ function StepDetail({ step, num, explanation, pending }: { step: FeedStep; num: 
   const [open, setOpen] = useState(false)
   const ask = nextAsk(step, explanation)
   return (
-    <PulledCard num={num} title={stepTitle(step)}>
+    <PulledCard num={num} title={stepKind(step)}>
       <p className="detail__caption">{step.caption}</p>
       {isExplained(explanation) ? (
         <>
