@@ -42,6 +42,8 @@ export interface ExplainerOptions {
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+/** Steps are numbered 1…n in a request instead of sending (and getting back) their long tool-use ids. */
+const shortId = (i: number) => String(i + 1)
 
 export function createExplainer(o: ExplainerOptions): Explainer {
   const now = o.now ?? Date.now
@@ -116,7 +118,7 @@ export function createExplainer(o: ExplainerOptions): Explainer {
       const session = o.store.getSession(sessionId)
       const req = buildRequest(
         { project: session?.cwd ? basename(session.cwd) : 'this project', lastPrompt: o.store.lastPrompt(sessionId) },
-        steps.map(toInput),
+        steps.map((s, i) => ({ ...toInput(s), stepId: shortId(i) })),
       )
       let result: ProviderResult | null = null
       let error: ExplainError | null = null
@@ -150,9 +152,9 @@ export function createExplainer(o: ExplainerOptions): Explainer {
 
   function settle(sessionId: string, steps: FeedStep[], result: ProviderResult | null, error: ExplainError | null): void {
     if (result) {
-      const explained = normalize(result.output, steps.map((s) => s.id))
-      for (const s of steps) {
-        const e = explained.get(s.id)
+      const explained = normalize(result.output, steps.map((_, i) => shortId(i)))
+      for (const [i, s] of steps.entries()) {
+        const e = explained.get(shortId(i))
         if (!e) { mark(sessionId, s.id, { unavailable: MISSING }); continue }
         mark(sessionId, s.id, e)
         const at = now()

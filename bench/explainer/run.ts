@@ -26,6 +26,8 @@ export interface SessionRun {
   name: string
   steps: FeedStep[]
   requests: ExplainRequest[]
+  /** The real step ids in each request, in order (requests may number their steps instead). */
+  batches: string[][]
   /** Step ids in the order they were sent, across all requests. */
   sent: string[]
 }
@@ -42,6 +44,9 @@ export async function runSession(s: BenchSession): Promise<SessionRun> {
     const hub = new Hub()
     const store = openStore(':memory:')
     const requests: ExplainRequest[] = []
+    // explanations are published per batch in request order, which recovers each request's real step ids
+    const explained: string[] = []
+    hub.subscribe((m) => { if (m.type === 'explanation') explained.push(m.stepId) })
     const provider: Provider = {
       id: 'api',
       async explain(req) {
@@ -64,7 +69,9 @@ export async function runSession(s: BenchSession): Promise<SessionRun> {
     const sessionId = String(s.events[0]?.payload.session_id)
     const steps = store.stepsForSession(sessionId)
     store.close()
-    return { name: s.name, steps, requests, sent: requests.flatMap(idsIn) }
+    let at = 0
+    const batches = requests.map((r) => explained.slice(at, (at += idsIn(r).length)))
+    return { name: s.name, steps, requests, batches, sent: batches.flat() }
   } finally {
     vi.useRealTimers()
   }

@@ -76,13 +76,13 @@ test('explainer token bench', { timeout: 10 * 60_000 }, async () => {
       row.outputTokens = 0
       const byId = new Map(run.steps.map((s) => [s.id, s]))
       notes.push(`## ${run.name}\n`)
-      for (const r of run.requests) {
+      for (const [i, r] of run.requests.entries()) {
         const res = await live.explain(r, 'haiku')
         row.inputTokens += res.usage.input
         row.outputTokens += res.usage.output
         const ids = idsIn(r)
         for (const [id, e] of normalize(res.output, ids)) {
-          const s = byId.get(id)
+          const s = byId.get(run.batches[i]![ids.indexOf(id)]!)
           notes.push(`### ${s?.category ?? '?'} · ${s?.status ?? '?'} · ${s?.caption ?? id}\n`)
           if (isExplained(e)) {
             notes.push(`${e.plain}\n\n*Why:* ${e.why}`)

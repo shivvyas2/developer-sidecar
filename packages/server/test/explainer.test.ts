@@ -16,12 +16,18 @@ function fakeProvider(behaviour: (ids: string[]) => Promise<unknown> | unknown =
   decision: stepId === 'd' ? { title: 'Payments', choice: 'Stripe', alternatives: ['Paddle'], reason: 'common' } : null,
 })) })) {
   const calls: string[][] = []
+  // Requests number their steps 1…n; tests name steps by their caption (= id) and answer with those names.
   const provider: Provider = {
     id: 'api',
     async explain(req) {
-      const ids = [...req.user.matchAll(/"stepId":"([^"]+)"/g)].map((m) => m[1]!)
+      const sent = req.user.split('\n').filter((l) => l.startsWith('{"stepId"')).map((l) => JSON.parse(l) as { stepId: string; caption: string })
+      const ids = sent.map((s) => s.caption)
       calls.push(ids)
-      const out = await behaviour(ids)
+      const out = await behaviour(ids) as { items?: Array<{ stepId: string }> } | null
+      for (const it of out?.items ?? []) {
+        const i = ids.indexOf(it.stepId)
+        if (i >= 0) it.stepId = sent[i]!.stepId
+      }
       return { output: out as never, usage: { input: 10, output: 5 } }
     },
   }
@@ -147,6 +153,45 @@ describe('explainer', () => {
       send(edit('e2', '/a.ts'))
       await flushed(ex)
       expect(calls.flat()).toEqual(['e1', 'e2'])
+    })
+  })
+
+  describe('short step ids', () => {
+    const answer = (stepId: string, plain: string) => ({ stepId, plain, why: 'w', concept: null, decision: null })
+
+    test('requests number steps 1…n instead of sending tool-use ids, and answers map back in any order', async () => {
+      const users: string[] = []
+      const provider: Provider = {
+        id: 'api',
+        async explain(req) {
+          users.push(req.user)
+          return { output: { items: [answer('2', 'second'), answer('1', 'first')] }, usage: { input: 1, output: 1 } }
+        },
+      }
+      const { ex, send, store } = setup(provider)
+      send(step('toolu_01AAAAAAAAAAAAAAAAAAAAAA')); send(step('toolu_01BBBBBBBBBBBBBBBBBBBBBB'))
+      await vi.advanceTimersByTimeAsync(QUIET_MS)
+      await ex.idle()
+      expect(users[0]).toContain('"stepId":"1"')
+      expect(users[0]).toContain('"stepId":"2"')
+      expect(users[0]).not.toContain('"stepId":"toolu_')
+      const plain = (id: string) => { const e = store.stepsForSession('s1').find((x) => x.id === id)?.explanation; return e && 'plain' in e ? e.plain : e }
+      expect(plain('toolu_01AAAAAAAAAAAAAAAAAAAAAA')).toBe('first')
+      expect(plain('toolu_01BBBBBBBBBBBBBBBBBBBBBB')).toBe('second')
+    })
+
+    test('an answer with an unknown number, or a real id, lands on no step', async () => {
+      const provider: Provider = {
+        id: 'api',
+        async explain() {
+          return { output: { items: [answer('9', 'ghost'), answer('a', 'by real id')] }, usage: { input: 1, output: 1 } }
+        },
+      }
+      const { ex, send, store } = setup(provider)
+      send(step('a'))
+      await vi.advanceTimersByTimeAsync(QUIET_MS)
+      await ex.idle()
+      expect(store.stepsForSession('s1')[0]!.explanation).toEqual({ unavailable: 'No explanation was returned for this step.' })
     })
   })
 
