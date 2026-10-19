@@ -66,6 +66,18 @@ describe('explainer', () => {
     expect(ex.state()).toMatchObject({ status: 'ready', provider: 'api', tokens: { input: 10, output: 5 } })
   })
 
+  test('a failed step keeps the suggested next prompt; an ok step drops it', async () => {
+    const { provider } = fakeProvider((ids) => ({ items: ids.map((stepId) => ({
+      stepId, plain: 'p', why: 'w', concept: null, decision: null, next: 'Fix the failing test.',
+    })) }))
+    const { ex, send, store } = setup(provider)
+    send(step('bad', { status: 'failed' })); send(step('good'))
+    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    await ex.idle()
+    const next = Object.fromEntries(store.stepsForSession('s1').map((s) => [s.id, s.explanation && 'plain' in s.explanation ? s.explanation.next : 'none']))
+    expect(next).toEqual({ bad: 'Fix the failing test.', good: undefined })
+  })
+
   test('skips running, interrupted, prompt and already explained steps', async () => {
     const { provider, calls } = fakeProvider()
     const { ex, send, store } = setup(provider)
@@ -182,7 +194,7 @@ describe('explainer', () => {
   })
 
   describe('short step ids', () => {
-    const answer = (stepId: string, plain: string) => ({ stepId, plain, why: 'w', concept: null, decision: null })
+    const answer = (stepId: string, plain: string) => ({ stepId, plain, why: 'w', concept: null, decision: null, next: null })
 
     test('requests label steps s1…sn instead of sending tool-use ids, and answers map back in any order', async () => {
       const users: string[] = []
@@ -228,7 +240,7 @@ describe('explainer', () => {
       inFlight++; maxInFlight = Math.max(maxInFlight, inFlight)
       await new Promise((r) => setTimeout(r, 50))
       inFlight--
-      return { items: ids.map((stepId) => ({ stepId, plain: 'p', why: 'w', concept: null, decision: null })) }
+      return { items: ids.map((stepId) => ({ stepId, plain: 'p', why: 'w', concept: null, decision: null, next: null })) }
     })
     const { ex, send } = setup(provider)
     for (let i = 0; i < 20; i++) send(step(`s${i}`))
@@ -319,7 +331,7 @@ describe('explainer', () => {
 
   const slow = (ms = 100) => fakeProvider(async (ids) => {
     await new Promise((r) => setTimeout(r, ms))
-    return { items: ids.map((stepId) => ({ stepId, plain: 'p', why: 'w', concept: { term: `T${stepId}`, definition: 'd' }, decision: null })) }
+    return { items: ids.map((stepId) => ({ stepId, plain: 'p', why: 'w', concept: { term: `T${stepId}`, definition: 'd' }, decision: null, next: null })) }
   })
 
   test('tokens are counted even when the batch is dropped mid-flight (session deleted)', async () => {
@@ -381,7 +393,7 @@ describe('explainer', () => {
     let fail = true
     const { provider, calls } = fakeProvider((ids) => {
       if (fail) throw new ExplainError('The Anthropic API key was rejected.', false)
-      return { items: ids.map((stepId) => ({ stepId, plain: 'p', why: 'w', concept: null, decision: null })) }
+      return { items: ids.map((stepId) => ({ stepId, plain: 'p', why: 'w', concept: null, decision: null, next: null })) }
     })
     const { ex, send } = setup(provider)
     send(step('a'))

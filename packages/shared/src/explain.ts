@@ -14,6 +14,8 @@ export const ExplanationSchema = z.object({
   why: z.string().min(1),
   concept: ConceptSchema.nullable(),
   decision: DecisionSchema.nullable(),
+  /** For a failed step: one thing the person could ask Claude next. Absent on older explanations. */
+  next: z.string().min(1).optional(),
 })
 export type Concept = z.infer<typeof ConceptSchema>
 export type Decision = z.infer<typeof DecisionSchema>

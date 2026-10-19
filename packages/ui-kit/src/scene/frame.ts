@@ -55,6 +55,6 @@ export function frameFront(ctx: SceneCtx): string {
     + readout(panel.at, panel.w,
       [{ k: 'STEP', v: step, big: true }, { k: 'FILES', v: pad(r.files, 2) }, { k: 'TOKENS', v: fmtTokens(r.tokens) }],
       [{ k: 'NOW', v: r.now.trim() || '-' }, { k: 'ELAPSED', v: r.elapsed.trim() || '00:00' }])
-    + statusStrip({ x: M, y: STRIP_Y }, VIEW.w - 2 * M, { text: caption ? `STEP ${step} · ${caption}` : `STEP ${step}`, live: r.live })
+    + statusStrip({ x: M, y: STRIP_Y }, VIEW.w - 2 * M, { text: caption ? `STEP ${step} · ${caption}` : `STEP ${step}`, live: r.live, ...(r.tag ? { tag: r.tag } : {}) })
     + `</g>`
 }

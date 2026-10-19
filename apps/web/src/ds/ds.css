@@ -349,6 +349,8 @@
   text-transform: uppercase;
 }
 .ds-strip__text { flex: 1; min-width: 0; font: 400 13px/1.4 var(--ds-sans); }
+.ds-strip[data-tone="alert"] { border-color: var(--sk-accent); }
+.ds-strip[data-tone="alert"] .ds-strip__tag { background: var(--sk-accent); color: var(--ds-on-accent); }
 
 /* ---- ThemeToggle ---- */
 .ds-toggle { display: inline-flex; align-items: center; gap: 6px; }

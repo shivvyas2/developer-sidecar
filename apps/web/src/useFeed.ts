@@ -12,6 +12,7 @@ export function useFeed() {
   lastSeq.current = state.lastSeq
   const selected = useRef<string | null>(null)
   selected.current = state.selected
+  const reconnect = useRef<() => void>(() => undefined)
 
   useEffect(() => {
     fetchSessions().then((sessions) => dispatch({ type: 'sessions', sessions })).catch(() => setConnection('offline'))
@@ -35,6 +36,8 @@ export function useFeed() {
         retry = 1000
         // after a reconnect, catch up on anything missed while offline (explanations ride along with steps)
         if (opened) {
+          // sessions carry whether Claude is waiting, which no replayed step would update
+          fetchSessions().then((sessions) => dispatch({ type: 'sessions', sessions })).catch(() => undefined)
           if (selected.current) loadSession(selected.current, dispatch)
           fetchExplainer().then((state) => dispatch({ type: 'explainer', state })).catch(() => undefined)
         }
@@ -48,10 +51,17 @@ export function useFeed() {
       }
     }
     connect()
+    // Try now instead of waiting out the backoff; a socket that is still open or opening is left alone.
+    reconnect.current = () => {
+      if (stopped || (ws && ws.readyState !== WebSocket.CLOSED)) return
+      clearTimeout(timer)
+      retry = 1000
+      connect()
+    }
     return () => { stopped = true; clearTimeout(timer); ws?.close() }
   }, [])
 
-  return { state, dispatch, connection }
+  return { state, dispatch, connection, retry: () => reconnect.current() }
 }
 
 function loadSession(id: string, dispatch: (a: FeedAction) => void) {

@@ -112,7 +112,7 @@ export function extractJson(text: string): unknown {
   }
 }
 
-const JSON_SHAPE = 'Respond with ONLY one JSON object of the form {"items":[{"stepId":"…","plain":"…","why":"…","concept":{"term":"…","definition":"…"} or null,"decision":{"title":"…","choice":"…","alternatives":["…"],"reason":"…"} or null}]} and nothing else.'
+const JSON_SHAPE = 'Respond with ONLY one JSON object of the form {"items":[{"stepId":"…","plain":"…","why":"…","concept":{"term":"…","definition":"…"} or null,"decision":{"title":"…","choice":"…","alternatives":["…"],"reason":"…"} or null,"next":"…" or null}]} and nothing else.'
 
 /** Marks the child as Sidecar's own run and drops the markers a nested-session guard would refuse on. */
 export function childEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {

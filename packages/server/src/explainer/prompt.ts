@@ -95,6 +95,7 @@ For every step you are given, write:
 - why: one or two sentences on why this matters for a real app that people will use: reliability, security, cost, speed or ease of change. Be concrete to this step, not generic.
 - concept: the single most useful technical term from this step for the person to learn, with a one-line definition of at most 25 words. Use null if the step teaches nothing new.
 - decision: only when the step shows a real architecture choice (picking a library, service, database, auth method, hosting or data shape): a short title, what was chosen, up to three realistic alternatives, and why it fits. Otherwise null.
+- next: only when the step failed: one short instruction the person could send Claude to fix it, written as they would type it (for example "Fix the failing checkout test: the total leaves out shipping."). Base it on what the output shows. Otherwise null.
 
 Return exactly one item per step, with the same stepId. Base everything only on the step data shown; never invent files, services or results that are not there. If a step failed, say plainly what went wrong when the output shows it.
 
@@ -119,12 +120,13 @@ export const ExplainOutputSchema = z.object({
     decision: z.object({
       title: z.string(), choice: z.string(), alternatives: z.array(z.string()), reason: z.string(),
     }).nullable(),
+    next: z.string().nullable(),
   })),
 })
 export type ExplainOutput = z.infer<typeof ExplainOutputSchema>
 
 export const LIMITS = {
-  plain: 400, why: 400, term: 60, definition: 240, title: 100, choice: 160, alternative: 100, alternatives: 3, reason: 320,
+  plain: 400, why: 400, term: 60, definition: 240, title: 100, choice: 160, alternative: 100, alternatives: 3, reason: 320, next: 200,
 } as const
 
 const clip = (s: string, n: number) => {
@@ -132,8 +134,8 @@ const clip = (s: string, n: number) => {
   return t.length > n ? `${t.slice(0, n - 1)}…` : t
 }
 
-/** Only answers for steps we asked about; every string clipped; anything malformed dropped. */
-export function normalize(out: ExplainOutput, ids: readonly string[]): Map<string, Explanation> {
+/** Only answers for steps we asked about; every string clipped; anything malformed dropped; `next` kept only for `failed` steps. */
+export function normalize(out: ExplainOutput, ids: readonly string[], failed: ReadonlySet<string> = new Set()): Map<string, Explanation> {
   const wanted = new Set(ids)
   const result = new Map<string, Explanation>()
   for (const it of out.items) {
@@ -150,7 +152,10 @@ export function normalize(out: ExplainOutput, ids: readonly string[]): Map<strin
           reason: clip(d.reason, LIMITS.reason),
         }
       : null
-    const parsed = ExplanationSchema.safeParse({ plain: clip(it.plain, LIMITS.plain), why: clip(it.why, LIMITS.why), concept, decision })
+    const next = failed.has(it.stepId) && it.next?.trim() ? clip(it.next, LIMITS.next) : undefined
+    const parsed = ExplanationSchema.safeParse({
+      plain: clip(it.plain, LIMITS.plain), why: clip(it.why, LIMITS.why), concept, decision, ...(next ? { next } : {}),
+    })
     if (parsed.success) result.set(it.stepId, parsed.data)
   }
   return result

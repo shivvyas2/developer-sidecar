@@ -16,6 +16,7 @@ const cannedItem = (stepId: string) => ({
   why: 'Payments run on Stripe’s servers, so card numbers never touch your app, which keeps you out of most security audits.',
   concept: { term: 'Checkout session', definition: 'A one-time Stripe payment page created for a single purchase.' },
   decision: null,
+  next: null,
 })
 
 export const idsIn = (req: ExplainRequest) => [...req.user.matchAll(/"stepId":"([^"]+)"/g)].map((m) => m[1]!)

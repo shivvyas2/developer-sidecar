@@ -74,6 +74,21 @@ body {
 .detail__concept { color: var(--sk-ink2); font-size: 13px; }
 .detail__note { color: var(--sk-ink2); font-size: 13px; }
 .detail__note--pending { font-style: italic; }
+.detail__next {
+  display: flex; flex-direction: column; gap: 8px; padding: 10px 12px;
+  border: 1px solid var(--sk-accent); background: var(--sk-paper);
+}
+.detail__ask { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.detail__ask code {
+  flex: 1 1 240px; min-width: 0; padding: 8px 10px; border: 1px dashed var(--sk-ink); background: var(--sk-card);
+  font: 400 12px/1.45 var(--ds-mono); overflow-wrap: anywhere;
+}
+.detail__copy {
+  padding: 8px 10px; border: 1px solid var(--sk-ink); background: var(--sk-ink); color: var(--sk-paper); cursor: pointer;
+  font: 700 9px/1 var(--ds-mono); letter-spacing: 1.4px;
+}
+.detail__copy:focus-visible { outline: 2px solid var(--sk-ink); outline-offset: 2px; }
+.detail__undo { margin: 0; color: var(--sk-ink2); font-size: 13px; }
 .detail__toggle {
   align-self: flex-start; padding: 0; border: 0; border-bottom: 1px dotted var(--sk-ink); background: none; cursor: pointer;
   color: var(--sk-ink); font: 700 9px/1.4 var(--ds-mono); letter-spacing: 1.4px;
@@ -150,3 +165,55 @@ body {
 .settings__btn:focus-visible { outline: 2px solid var(--sk-ink); outline-offset: 2px; }
 .settings__error { margin: 12px 0 0; color: var(--sk-accent); font: 700 12px/1.4 var(--ds-mono); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---- brand: the Sidecar mark and the drive-in intro ---- */
+.sc-logo { display: block; flex: none; filter: drop-shadow(0 0 1px var(--sc-halo, transparent)); }
+.sc-logo .sc-ink { fill: var(--sk-ink); }
+/* The mark's navy outline sinks into dark paper; a faint halo keeps its edge. */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --sc-halo: rgba(232, 230, 224, .5); } }
+[data-theme="dark"] { --sc-halo: rgba(232, 230, 224, .5); }
+[data-theme="light"] { --sc-halo: transparent; }
+
+.hdr__brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+
+.intro {
+  position: fixed; inset: 0; z-index: 1000; overflow: hidden; pointer-events: none;
+  background: var(--sk-paper);
+  animation: intro-veil 2.6s ease-in forwards;
+}
+.intro__road {
+  position: absolute; left: 0; right: 0; top: calc(50% + 74px); height: 2px;
+  background: repeating-linear-gradient(90deg, var(--sk-ink2) 0 18px, transparent 18px 34px);
+  animation: intro-road .35s linear infinite;
+}
+.intro__car {
+  position: absolute; top: calc(50% - 100px); left: 0;
+  animation: intro-drive 2.6s cubic-bezier(.3, 0, .7, 1) forwards;
+}
+.intro__word {
+  position: absolute; left: 0; right: 0; top: calc(50% + 96px); margin: 0; text-align: center;
+  font: 700 12px/1 var(--ds-mono); letter-spacing: 6px; color: var(--sk-ink);
+  animation: intro-word 2.6s ease forwards;
+}
+/* In from the left, a slow roll past the middle so the driver can wave, then off to the right. */
+@keyframes intro-drive {
+  0% { transform: translateX(-300px); }
+  38% { transform: translateX(calc(50vw - 150px)); }
+  62% { transform: translateX(calc(50vw - 110px)); }
+  100% { transform: translateX(calc(100vw + 40px)); }
+}
+@keyframes intro-veil { 0%, 72% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes intro-word { 0%, 22% { opacity: 0; } 40%, 70% { opacity: 1; } 90%, 100% { opacity: 0; } }
+@keyframes intro-road { to { background-position: -34px 0; } }
+
+/* Pixel-art motion: two-frame steps, never smooth, so the grid stays crisp. */
+.sc-logo--driving .sc-car { animation: sc-bob .28s steps(1) infinite; }
+.sc-logo--driving .sc-arm { animation: sc-wave .44s steps(1) infinite; }
+.sc-logo--driving .sc-speed { animation: sc-speed .2s steps(1) infinite; }
+.sc-logo--driving .sc-spokes--a { animation: sc-blink .16s steps(1) infinite; }
+.sc-logo--driving .sc-spokes--b { animation: sc-blink-b .16s steps(1) infinite; }
+@keyframes sc-bob { 0% { transform: translateY(0); } 50% { transform: translateY(1px); } }
+@keyframes sc-wave { 0% { transform: translate(0, 0); } 50% { transform: translate(-1px, -2px); } }
+@keyframes sc-speed { 0% { transform: translateX(0); } 50% { transform: translateX(-3px); } }
+@keyframes sc-blink { 0% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes sc-blink-b { 0% { opacity: 0; } 50% { opacity: 1; } }

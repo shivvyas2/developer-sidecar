@@ -1,4 +1,4 @@
-import { scrubEvent, type SidecarEvent, type Step } from '@sidecar/shared'
+import { scrubEvent, type Attention, type SidecarEvent, type Step } from '@sidecar/shared'
 import type { Hub } from './hub'
 import { translate } from './rules'
 import { StepTracker } from './steps'
@@ -8,6 +8,27 @@ export interface Pipeline {
   ingest(e: SidecarEvent): { seq: number | null }
   sweep(): number
   lastActivity(): number
+}
+
+const ATTENTION_TEXT = 200
+
+/**
+ * What an event says about whether Claude needs its person. Notices carry Claude Code's notification_type;
+ * older Claude Code versions send only the message, so fall back to its wording.
+ */
+export function attentionOf(e: SidecarEvent): { state: Attention; text?: string } | undefined {
+  if (e.kind === 'turn_end') return { state: 'done' }
+  if (e.kind !== 'notice') return e.kind === 'session_start' ? undefined : { state: 'working' }
+  const raw = (e.raw ?? {}) as { message?: unknown; notification_type?: unknown }
+  const message = typeof raw.message === 'string' ? raw.message.replace(/\s+/g, ' ').trim() : ''
+  const type = typeof raw.notification_type === 'string' ? raw.notification_type : ''
+  const state: Attention | undefined =
+    type === 'permission_prompt' || (!type && /permission/i.test(message)) ? 'permission'
+      : type === 'idle_prompt' || (!type && /waiting for your input/i.test(message)) ? 'idle'
+        : undefined
+  if (!state) return undefined
+  const text = message.length > ATTENTION_TEXT ? `${message.slice(0, ATTENTION_TEXT - 1)}…` : message
+  return text ? { state, text } : { state }
 }
 
 export function createPipeline(o: { store: Store; tracker?: StepTracker; hub: Hub; now?: () => number }): Pipeline {
@@ -36,7 +57,7 @@ export function createPipeline(o: { store: Store; tracker?: StepTracker; hub: Hu
       const e = scrubEvent(raw)
       const seq = o.store.insertEvent(e)
       if (seq === null) return { seq: null }
-      o.hub.publish({ type: 'session', session: o.store.touchSession(e.sessionId, e.cwd, e.ts) })
+      o.hub.publish({ type: 'session', session: o.store.touchSession(e.sessionId, e.cwd, e.ts, attentionOf(e)) })
       if (e.kind === 'turn_end' || e.kind === 'prompt') publishInterrupted(tracker.closeSession(e.sessionId, e.ts))
       const step = tracker.apply(e)
       if (step) publishStep(step, seq)

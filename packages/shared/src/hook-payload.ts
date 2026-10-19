@@ -49,7 +49,7 @@ export function fromHookPayload(payload: unknown, opts: { now: number; id: strin
   } else if (kind === 'prompt') {
     event.prompt = str(payload.prompt) ?? ''
   } else if (kind === 'notice') {
-    event.raw = KIND_BY_HOOK[hook] ? { message: payload.message } : payload
+    event.raw = KIND_BY_HOOK[hook] ? { message: payload.message, notification_type: payload.notification_type } : payload
   }
   return event
 }

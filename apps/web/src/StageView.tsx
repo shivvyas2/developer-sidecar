@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useState } from 'react'
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { isExplained, routineIds, SceneSpecSchema, type ExplainerState, type FeedStep, type StepExplanation } from '@sidecar/shared'
 import { townFrom, type Readout } from '@sidecar/ui-kit'
 import { forStatus } from '@sidecar/ui-kit/catalog'
@@ -6,6 +6,7 @@ import { Scene } from '@sidecar/ui-kit/react'
 import { Chip, PulledCard, ReadoutPanel, RoundButton, StepCard, StepDrawer, TickRuler } from './ds'
 import { readoutFields, useFramed } from './framed'
 import { formatElapsed, stepTitle } from './format'
+import { nextAsk, UNDO_HINT } from './next'
 import { isPendingExplanation } from './pending'
 import { initialSelection, selectedId, selectionReducer, stepNumber } from './selection'
 import { initialStage, replayAdvance, stageReducer, type Replay } from './stage'
@@ -22,10 +23,12 @@ export interface StageTabProps {
   project?: string
   /** Select this step on arrival (from a Decisions link). */
   pickRequest?: string | null
+  /** Shown in place of LIVE while following the newest step, e.g. DONE or NEEDS YOU. */
+  liveTag?: string
 }
 
 /** Layout B: the step drawer on the left; the framed stage, replay ruler and pulled-out card on the right. */
-export function StageTab({ sessionId, loaded, steps, explanations, explainer, readySince, project, pickRequest }: StageTabProps) {
+export function StageTab({ sessionId, loaded, steps, explanations, explainer, readySince, project, pickRequest, liveTag }: StageTabProps) {
   const [stage, dispatch] = useReducer(stageReducer, initialStage)
   const [selection, select] = useReducer(selectionReducer, initialSelection)
   const [replay, setReplay] = useState<Replay | null>(null)
@@ -66,11 +69,13 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
   const framed = useFramed()
   const count = steps.length
   // Built from primitives so the SVG only re-renders when a number on the frame changes.
+  const tag = live ? liveTag : undefined
   const readout = useMemo<Readout>(() => ({
     step: index + 1, files, tokens, now, elapsed, live,
     session: count > 0 ? (index + 1) / count : 0,
     ...(project ? { project } : {}),
-  }), [index, files, tokens, now, elapsed, live, count, project])
+    ...(tag ? { tag } : {}),
+  }), [index, files, tokens, now, elapsed, live, count, project, tag])
 
   const goLive = () => { dispatch({ type: 'reset', ids }); setReplay(null); select({ type: 'live' }) }
   const pick = (id: string) => {
@@ -123,7 +128,7 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
       </div>
       <div className="stagetab__main">
         {!framed && shown ? (
-          <ReadoutPanel label="Stage readout" fields={readoutFields(readout)} note={`${live ? 'LIVE' : 'REPLAY'} · ${now}`} />
+          <ReadoutPanel label="Stage readout" fields={readoutFields(readout)} note={`${tag ?? (live ? 'LIVE' : 'REPLAY')} · ${now}`} />
         ) : null}
         <section className="stagetab__stage" aria-label="Stage">
           {shown && parsed?.success ? (
@@ -169,6 +174,7 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
 
 function StepDetail({ step, num, explanation, pending }: { step: FeedStep; num: number; explanation?: StepExplanation; pending: boolean }) {
   const [open, setOpen] = useState(false)
+  const ask = nextAsk(step, explanation)
   return (
     <PulledCard num={num} title={stepTitle(step)}>
       <p className="detail__caption">{step.caption}</p>
@@ -188,6 +194,7 @@ function StepDetail({ step, num, explanation, pending }: { step: FeedStep; num: 
       ) : pending ? (
         <p className="detail__note detail__note--pending">Explaining…</p>
       ) : null}
+      {ask ? <NextStep ask={ask} /> : null}
       <button className="detail__toggle" onClick={() => setOpen(!open)} aria-expanded={open}>
         {open ? 'HIDE TECHNICAL' : 'SHOW TECHNICAL'}
       </button>
@@ -198,5 +205,34 @@ function StepDetail({ step, num, explanation, pending }: { step: FeedStep; num: 
         </pre>
       ) : null}
     </PulledCard>
+  )
+}
+
+/** A failed step's way forward: a request to copy into Claude Code, and Claude Code's own undo. */
+function NextStep({ ask }: { ask: string }) {
+  const [copied, setCopied] = useState<'idle' | 'copied' | 'select'>('idle')
+  const text = useRef<HTMLElement>(null)
+  const copy = () => {
+    const selectIt = () => {
+      const range = document.createRange()
+      if (text.current) range.selectNodeContents(text.current)
+      getSelection()?.removeAllRanges()
+      getSelection()?.addRange(range)
+      setCopied('select')
+    }
+    if (!navigator.clipboard) return selectIt()
+    navigator.clipboard.writeText(ask).then(() => setCopied('copied'), selectIt)
+  }
+  return (
+    <div className="detail__next">
+      <span className="ds-kicker">WHAT TO DO NEXT</span>
+      <div className="detail__ask">
+        <code ref={text}>{ask}</code>
+        <button type="button" className="detail__copy" onClick={copy}>
+          {copied === 'copied' ? 'COPIED' : copied === 'select' ? 'SELECTED, PRESS COPY' : 'COPY FOR CLAUDE'}
+        </button>
+      </div>
+      <p className="detail__undo">{UNDO_HINT}</p>
+    </div>
   )
 }

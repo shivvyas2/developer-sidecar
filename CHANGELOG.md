@@ -6,6 +6,29 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Claude is waiting for you.** When Claude Code asks for permission, the
+  workstation shows a banner with Claude's own words and says to answer in the
+  Claude Code window. The tab title starts with "(waiting)", the session picker
+  marks the session, and the stage reads NEEDS YOU, then DONE once Claude's turn
+  ends. Older databases gain the new session columns on open.
+- **A next step for every failure.** A failed step now shows "What to do
+  next": a request to copy into Claude Code, suggested by the explainer from
+  the step's output (or a plain one naming the step when explanations are
+  off), and a reminder that Esc twice or /rewind undoes Claude's changes.
+- **New sessions are offered.** When a Claude Code session starts while you are
+  watching another one, a banner names its project with a button to switch.
+- **Clear offline state.** When the workstation loses its server for more than
+  a few seconds, a banner says so, explains how Sidecar comes back, and offers
+  to try again now. The last steps stay on screen and the stage reads OFFLINE.
+- **A logo, and a drive-in.** Sidecar has a mark: a pixel robot waving from the
+  driver's seat of a yellow cab. It sits in the workstation header, the browser
+  tab, the kit gallery and the README. When the workstation opens, the cab
+  drives across the page once per tab. Any key or click skips it, and it never
+  plays when the system asks for reduced motion. Add `?intro=1` to the address
+  to see it again.
+
 ### Changed
 
 - **Lighter explanations.** The explainer skips steps whose caption already
