@@ -159,32 +159,33 @@ describe('explainer', () => {
   describe('short step ids', () => {
     const answer = (stepId: string, plain: string) => ({ stepId, plain, why: 'w', concept: null, decision: null })
 
-    test('requests number steps 1…n instead of sending tool-use ids, and answers map back in any order', async () => {
+    test('requests label steps s1…sn instead of sending tool-use ids, and answers map back in any order', async () => {
       const users: string[] = []
       const provider: Provider = {
         id: 'api',
         async explain(req) {
           users.push(req.user)
-          return { output: { items: [answer('2', 'second'), answer('1', 'first')] }, usage: { input: 1, output: 1 } }
+          return { output: { items: [answer('s2', 'second'), answer('s1', 'first')] }, usage: { input: 1, output: 1 } }
         },
       }
       const { ex, send, store } = setup(provider)
       send(step('toolu_01AAAAAAAAAAAAAAAAAAAAAA')); send(step('toolu_01BBBBBBBBBBBBBBBBBBBBBB'))
       await vi.advanceTimersByTimeAsync(QUIET_MS)
       await ex.idle()
-      expect(users[0]).toContain('"stepId":"1"')
-      expect(users[0]).toContain('"stepId":"2"')
+      // not bare numbers: a model answering through the CLI (no schema enforcement) could send stepId: 1
+      expect(users[0]).toContain('"stepId":"s1"')
+      expect(users[0]).toContain('"stepId":"s2"')
       expect(users[0]).not.toContain('"stepId":"toolu_')
       const plain = (id: string) => { const e = store.stepsForSession('s1').find((x) => x.id === id)?.explanation; return e && 'plain' in e ? e.plain : e }
       expect(plain('toolu_01AAAAAAAAAAAAAAAAAAAAAA')).toBe('first')
       expect(plain('toolu_01BBBBBBBBBBBBBBBBBBBBBB')).toBe('second')
     })
 
-    test('an answer with an unknown number, or a real id, lands on no step', async () => {
+    test('an answer with an unknown label, or a real id, lands on no step', async () => {
       const provider: Provider = {
         id: 'api',
         async explain() {
-          return { output: { items: [answer('9', 'ghost'), answer('a', 'by real id')] }, usage: { input: 1, output: 1 } }
+          return { output: { items: [answer('s9', 'ghost'), answer('a', 'by real id')] }, usage: { input: 1, output: 1 } }
         },
       }
       const { ex, send, store } = setup(provider)

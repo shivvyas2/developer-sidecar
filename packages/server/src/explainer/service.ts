@@ -42,8 +42,12 @@ export interface ExplainerOptions {
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
-/** Steps are numbered 1…n in a request instead of sending (and getting back) their long tool-use ids. */
-const shortId = (i: number) => String(i + 1)
+/**
+ * Steps are labelled s1…sn in a request instead of sending (and getting back) their long tool-use ids.
+ * Not bare numbers: through the CLI provider the output schema isn't enforced, and a model answering
+ * stepId: 1 would fail it, mark the batch unavailable and, repeated, pause the explainer.
+ */
+const shortId = (i: number) => `s${i + 1}`
 
 export function createExplainer(o: ExplainerOptions): Explainer {
   const now = o.now ?? Date.now
