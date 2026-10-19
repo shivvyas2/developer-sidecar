@@ -197,14 +197,14 @@ describe('recaps', () => {
     expect(s.saveRecap(recap('p1', 'done', 2))).toBe(1)
     expect(s.getRecap('p1')).toMatchObject({ status: 'done', ai: { summary: 'S' }, count: 1 })
     expect(s.saveRecap(recap('p1', 'pending', 3))).toBe(2)
-    expect(s.saveRecap(recap('p2', 'skipped', 4))).toBe(0)
+    expect(s.saveRecap(recap('p2', 'unavailable', 4))).toBe(0)
     expect(s.getRecap('nope')).toBeUndefined()
   })
 
   test('listed per session, oldest first, and deleted with the session', () => {
     const s = openStore(':memory:')
     s.saveRecap(recap('b', 'done', 5))
-    s.saveRecap(recap('a', 'skipped', 2))
+    s.saveRecap(recap('a', 'unavailable', 2))
     s.saveRecap(recap('x', 'done', 1, 's2'))
     expect(s.listRecaps('s1').map((r) => r.turnId)).toEqual(['a', 'b'])
     s.deleteSession('s1')

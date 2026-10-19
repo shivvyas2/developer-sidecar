@@ -111,8 +111,11 @@ export const AiRecapSchema = z.object({
 })
 export type AiRecap = z.infer<typeof AiRecapSchema>
 
-/** pending: the model is writing it. done: it's in `ai`. skipped: no call was made (see `reason`). unavailable: the call failed. */
-export type RecapStatus = 'pending' | 'done' | 'skipped' | 'unavailable'
+/**
+ * pending: the model is writing it. done: it's in `ai`. unavailable: the call failed or recaps are
+ * paused (see `reason`). A turn that needed no call (recaps off, nothing changed) has no entry at all.
+ */
+export type RecapStatus = 'pending' | 'done' | 'unavailable'
 
 /** One turn's AI recap as stored and sent to the workstation. */
 export interface RecapEntry {
