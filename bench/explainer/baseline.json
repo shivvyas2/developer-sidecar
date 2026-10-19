@@ -1,0 +1,34 @@
+{
+  "build-stripe-app": {
+    "finished": 35,
+    "sent": 35,
+    "batches": 6,
+    "requestChars": 46419,
+    "estInputTokens": 11605,
+    "estOutputTokens": 3727
+  },
+  "fix-failing-test": {
+    "finished": 19,
+    "sent": 19,
+    "batches": 3,
+    "requestChars": 26252,
+    "estInputTokens": 6563,
+    "estOutputTokens": 2023
+  },
+  "explore-codebase": {
+    "finished": 25,
+    "sent": 25,
+    "batches": 4,
+    "requestChars": 24754,
+    "estInputTokens": 6189,
+    "estOutputTokens": 2661
+  },
+  "total": {
+    "finished": 79,
+    "sent": 79,
+    "batches": 13,
+    "requestChars": 97425,
+    "estInputTokens": 24357,
+    "estOutputTokens": 8411
+  }
+}
