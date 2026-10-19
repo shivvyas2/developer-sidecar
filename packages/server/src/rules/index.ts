@@ -33,7 +33,13 @@ const rawPart = (c: Ctx, re: RegExp) => c.raw[c.parts.findIndex((p) => re.test(p
 
 // Matched against one simple command at a time (see segments), from its start, so words elsewhere never count.
 const INSTALL = /^(npm|pnpm|yarn|bun)\s+(i|install|add)\b|^(pip3?|uv\s+pip|poetry)\s+(install|add)\b|^python3?\s+-m\s+pip\s+install\b|^uv\s+add\b|^cargo\s+add\b|^go\s+get\b/
-const TEST = /^(?:(?:npm|pnpm|yarn|bun|npx|bunx|python3?|uv|poetry|cargo|go|make|deno)\b.*\b(?:test|vitest|jest|pytest|playwright|mocha)|(?:vitest|jest|pytest|playwright|mocha))\b/
+/** A test runner in the command's runner position, so `npx playwright install` or `tsc -p tsconfig.test.json` is not a test run. */
+const TEST = new RegExp([
+  /^(npm|pnpm|yarn|bun)\s+(run\s+)?test\b/.source,
+  /^((npx|bunx|npm\s+exec|pnpm(\s+(exec|dlx))?|yarn(\s+dlx)?)\s+(-\S+\s+)*)?(vitest|jest|mocha|playwright\s+test|cypress\s+run)\b/.source,
+  /^((python3?\s+-m|uv\s+run|poetry\s+run)\s+)?pytest\b/.source,
+  /^(cargo|go|deno|make)\s+test\b/.source,
+].join('|'))
 const DEPLOY = /^(npx\s+|bunx\s+)?(vercel|netlify\s+deploy|fly\s+deploy|flyctl\s+deploy|railway\s+up|docker\s+push|wrangler\s+deploy)\b/
 const RUN = /^(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start|build|preview)\b|^(npx\s+)?(next|vite)\s+(dev|build)\b|^python3?\s+\S+\.py\b|^node\s+\S+\.(m?js|ts)\b/
 const BUILD = /^(npm|pnpm|yarn|bun)\s+(run\s+)?build\b|^(npx\s+)?(next|vite)\s+build\b/
