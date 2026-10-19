@@ -30,9 +30,16 @@ const RUN = /\b(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start|build|preview)\b|\b(nex
 const DATA_FILE = /(schema\.prisma|\/migrations?\/|\.sql$|drizzle|schema\.(ts|js)$|models?\.py$)/i
 const DATA_CMD = /\b(prisma\s+(migrate|db)|drizzle-kit|alembic|knex\s+migrate|supabase\s+db)\b/
 const GIT = /^\s*(git\s+(commit|push|merge|tag|checkout\s+-b|switch\s+-c|branch)|gh\s+pr\s+(create|merge))\b/
-/** One command that only looks. Anything chained, piped, redirected or substituted is not read-only. */
+/** One command that only looks. Anything chained (a newline too), piped, redirected or substituted is not read-only. */
 const LOOK = /^\s*(ls|pwd|cat|head|tail|wc|tree|file|stat|which|find|grep|rg|git\s+(status|diff|log|show))\b/
-const NOT_ONLY_LOOKING = /[|;&<>`]|\$\(|\s-(exec|execdir|delete|ok|fprint)\b/
+const NOT_ONLY_LOOKING = new RegExp([
+  /[|;&<>`\n\r]|\$\(/.source,
+  // flags that write a file, run a command or never return
+  /\s-(exec|execdir|delete|ok|okdir|fprint\w*|fls)\b/.source,
+  /^\s*git\b.*\s--output\b/.source,
+  /^\s*tree\b.*\s-o\b/.source,
+  /^\s*tail\b.*\s(-[a-zA-Z0-9]*[fF]|--follow)\b/.source,
+].join('|'))
 
 function packagesFrom(command: string): string {
   const m = command.match(/\b(?:i|install|add|get)\b(.*)$/)
