@@ -41,6 +41,9 @@ const NOT_ONLY_LOOKING = new RegExp([
   /^\s*tail\b.*\s(-[a-zA-Z0-9]*[fF]|--follow)\b/.source,
 ].join('|'))
 
+/** A shell command that names a .env file: handled like the Read tool on one, as secrets, never as a quick look. */
+const ENV_FILE = /(^|[\s/'"=])\.env(\.[\w.-]+)?(?=$|[\s'";|&>)])/
+
 function packagesFrom(command: string): string {
   const m = command.match(/\b(?:i|install|add|get)\b(.*)$/)
   const pkgs = (m?.[1] ?? '').split(/\s+/).filter((t) => t && !t.startsWith('-') && !t.includes('='))
@@ -82,7 +85,7 @@ const RULES: Rule[] = [
   },
   {
     id: 'read',
-    match: (c) => LOOK.test(c.command) && !NOT_ONLY_LOOKING.test(c.command),
+    match: (c) => LOOK.test(c.command) && !NOT_ONLY_LOOKING.test(c.command) && !ENV_FILE.test(c.command),
     build: (c) => ({
       caption: /^\s*git\b/.test(c.command) ? 'Checking what has changed in your code' : 'Looking around your project',
       scene: scenes.read,
@@ -124,9 +127,9 @@ const RULES: Rule[] = [
   },
   {
     id: 'external',
-    match: (c) => c.name === 'WebFetch' || c.name === 'WebSearch' || /^\.env(\.|$)/.test(basename(c.file)) || /\b(curl|wget)\s+\S*https?:/.test(c.command),
+    match: (c) => c.name === 'WebFetch' || c.name === 'WebSearch' || /^\.env(\.|$)/.test(basename(c.file)) || ENV_FILE.test(c.command) || /\b(curl|wget)\s+\S*https?:/.test(c.command),
     build: (c) => {
-      if (/^\.env/.test(basename(c.file))) {
+      if (/^\.env/.test(basename(c.file)) || ENV_FILE.test(c.command)) {
         return { caption: 'Storing secret settings (like API keys) safely outside the code', scene: (cap) => scenes.connect(cap, undefined, c.failed) }
       }
       if (c.name === 'WebSearch') {

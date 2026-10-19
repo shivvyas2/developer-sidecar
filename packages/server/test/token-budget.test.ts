@@ -8,7 +8,7 @@ import { SESSIONS } from '../../../bench/explainer/sessions'
  * skipped and requests trimmed, these sessions sent 79 steps in 97,425 request characters; the ceilings
  * leave about 20% headroom over what they send now, so a change that puts bulk back fails here.
  */
-const MAX_SENT = 35
+const MAX_SENT = 36
 const MAX_REQUEST_CHARS = 36_000
 
 const runs: SessionRun[] = []
