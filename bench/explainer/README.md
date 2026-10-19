@@ -1,7 +1,9 @@
 # Explainer token bench
 
 Measures how many tokens the explainer spends on three sample Claude Code sessions, so a change to
-what gets explained, or how, can be compared with the numbers in `baseline.json`.
+what gets explained, or how, can be compared with the numbers in `baseline.json`. The committed
+baseline is from before routine steps were skipped and requests trimmed. The CI guard in
+`packages/server/test/token-budget.test.ts` runs the same sessions with fixed ceilings.
 
 The sessions in `sessions.ts` are raw hook payloads, shaped like what Claude Code really sends. They
 play through the real pipeline and explainer with a fake clock, so batching matches a live server.
