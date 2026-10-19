@@ -39,6 +39,9 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
   // eslint-disable-next-line react-hooks/exhaustive-deps -- ids are read on purpose but must not retrigger a reset
   useEffect(() => { dispatch({ type: 'reset', ids }); setReplay(null); select({ type: 'reset' }) }, [sessionId, loaded])
   useEffect(() => { dispatch({ type: 'sync', ids }) }, [ids])
+  // When Claude stops or needs you, the stage shows where things ended, not a scene still in line.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new tag should catch up
+  useEffect(() => { if (liveTag === 'DONE' || liveTag === 'NEEDS YOU') dispatch({ type: 'catchUp', ids }) }, [liveTag])
   // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new request should pick
   useEffect(() => { if (pickRequest && ids.includes(pickRequest)) select({ type: 'pick', id: pickRequest, latestId }) }, [pickRequest])
 
