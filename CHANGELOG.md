@@ -15,6 +15,9 @@ All notable changes to Developer Sidecar are recorded here. The format follows
   worked. On the sample sessions in `bench/explainer` that is 5 requests
   instead of 9 and about 75% fewer tokens, and a long turn costs no more than
   a short one. Explanations already stored still show on older steps.
+  Secrets are scrubbed before anything is shortened, a recap that can't
+  finish says so instead of waiting forever, and a turn that ended while
+  recaps were paused gets its recap when they resume.
 - **Where things stand.** The Stage opens with a card that sums up the last
   thing you asked: how it ended, the parts made or changed, building blocks
   added and whether the checks pass. When a dev server is up there is an
