@@ -50,10 +50,10 @@ export async function runSession(s: BenchSession): Promise<SessionRun> {
     hub.subscribe((m) => { if (m.type === 'explanation') explained.push(m.stepId) })
     const provider: Provider = {
       id: 'api',
-      async explain(req) {
+      async call(req) {
         requests.push(req)
         const output = { items: idsIn(req).map(cannedItem) }
-        return { output, usage: { input: 0, output: 0 } }
+        return { output: output as never, usage: { input: 0, output: 0 } }
       },
     }
     const pipeline = createPipeline({ store, hub, now: () => clock })

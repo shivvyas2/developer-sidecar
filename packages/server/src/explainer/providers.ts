@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
+import type { z } from 'zod'
 import type { TokenUsage } from '@sidecar/shared'
 import { ExplainOutputSchema, type ExplainOutput, type ExplainRequest } from './prompt'
 
@@ -16,10 +17,19 @@ export class ExplainError extends Error {
   }
 }
 
-export interface ProviderResult { output: ExplainOutput; usage: TokenUsage }
+/** One model call: the prompt, the shape of the answer, and the most it may write. */
+export interface ModelTask<T> {
+  system: string
+  user: string
+  schema: z.ZodType<T>
+  maxTokens: number
+  /** The answer's shape spelled out, for the CLI, which can't enforce a schema. */
+  shape: string
+}
+export interface ProviderResult<T = ExplainOutput> { output: T; usage: TokenUsage }
 export interface Provider {
   id: 'api' | 'cli'
-  explain(req: ExplainRequest, level: ModelLevel): Promise<ProviderResult>
+  call<T>(task: ModelTask<T>, level: ModelLevel): Promise<ProviderResult<T>>
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the SDK's create() is heavily overloaded; tests pass a fake
@@ -44,16 +54,16 @@ function classify(err: unknown): ExplainError {
 export function anthropicProvider(client: MessagesClient = new Anthropic({ maxRetries: 0, timeout: 60_000 })): Provider {
   return {
     id: 'api',
-    async explain(req, level) {
+    async call(task, level) {
       let res: ApiMessage
       try {
         // create(), not parse(): parse() throws on malformed output before we can read stop_reason or usage
         res = await client.messages.create({
           model: API_MODEL[level],
-          max_tokens: 8000,
-          output_config: { effort: 'low', format: zodOutputFormat(ExplainOutputSchema) },
-          system: req.system,
-          messages: [{ role: 'user', content: req.user }],
+          max_tokens: task.maxTokens,
+          output_config: { effort: 'low', format: zodOutputFormat(task.schema) },
+          system: task.system,
+          messages: [{ role: 'user', content: task.user }],
         }) as ApiMessage
       } catch (err) {
         throw classify(err)
@@ -69,7 +79,7 @@ export function anthropicProvider(client: MessagesClient = new Anthropic({ maxRe
       } catch {
         throw new ExplainError(MALFORMED, true, usage)
       }
-      const parsed = ExplainOutputSchema.safeParse(json)
+      const parsed = task.schema.safeParse(json)
       if (!parsed.success) throw new ExplainError(MALFORMED, true, usage)
       return { output: parsed.data, usage }
     },
@@ -112,7 +122,7 @@ export function extractJson(text: string): unknown {
   }
 }
 
-const JSON_SHAPE = 'Respond with ONLY one JSON object of the form {"items":[{"stepId":"…","plain":"…","why":"…","concept":{"term":"…","definition":"…"} or null,"decision":{"title":"…","choice":"…","alternatives":["…"],"reason":"…"} or null,"next":"…" or null}]} and nothing else.'
+export const JSON_SHAPE = 'Respond with ONLY one JSON object of the form {"items":[{"stepId":"…","plain":"…","why":"…","concept":{"term":"…","definition":"…"} or null,"decision":{"title":"…","choice":"…","alternatives":["…"],"reason":"…"} or null,"next":"…" or null}]} and nothing else.'
 
 /** Marks the child as Sidecar's own run and drops the markers a nested-session guard would refuse on. */
 export function childEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -123,10 +133,10 @@ export function childEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 export function cliProvider(run: Runner = runClaude, env: NodeJS.ProcessEnv = process.env): Provider {
   return {
     id: 'cli',
-    async explain(req, level) {
+    async call(task, level) {
       let r: Awaited<ReturnType<Runner>>
       try {
-        r = await run(CLI_ARGS(level, req.system), `${JSON_SHAPE}\n\n${req.user}`, { env: childEnv(env), timeoutMs: 120_000 })
+        r = await run(CLI_ARGS(level, task.system), `${task.shape}\n\n${task.user}`, { env: childEnv(env), timeoutMs: 120_000 })
       } catch (err) {
         const missing = (err as NodeJS.ErrnoException).code === 'ENOENT'
         throw new ExplainError(missing ? 'The claude command is not installed.' : `Could not run claude: ${(err as Error).message}`, !missing)
@@ -140,7 +150,7 @@ export function cliProvider(run: Runner = runClaude, env: NodeJS.ProcessEnv = pr
         throw new ExplainError('claude returned output that is not JSON.', true)
       }
       if (outer.is_error || typeof outer.result !== 'string') throw new ExplainError('claude reported an error.', true)
-      const parsed = ExplainOutputSchema.safeParse(extractJson(outer.result))
+      const parsed = task.schema.safeParse(extractJson(outer.result))
       if (!parsed.success) throw new ExplainError('claude returned explanations in the wrong shape.', true)
       const u = outer.usage ?? {}
       return {
@@ -150,6 +160,10 @@ export function cliProvider(run: Runner = runClaude, env: NodeJS.ProcessEnv = pr
     },
   }
 }
+
+/** The per-step explanation request as a task. */
+export const explainTask = (req: ExplainRequest): ModelTask<ExplainOutput> =>
+  ({ ...req, schema: ExplainOutputSchema, maxTokens: 8000, shape: JSON_SHAPE })
 
 export const claudeAvailable = (run: Runner = runClaude) => async (): Promise<boolean> => {
   try {

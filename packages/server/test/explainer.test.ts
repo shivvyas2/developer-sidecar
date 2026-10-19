@@ -19,7 +19,7 @@ function fakeProvider(behaviour: (ids: string[]) => Promise<unknown> | unknown =
   // Requests number their steps 1…n; tests name steps by their caption (= id) and answer with those names.
   const provider: Provider = {
     id: 'api',
-    async explain(req) {
+    async call(req) {
       const sent = req.user.split('\n').filter((l) => l.startsWith('{"stepId"')).map((l) => JSON.parse(l) as { stepId: string; caption: string })
       const ids = sent.map((s) => s.caption)
       calls.push(ids)
@@ -200,9 +200,9 @@ describe('explainer', () => {
       const users: string[] = []
       const provider: Provider = {
         id: 'api',
-        async explain(req) {
+        async call(req) {
           users.push(req.user)
-          return { output: { items: [answer('s2', 'second'), answer('s1', 'first')] }, usage: { input: 1, output: 1 } }
+          return { output: { items: [answer('s2', 'second'), answer('s1', 'first')] } as never, usage: { input: 1, output: 1 } }
         },
       }
       const { ex, send, store } = setup(provider)
@@ -221,8 +221,8 @@ describe('explainer', () => {
     test('an answer with an unknown label, or a real id, lands on no step', async () => {
       const provider: Provider = {
         id: 'api',
-        async explain() {
-          return { output: { items: [answer('s9', 'ghost'), answer('a', 'by real id')] }, usage: { input: 1, output: 1 } }
+        async call() {
+          return { output: { items: [answer('s9', 'ghost'), answer('a', 'by real id')] } as never, usage: { input: 1, output: 1 } }
         },
       }
       const { ex, send, store } = setup(provider)
@@ -319,7 +319,7 @@ describe('explainer', () => {
 
   test('sends the project name and the latest prompt as context', async () => {
     let user = ''
-    const provider: Provider = { id: 'api', async explain(req) { user = req.user; return { output: { items: [] }, usage: { input: 0, output: 0 } } } }
+    const provider: Provider = { id: 'api', async call(req) { user = req.user; return { output: { items: [] } as never, usage: { input: 0, output: 0 } } } }
     const { ex, send, store } = setup(provider)
     store.saveStep(step('p', { category: 'prompt', toolName: 'UserPrompt', input: { prompt: 'add checkout' } }))
     send(step('a'))

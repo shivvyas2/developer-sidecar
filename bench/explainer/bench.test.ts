@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { expect, test } from 'vitest'
 import { isExplained } from '@sidecar/shared'
 import { normalize } from '../../packages/server/src/explainer/prompt'
-import { anthropicProvider, API_MODEL } from '../../packages/server/src/explainer/providers'
+import { anthropicProvider, API_MODEL, explainTask } from '../../packages/server/src/explainer/providers'
 import { runSession, statsOf, idsIn, type SessionRun, type Stats } from './run'
 import { SESSIONS } from './sessions'
 
@@ -78,7 +78,7 @@ test('explainer token bench', { timeout: 10 * 60_000 }, async () => {
       const byId = new Map(run.steps.map((s) => [s.id, s]))
       notes.push(`## ${run.name}\n`)
       for (const [i, r] of run.requests.entries()) {
-        const res = await live.explain(r, 'haiku')
+        const res = await live.call(explainTask(r), 'haiku')
         row.inputTokens += res.usage.input
         row.outputTokens += res.usage.output
         const ids = idsIn(r)

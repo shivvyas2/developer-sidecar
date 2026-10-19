@@ -4,7 +4,7 @@ import type { Hub } from '../hub'
 import type { SettingsStore } from '../settings'
 import type { Store } from '../store'
 import { buildRequest, normalize, toInput } from './prompt'
-import { ExplainError, type ModelLevel, type Provider, type ProviderResult } from './providers'
+import { ExplainError, explainTask, type ModelLevel, type Provider, type ProviderResult } from './providers'
 
 export const QUIET_MS = 3000
 /** Longest a queued step waits while routine steps keep the session busy. */
@@ -136,7 +136,7 @@ export function createExplainer(o: ExplainerOptions): Explainer {
       for (let attempt = 0; attempt < 2 && !result; attempt++) {
         if (attempt > 0 && cancelled()) break
         try {
-          result = await provider.explain(req, lvl)
+          result = await provider.call(explainTask(req), lvl)
         } catch (err) {
           error = err instanceof ExplainError ? err : new ExplainError(String(err), true)
           // a failed attempt can still have spent tokens
