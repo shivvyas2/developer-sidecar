@@ -10,6 +10,8 @@ interface Ctx {
   command: string
   /** The command's simple commands with quoted text blanked (see segments). */
   parts: string[]
+  /** The same parts with their quoted text kept, for reading names out of them (see segments). */
+  raw: string[]
   file: string
   name: string
   failed: boolean
@@ -26,10 +28,18 @@ const short = (s: string, n = 100) => (s.length > n ? `${s.slice(0, n - 1)}…` 
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
 /** The first simple command that matches, so `git add -A && git commit` is a commit and a commit message never matches. */
 const part = (c: Ctx, re: RegExp) => c.parts.find((p) => re.test(p))
+/** That part with its quoted text kept, so `npm i "@scope/pkg"` names the package, not the quotes. */
+const rawPart = (c: Ctx, re: RegExp) => c.raw[c.parts.findIndex((p) => re.test(p))]
 
 // Matched against one simple command at a time (see segments), from its start, so words elsewhere never count.
 const INSTALL = /^(npm|pnpm|yarn|bun)\s+(i|install|add)\b|^(pip3?|uv\s+pip|poetry)\s+(install|add)\b|^python3?\s+-m\s+pip\s+install\b|^uv\s+add\b|^cargo\s+add\b|^go\s+get\b/
-const TEST = /^(?:(?:npm|pnpm|yarn|bun|npx|bunx|python3?|uv|poetry|cargo|go|make|deno)\b.*\b(?:test|vitest|jest|pytest|playwright|mocha)|(?:vitest|jest|pytest|playwright|mocha))\b/
+/** A test runner in the command's runner position, so `npx playwright install` or `tsc -p tsconfig.test.json` is not a test run. */
+const TEST = new RegExp([
+  /^(npm|pnpm|yarn|bun)\s+(run\s+)?test\b/.source,
+  /^((npx|bunx|npm\s+exec|pnpm(\s+(exec|dlx))?|yarn(\s+dlx)?)\s+(-\S+\s+)*)?(vitest|jest|mocha|playwright\s+test|cypress\s+run)\b/.source,
+  /^((python3?\s+-m|uv\s+run|poetry\s+run)\s+)?pytest\b/.source,
+  /^(cargo|go|deno|make)\s+test\b/.source,
+].join('|'))
 const DEPLOY = /^(npx\s+|bunx\s+)?(vercel|netlify\s+deploy|fly\s+deploy|flyctl\s+deploy|railway\s+up|docker\s+push|wrangler\s+deploy)\b/
 const RUN = /^(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start|build|preview)\b|^(npx\s+)?(next|vite)\s+(dev|build)\b|^python3?\s+\S+\.py\b|^node\s+\S+\.(m?js|ts)\b/
 const BUILD = /^(npm|pnpm|yarn|bun)\s+(run\s+)?build\b|^(npx\s+)?(next|vite)\s+build\b/
@@ -53,36 +63,47 @@ const ENV_FILE = /(^|[\s/'"=])\.env(\.[\w.-]+)?(?=$|[\s'";|&>)])/
 /**
  * The simple commands in a shell line, split on `&&`, `||`, `;`, `|`, `&` and newlines. Quoted text is blanked, so a
  * commit message or an echo can't look like a command, and leading env assignments, `sudo` and subshell brackets go.
+ * With `raw`, the same parts keep their quoted text and lose the quotes (`pip install "django>=4"` gives `django>=4`).
  */
-export function segments(cmd: string): string[] {
-  const out: string[] = []
+export function segments(cmd: string, o: { raw?: boolean } = {}): string[] {
+  // blank and raw stay the same length, char for char; raw marks each quote with \0 so it can be dropped at the end
+  const out: { blank: string; raw: string }[] = []
   let cur = ''
+  let raw = ''
   let quote = ''
+  const cut = () => { out.push({ blank: cur, raw }); cur = ''; raw = '' }
   for (let i = 0; i < cmd.length; i++) {
     const ch = cmd[i]!
     if (quote) {
-      if (ch === quote) { quote = ''; cur += ch } else { if (ch === '\\' && quote === '"') i++; cur += ' ' }
+      if (ch === quote) { quote = ''; cur += ch; raw += '\0'; continue }
+      if (ch === '\\' && quote === '"') i++
+      cur += ' '
+      raw += cmd[i] ?? ' '
       continue
     }
-    if (ch === '"' || ch === "'") { quote = ch; cur += ch; continue }
+    if (ch === '"' || ch === "'") { quote = ch; cur += ch; raw += '\0'; continue }
     // an escaped character, or a line continuation, stays inside the command
-    if (ch === '\\') { cur += ch + (cmd[i + 1] ?? ''); i++; continue }
+    if (ch === '\\') { const two = ch + (cmd[i + 1] ?? ''); cur += two; raw += two; i++; continue }
     const two = cmd.slice(i, i + 2)
-    if (two === '&&' || two === '||') { out.push(cur); cur = ''; i++; continue }
+    if (two === '&&' || two === '||') { cut(); i++; continue }
     // a lone & runs in the background, but 2>&1 and &> are redirections
     const background = ch === '&' && !/[<>]/.test(cmd[i - 1] ?? '') && cmd[i + 1] !== '>'
-    if (ch === ';' || ch === '|' || ch === '\n' || ch === '\r' || background) { out.push(cur); cur = ''; continue }
+    if (ch === ';' || ch === '|' || ch === '\n' || ch === '\r' || background) { cut(); continue }
     cur += ch
+    raw += ch
   }
-  out.push(cur)
-  return out
-    .map((s) => s.trim().replace(/^[({]\s*/, '').replace(/^(\w+=\S*\s+)+/, '').replace(/^(sudo|time|exec)\s+/, '').trim())
-    .filter(Boolean)
+  cut()
+  return out.flatMap((s) => {
+    const end = s.blank.trimEnd().length
+    const start = s.blank.slice(0, end).match(/^\s*(?:[({]\s*)?(?:\w+=(?:"[^"]*"|'[^']*'|\S*)\s+)*(?:(?:sudo|time|exec)\s+)?\s*/)![0].length
+    if (start >= end) return []
+    return [o.raw ? s.raw.slice(start, end).replaceAll('\0', '').trim() : s.blank.slice(start, end)]
+  })
 }
 
 function packagesFrom(command: string): string {
   const m = command.match(/\b(?:i|install|add|get)\b(.*)$/)
-  const pkgs = (m?.[1] ?? '').split(/\s+/).filter((t) => t && !t.startsWith('-') && !t.includes('='))
+  const pkgs = (m?.[1] ?? '').split(/\s+/).filter((t) => t && !t.startsWith('-') && !/^\w+=(?!=)/.test(t))
   return pkgs.length ? pkgs.slice(0, 4).join(', ') + (pkgs.length > 4 ? '…' : '') : ''
 }
 
@@ -131,7 +152,7 @@ const RULES: Rule[] = [
     id: 'install',
     match: (c) => !!part(c, INSTALL),
     build: (c) => {
-      const pkgs = packagesFrom(part(c, INSTALL) ?? '')
+      const pkgs = packagesFrom(rawPart(c, INSTALL) ?? '')
       return { caption: pkgs ? `Adding ready-made building blocks: ${pkgs}` : 'Installing the project’s building blocks', scene: (cap) => scenes.toolbox(cap, c.failed) }
     },
   },
@@ -222,6 +243,7 @@ export function translate(step: Step): Translation {
     input,
     command,
     parts: segments(command),
+    raw: segments(command, { raw: true }),
     file: str(input.file_path) || str(input.notebook_path) || str(input.path),
     name: step.toolName,
     failed: step.status === 'failed',
