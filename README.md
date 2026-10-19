@@ -1,3 +1,5 @@
+<p align="center"><img src="apps/web/src/brand/sidecar.svg" width="160" height="160" alt="The Sidecar mark: a pixel robot waving from the driver's seat of a yellow cab"></p>
+
 <h1 align="center">Developer Sidecar</h1>
 
 <p align="center">A Claude Code plugin that shows what Claude is doing as live technical-drawing scenes and plain-English explanations, so people who build with AI can understand what is being built and why.</p>

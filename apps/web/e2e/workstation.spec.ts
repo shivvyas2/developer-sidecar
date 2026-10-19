@@ -79,3 +79,14 @@ test('the kit gallery renders', async ({ page }) => {
   await expect(page.getByLabel('Terminal renderer preview')).toHaveCount(2)
   await expect(page.getByLabel('Terminal renderer preview').first()).toBeVisible()
 })
+
+test('the header carries the mark and the intro drives off by itself', async ({ page }) => {
+  await page.goto(url())
+  await expect(page.locator('.hdr .sc-logo')).toBeVisible()
+  // Automation never sees the intro unless it is asked for.
+  await expect(page.locator('.intro')).toHaveCount(0)
+  await page.goto(`${url()}?intro=1`)
+  await expect(page.locator('.intro .sc-logo--driving')).toBeVisible()
+  await expect(page.locator('.intro')).toHaveCount(0, { timeout: 6000 })
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('type', 'image/svg+xml')
+})

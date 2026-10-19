@@ -22,6 +22,12 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 - **Clear offline state.** When the workstation loses its server for more than
   a few seconds, a banner says so, explains how Sidecar comes back, and offers
   to try again now. The last steps stay on screen and the stage reads OFFLINE.
+- **A logo, and a drive-in.** Sidecar has a mark: a pixel robot waving from the
+  driver's seat of a yellow cab. It sits in the workstation header, the browser
+  tab, the kit gallery and the README. When the workstation opens, the cab
+  drives across the page once per tab. Any key or click skips it, and it never
+  plays when the system asks for reduced motion. Add `?intro=1` to the address
+  to see it again.
 
 ## [0.1.0] - 2026-10-15
 
