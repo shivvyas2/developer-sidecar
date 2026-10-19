@@ -30,6 +30,9 @@ const RUN = /\b(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start|build|preview)\b|\b(nex
 const DATA_FILE = /(schema\.prisma|\/migrations?\/|\.sql$|drizzle|schema\.(ts|js)$|models?\.py$)/i
 const DATA_CMD = /\b(prisma\s+(migrate|db)|drizzle-kit|alembic|knex\s+migrate|supabase\s+db)\b/
 const GIT = /^\s*(git\s+(commit|push|merge|tag|checkout\s+-b|switch\s+-c|branch)|gh\s+pr\s+(create|merge))\b/
+/** One command that only looks. Anything chained, piped, redirected or substituted is not read-only. */
+const LOOK = /^\s*(ls|pwd|cat|head|tail|wc|tree|file|stat|which|find|grep|rg|git\s+(status|diff|log|show))\b/
+const NOT_ONLY_LOOKING = /[|;&<>`]|\$\(|\s-(exec|execdir|delete|ok|fprint)\b/
 
 function packagesFrom(command: string): string {
   const m = command.match(/\b(?:i|install|add|get)\b(.*)$/)
@@ -68,6 +71,14 @@ const RULES: Rule[] = [
     build: (c) => ({
       caption: /push|pr\s+create/.test(c.command) ? 'Saving a checkpoint and sending it to GitHub' : 'Saving a checkpoint of your code',
       scene: (cap) => scenes.ship(cap, c.failed),
+    }),
+  },
+  {
+    id: 'read',
+    match: (c) => LOOK.test(c.command) && !NOT_ONLY_LOOKING.test(c.command),
+    build: (c) => ({
+      caption: /^\s*git\b/.test(c.command) ? 'Checking what has changed in your code' : 'Looking around your project',
+      scene: scenes.read,
     }),
   },
   {
