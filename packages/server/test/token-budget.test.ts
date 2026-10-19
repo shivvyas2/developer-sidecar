@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { routineIds } from '@sidecar/shared'
 import { runSession, statsOf, type SessionRun } from '../../../bench/explainer/run'
-import { SESSIONS } from '../../../bench/explainer/sessions'
+import { EDGE_SESSIONS, SESSIONS } from '../../../bench/explainer/sessions'
 
 /**
  * Keeps the explainer lean on the bench's sample sessions (see bench/explainer). Before routine steps were
@@ -13,23 +13,28 @@ const MAX_REQUEST_CHARS = 36_000
 
 const runs: SessionRun[] = []
 for (const s of SESSIONS) runs.push(await runSession(s))
+const edges: SessionRun[] = []
+for (const s of EDGE_SESSIONS) edges.push(await runSession(s))
 
-const lines = (run: SessionRun) => run.requests.flatMap((r) =>
-  r.user.split('\n').filter((l) => l.startsWith('{"stepId"')).map((l) => JSON.parse(l) as { tool: string; input: Record<string, unknown> }))
+interface Sent { tool: string; input: Record<string, unknown>; output?: unknown }
+const sentSteps = (r: SessionRun['requests'][number]) =>
+  r.user.split('\n').filter((l) => l.startsWith('{"stepId"')).map((l) => JSON.parse(l) as Sent)
+const lines = (run: SessionRun) => run.requests.flatMap(sentSteps)
 
-describe.each(runs.map((r) => [r.name, r] as const))('%s', (_name, run) => {
+describe.each([...runs, ...edges].map((r) => [r.name, r] as const))('%s', (_name, run) => {
   test('no routine step is sent', () => {
     const routine = routineIds(run.steps)
     expect(routine.size).toBeGreaterThan(0)
     expect(run.sent.filter((id) => routine.has(id))).toEqual([])
   })
 
-  test('every failed step is sent with the start of its error', () => {
+  test('every failed step is sent with something that says why', () => {
     for (const s of run.steps.filter((x) => x.status === 'failed')) {
       const i = run.batches.findIndex((b) => b.includes(s.id))
       expect(i, `${s.caption} was not sent`).toBeGreaterThanOrEqual(0)
-      const head = JSON.stringify(String(s.output).slice(0, 40)).slice(1, -1)
-      expect(run.requests[i]!.user).toContain(head)
+      const sent = sentSteps(run.requests[i]!)[run.batches[i]!.indexOf(s.id)]!
+      expect(sent.output, `${s.caption} was sent without output`).toBeDefined()
+      if (typeof s.output === 'string') expect(sent.output).toContain(s.output.slice(0, 40))
     }
   })
 
@@ -46,4 +51,23 @@ test('the sample sessions stay under the token budget', () => {
   const total = runs.map(statsOf).reduce((a, s) => ({ sent: a.sent + s.sent, chars: a.chars + s.requestChars }), { sent: 0, chars: 0 })
   expect(total.sent).toBeLessThanOrEqual(MAX_SENT)
   expect(total.chars).toBeLessThanOrEqual(MAX_REQUEST_CHARS)
+})
+
+describe('edge cases', () => {
+  const edge = edges[0]!
+  const byCaption = (re: RegExp) => edge.steps.find((s) => re.test(s.caption))!
+  test('a multi-line command is explained, not skipped as a look', () => {
+    expect(edge.sent).toContain(edge.steps.find((s) => String((s.input as { command?: string }).command).startsWith('ls dist'))!.id)
+  })
+  test('a cancelled command is sent as failed and says it was interrupted', () => {
+    const run = byCaption(/starting your app/i)
+    expect(run.status).toBe('failed')
+    expect(edge.sent).toContain(run.id)
+    const i = edge.batches.findIndex((b) => b.includes(run.id))
+    expect(sentSteps(edge.requests[i]!)[edge.batches[i]!.indexOf(run.id)]!.output).toEqual({ interrupted: true })
+  })
+  test('reading secrets through the shell is explained, and the key never reaches the model', () => {
+    expect(edge.sent).toContain(byCaption(/secret settings/i).id)
+    for (const r of edge.requests) expect(r.user).not.toMatch(/sk_test_51P/)
+  })
 })

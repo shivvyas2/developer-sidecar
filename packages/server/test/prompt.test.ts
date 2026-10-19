@@ -78,6 +78,16 @@ describe('toInput', () => {
     expect(out).toMatch(/1 failed \| 5 passed \(6\)$/)
     expect(out.length).toBeLessThan(1600)
   })
+  test('a failed shell step keeps what says why, even with empty stdout and stderr', () => {
+    const cancelled = toInput(step({ category: 'test', status: 'failed', output: { stdout: '', stderr: '', interrupted: true, isImage: false } }))
+    expect(cancelled.output).toEqual({ interrupted: true })
+    const flagged = toInput(step({ category: 'run', status: 'failed', output: { stdout: 'partial', stderr: '', is_error: true, returnCodeInterpretation: 'Exit code 137', isImage: false } }))
+    expect(flagged.output).toEqual({ stdout: 'partial', is_error: true, returnCodeInterpretation: 'Exit code 137' })
+  })
+  test('a failed step with no recognised fields still sends its output', () => {
+    const odd = toInput(step({ status: 'failed', output: { stdout: '', stderr: '', reason: 'killed by timeout' } }))
+    expect(JSON.stringify(odd.output)).toContain('killed by timeout')
+  })
   test('an empty shell output is left out', () => {
     expect(toInput(step({ output: { stdout: '', stderr: '  ', interrupted: false } }))).not.toHaveProperty('output')
   })

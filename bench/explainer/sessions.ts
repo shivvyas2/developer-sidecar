@@ -87,10 +87,10 @@ function builder(name: string, cwd: string, seed: number) {
       })
       return b
     },
-    bash(command: string, stdout = '', opts: { stderr?: string; fail?: string; description?: string } = {}) {
+    bash(command: string, stdout = '', opts: { stderr?: string; fail?: string; description?: string; interrupted?: boolean } = {}) {
       const input = { command, description: opts.description ?? command.split(' ').slice(0, 3).join(' ') }
       if (opts.fail) { tool('Bash', input, undefined, opts.fail); return b }
-      tool('Bash', input, { stdout, stderr: opts.stderr ?? '', interrupted: false, isImage: false, noOutputExpected: false })
+      tool('Bash', input, { stdout, stderr: opts.stderr ?? '', interrupted: opts.interrupted ?? false, isImage: false, noOutputExpected: false })
       return b
     },
     stop() { events.push({ gapMs: STEP_GAP, payload: { ...base('Stop') } }); return b },
@@ -557,3 +557,21 @@ const exploreCodebase = builder('explore-codebase', '/Users/sam/shop', 37)
   .done()
 
 export const SESSIONS: readonly BenchSession[] = [buildStripeApp, fixFailingTest, exploreCodebase]
+
+/**
+ * Cases the CI guard checks but the bench doesn't measure (so its numbers stay comparable with the
+ * baseline): a cancelled command with no output, a multi-line command that starts with ls, and
+ * reading secrets through the shell.
+ */
+export const EDGE_SESSIONS: readonly BenchSession[] = [
+  builder('edge-cases', '/Users/sam/shop', 51)
+    .has('lib/products.ts', PRODUCTS_TS)
+    .start()
+    .prompt('Clean the build and run the dev server')
+    .bash('ls dist\nrm -rf dist\nmkdir dist', 'index.html\nassets')
+    .bash('npm run dev', '', { interrupted: true })
+    .bash('cat .env.local', `STRIPE_SECRET_KEY=${FAKE_STRIPE_KEY}`)
+    .read('lib/products.ts')
+    .stop()
+    .done(),
+]

@@ -44,9 +44,21 @@ function summarizeInput(tool: string, input: unknown): unknown {
   }
 }
 
+/** The fields of a shell result that say why it failed, when set. */
+const failureSignal = (k: string, v: unknown): boolean => {
+  switch (k) {
+    case 'interrupted': case 'is_error': case 'isError': return v === true
+    case 'success': return v === false
+    case 'error': case 'returnCodeInterpretation': return typeof v === 'string' && v.trim() !== ''
+    case 'exitCode': case 'exit_code': return typeof v === 'number'
+    default: return false
+  }
+}
+
 /**
  * A failure keeps up to FIELD_CHARS from both ends, since the error can be anywhere; a success keeps
- * only its end. Shell output keeps just stdout and stderr, and an empty one is left out.
+ * only its end. Shell output keeps stdout and stderr, plus, for a failure, the fields that say why
+ * (interrupted, is_error…). An empty successful output is left out; a failure always sends something.
  */
 function trimOutput(output: unknown, failed: boolean): unknown {
   const cut = (s: string, max: number) => failed ? headTail(s, max) : s.length > max ? `…${s.slice(s.length - max)}` : s
@@ -54,8 +66,10 @@ function trimOutput(output: unknown, failed: boolean): unknown {
   if (typeof output === 'string') return output.trim() ? cut(output, max) : undefined
   if (isRecord(output) && ('stdout' in output || 'stderr' in output)) {
     const streams = (['stdout', 'stderr'] as const).filter((k) => typeof output[k] === 'string' && (output[k] as string).trim())
-    if (streams.length === 0) return undefined
-    return Object.fromEntries(streams.map((k) => [k, cut(output[k] as string, Math.floor(max / streams.length))]))
+    const out: Record<string, unknown> = Object.fromEntries(streams.map((k) => [k, cut(output[k] as string, Math.floor(max / streams.length))]))
+    if (failed) for (const [k, v] of Object.entries(output)) if (failureSignal(k, v)) out[k] = typeof v === 'string' ? cut(v, 300) : v
+    if (Object.keys(out).length > 0) return out
+    return failed ? limitSize(output, max) : undefined
   }
   return limitSize(output, max)
 }
