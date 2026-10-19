@@ -153,3 +153,15 @@ test('steps carry a revision and answer 304 when it is unchanged', async () => {
   expect(stale.status).toBe(200)
   expect(stale.headers.get('x-sidecar-rev')).toBe(rev)
 })
+
+test('steps say what the session is waiting on, even when unchanged', async () => {
+  const app = make()
+  await app.request(U('/events'), { method: 'POST', headers: AUTH, body: JSON.stringify(event) })
+  const first = await app.request(U('/api/sessions/s1/steps'), { headers: AUTH })
+  expect(first.headers.get('x-sidecar-attention')).toBe('working')
+  app.store.touchSession('s1', '/p', 5, { state: 'permission' })
+  const same = await app.request(U(`/api/sessions/s1/steps?rev=${encodeURIComponent(first.headers.get('x-sidecar-rev')!)}`), { headers: AUTH })
+  expect(same.status).toBe(304)
+  expect(same.headers.get('x-sidecar-attention')).toBe('permission')
+  expect((await app.request(U('/api/sessions/none/steps'), { headers: AUTH })).headers.get('x-sidecar-attention')).toBeNull()
+})

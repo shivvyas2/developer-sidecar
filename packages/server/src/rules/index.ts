@@ -9,6 +9,8 @@ interface Ctx {
   command: string
   /** The command's simple commands with quoted text blanked (see segments). */
   parts: string[]
+  /** The same parts with their quoted text kept, for reading names out of them (see segments). */
+  raw: string[]
   file: string
   name: string
   failed: boolean
@@ -25,10 +27,18 @@ const short = (s: string, n = 100) => (s.length > n ? `${s.slice(0, n - 1)}…` 
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
 /** The first simple command that matches, so `git add -A && git commit` is a commit and a commit message never matches. */
 const part = (c: Ctx, re: RegExp) => c.parts.find((p) => re.test(p))
+/** That part with its quoted text kept, so `npm i "@scope/pkg"` names the package, not the quotes. */
+const rawPart = (c: Ctx, re: RegExp) => c.raw[c.parts.findIndex((p) => re.test(p))]
 
 // Matched against one simple command at a time (see segments), from its start, so words elsewhere never count.
 // INSTALL lives in @sidecar/shared with the project map, which reads installs too.
-const TEST = /^(?:(?:npm|pnpm|yarn|bun|npx|bunx|python3?|uv|poetry|cargo|go|make|deno)\b.*\b(?:test|vitest|jest|pytest|playwright|mocha)|(?:vitest|jest|pytest|playwright|mocha))\b/
+/** A test runner in the command's runner position, so `npx playwright install` or `tsc -p tsconfig.test.json` is not a test run. */
+const TEST = new RegExp([
+  /^(npm|pnpm|yarn|bun)\s+(run\s+)?test\b/.source,
+  /^((npx|bunx|npm\s+exec|pnpm(\s+(exec|dlx))?|yarn(\s+dlx)?)\s+(-\S+\s+)*)?(vitest|jest|mocha|playwright\s+test|cypress\s+run)\b/.source,
+  /^((python3?\s+-m|uv\s+run|poetry\s+run)\s+)?pytest\b/.source,
+  /^(cargo|go|deno|make)\s+test\b/.source,
+].join('|'))
 const DEPLOY = /^(npx\s+|bunx\s+)?(vercel|netlify\s+deploy|fly\s+deploy|flyctl\s+deploy|railway\s+up|docker\s+push|wrangler\s+deploy)\b/
 const RUN = /^(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start|build|preview)\b|^(npx\s+)?(next|vite)\s+(dev|build)\b|^python3?\s+\S+\.py\b|^node\s+\S+\.(m?js|ts)\b/
 const BUILD = /^(npm|pnpm|yarn|bun)\s+(run\s+)?build\b|^(npx\s+)?(next|vite)\s+build\b/
@@ -94,7 +104,7 @@ const RULES: Rule[] = [
     id: 'install',
     match: (c) => !!part(c, INSTALL),
     build: (c) => {
-      const all = packagesIn(part(c, INSTALL) ?? '')
+      const all = packagesIn(rawPart(c, INSTALL) ?? '')
       const pkgs = all.slice(0, 4).join(', ') + (all.length > 4 ? '…' : '')
       return { caption: pkgs ? `Adding ready-made building blocks: ${pkgs}` : 'Installing the project’s building blocks', scene: (cap) => scenes.toolbox(cap, c.failed) }
     },
@@ -186,6 +196,7 @@ export function translate(step: Step): Translation {
     input,
     command,
     parts: segments(command),
+    raw: segments(command, { raw: true }),
     file: str(input.file_path) || str(input.notebook_path) || str(input.path),
     name: step.toolName,
     failed: step.status === 'failed',

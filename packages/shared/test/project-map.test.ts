@@ -65,6 +65,9 @@ describe('what a session touched', () => {
       ['service', 'Stripe'], ['service', 'Supabase'], ['blocks', 'stripe'], ['blocks', 'zod'], ['blocks', '@supabase/supabase-js'],
     ])
   })
+  test('quoted package names count by name, without their quotes or version', () => {
+    expect(flat([bash(`pip install "django>=4" 'requests==2.31'`, 'install')])).toEqual([['blocks', 'django'], ['blocks', 'requests']])
+  })
   test('only the install part of a chained command counts, and quoted words never do', () => {
     expect(flat([bash('cd app && npm i -D vitest && git commit -m "add stripe"', 'install')])).toEqual([['blocks', 'vitest']])
   })

@@ -79,7 +79,7 @@ export function StageTab({ sessionId, loaded, steps, explanations, recaps, proje
   const elapsed = shown ? formatElapsed(shown.startedAt - firstAt) : '00:00'
   // LIVE only while following the newest step; a replay or an older pick reads REPLAY.
   const live = !replay && selection.follow
-  const ai = recap?.turnId ? recaps[recap.turnId] : undefined
+  const ai = recap ? recaps[recap.turnId] : undefined
   const failing = recap?.failingId ? steps.find((s) => s.id === recap.failingId) : undefined
   const ask = recapAsk(ai, failing ? nextAsk(failing, explanations[failing.id]) : null)
   const framed = useFramed()

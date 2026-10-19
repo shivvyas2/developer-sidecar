@@ -201,6 +201,31 @@ describe('recaps', () => {
     expect(s.getRecap('nope')).toBeUndefined()
   })
 
+  test('pending recaps can all be failed at once, keeping their count', () => {
+    const s = openStore(':memory:')
+    s.saveRecap(recap('p1', 'pending'))
+    s.saveRecap(recap('p2', 'done'))
+    s.saveRecap(recap('p3', 'pending', 1, 's2'))
+    const failed = s.failPendingRecaps('restarted', 9)
+    expect(failed.map((r) => r.turnId).sort()).toEqual(['p1', 'p3'])
+    expect(failed[0]).toMatchObject({ status: 'unavailable', reason: 'restarted', at: 9 })
+    expect(s.getRecap('p1')).toMatchObject({ status: 'unavailable', reason: 'restarted', lastStepId: 'p1-last', count: 1 })
+    expect(s.getRecap('p2')!.status).toBe('done')
+    expect(s.failPendingRecaps('again', 10)).toEqual([])
+  })
+
+  test('the newest recap of each session that was never called', () => {
+    const s = openStore(':memory:')
+    s.saveRecap(recap('a1', 'unavailable', 1))
+    s.saveRecap(recap('a2', 'unavailable', 2))
+    s.saveRecap(recap('b1', 'unavailable', 1, 's2'))
+    s.saveRecap(recap('b2', 'done', 2, 's2'))
+    s.saveRecap(recap('c1', 'pending', 1, 's3'))
+    s.saveRecap(recap('c1', 'unavailable', 2, 's3'))
+    // s1's newest was never called; s2's newest is done; s3's newest was called once
+    expect(s.unavailableRecaps().map((r) => r.turnId)).toEqual(['a2'])
+  })
+
   test('listed per session, oldest first, and deleted with the session', () => {
     const s = openStore(':memory:')
     s.saveRecap(recap('b', 'done', 5))

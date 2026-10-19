@@ -76,9 +76,16 @@ describe('one recap per turn', () => {
     expect(done).toMatchObject({ status: 'done', lastStepId: last.id, ai: { summary: 'Claude added a checkout page.', meaning: 'People can pay you now.' } })
     // nothing is failing, so the next ask is dropped
     expect(done.ai!.next).toBeUndefined()
-    expect(t.store.listDecisions('s1')).toEqual([expect.objectContaining({ stepId: last.id, choice: 'Stripe', id: `${last.id}:decision` })])
+    expect(t.store.listDecisions('s1')).toEqual([expect.objectContaining({ stepId: last.id, choice: 'Stripe', id: `${last.id}:decision:0` })])
     expect(t.store.listGlossary('s1').map((g) => g.term)).toEqual(['Checkout session'])
     expect(t.store.usage()).toEqual({ input: 100, output: 40 })
+  })
+
+  test('two decisions citing the same step are both kept', async () => {
+    const second = { step: 's1', title: 'Validation', choice: 'Zod', alternatives: ['Yup'], reason: 'Types for free' }
+    const t = setup(fake(() => ({ ...ANSWER, decisions: [...ANSWER.decisions, second] })).provider)
+    t.turn(); t.stop(); await t.settle()
+    expect(t.store.listDecisions('s1').map((d) => d.choice)).toEqual(['Stripe', 'Zod'])
   })
 
   test('the next ask is kept while a check still fails', async () => {
@@ -128,7 +135,7 @@ describe('one recap per turn', () => {
     expect(f.tasks).toHaveLength(MAX_RECAPS_PER_TURN + 1)
   })
 
-  test('a burst of Stops makes at most one more call, which reads the newest turn', async () => {
+  test('a burst of Stops on one turn makes one call', async () => {
     const f = fake()
     const t = setup(f.provider)
     t.turn()
@@ -179,11 +186,91 @@ describe('when the model fails', () => {
     expect(t.rx.state().status).toBe('ready')
   })
 
+  test('after a pause is cleared, the turn that ended while paused gets one call', async () => {
+    let n = 0
+    const provider: Provider = {
+      id: 'api',
+      async call(task) {
+        if (++n === 1) throw new ExplainError('The Anthropic API key was rejected.', false)
+        return { output: task.schema.parse(ANSWER), usage: { input: 1, output: 1 } }
+      },
+    }
+    const t = setup(provider)
+    t.turn('s1', 'first'); t.stop(); await t.settle()
+    t.turn('s1', 'second'); t.stop(); await t.settle()
+    expect(n).toBe(1)
+    t.rx.settingsChanged(); await t.settle()
+    expect(n).toBe(2)
+    expect(t.store.listRecaps('s1').map((r) => r.status)).toEqual(['unavailable', 'done'])
+    // nothing more to catch up on
+    t.rx.setProvider(provider); await t.settle()
+    expect(n).toBe(2)
+  })
+
+  test('turns paused before this start are not caught up, so a restart spends nothing on old sessions', async () => {
+    const hub = new Hub()
+    const store = openStore(':memory:')
+    const s: Step = { id: 'w1', sessionId: 'old', toolName: 'Write', input: { file_path: '/a.ts', content: 'x' }, startedAt: 1, status: 'ok' }
+    store.saveStep({ ...s, ...translate(s), seq: 1 })
+    store.saveRecap({ sessionId: 'old', turnId: 'w1', lastStepId: 'w1', at: 1, status: 'unavailable', reason: 'paused' })
+    const f = fake()
+    const rx = createRecapper({ hub, store, settings: memorySettings(), provider: null, now: () => 100 })
+    rx.setProvider(f.provider)
+    await vi.runAllTimersAsync(); await rx.idle()
+    expect(f.tasks).toEqual([])
+  })
+
   test('three failed recaps in a row pause', async () => {
     const t = setup(fake(() => ({ summary: ' ', meaning: ' ', next: null, decisions: [], concepts: [] })).provider)
     for (let i = 0; i < 3; i++) { t.turn('s1', `t${i}`); t.stop(); await t.settle() }
     expect(t.store.listRecaps('s1').map((r: RecapEntry) => r.reason)).toEqual(['The recap came back empty.', 'The recap came back empty.', 'The recap came back empty.'])
     expect(t.rx.state().status).toBe('paused')
+  })
+})
+
+describe('no recap is left pending', () => {
+  test('a provider that throws something odd ends unavailable', async () => {
+    const t = setup({ id: 'api', async call() { throw new TypeError('boom') } })
+    t.turn(); t.stop(); await t.settle()
+    expect(t.store.listRecaps('s1')[0]).toMatchObject({ status: 'unavailable' })
+  })
+
+  test('a store write that throws after the call ends unavailable, not pending', async () => {
+    const log: string[] = []
+    const hub = new Hub()
+    const store = openStore(':memory:')
+    const rx = createRecapper({ hub, store, settings: memorySettings(), provider: fake().provider, retryDelayMs: 0, log: (m) => log.push(m) })
+    vi.spyOn(store, 'addUsage').mockImplementation(() => { throw new Error('disk full') })
+    const s: Step = { id: 'w1', sessionId: 's1', toolName: 'Write', input: { file_path: '/a.ts', content: 'x' }, startedAt: 1, status: 'ok' }
+    store.saveStep({ ...s, ...translate(s), seq: 1 })
+    hub.publish({ type: 'turn_end', sessionId: 's1', at: 2 })
+    await vi.runAllTimersAsync(); await rx.idle()
+    expect(store.listRecaps('s1')[0]).toMatchObject({ status: 'unavailable', reason: 'The recap was interrupted.' })
+    expect(log).toEqual(['recap failed: disk full'])
+  })
+
+  test('a recap still pending from before a restart is marked unavailable, and said so', () => {
+    const hub = new Hub()
+    const store = openStore(':memory:')
+    store.saveRecap({ sessionId: 's1', turnId: 'p1', lastStepId: 'x', at: 1, status: 'pending' })
+    store.saveRecap({ sessionId: 's1', turnId: 'p0', lastStepId: 'y', at: 1, status: 'done', ai: { summary: 'S', meaning: 'M' } })
+    const got: ServerMessage[] = []
+    hub.subscribe((m) => got.push(m))
+    createRecapper({ hub, store, settings: memorySettings(), provider: null })
+    expect(store.getRecap('p1')).toMatchObject({ status: 'unavailable', reason: 'Sidecar restarted before the recap finished.', count: 1 })
+    expect(store.getRecap('p0')!.status).toBe('done')
+    expect(got).toEqual([{ type: 'recap', recap: expect.objectContaining({ turnId: 'p1', status: 'unavailable' }) }])
+  })
+
+  test('an unavailable recap is tried again on the next Stop, within the cap', async () => {
+    let n = 0
+    const t = setup(fake(() => (++n === 1 ? { summary: ' ', meaning: ' ', next: null, decisions: [], concepts: [] } : ANSWER)).provider)
+    t.turn(); t.stop(); await t.settle()
+    expect(t.store.listRecaps('s1')[0]!.status).toBe('unavailable')
+    t.stop(); await t.settle()
+    expect(t.store.listRecaps('s1')[0]!.status).toBe('done')
+    t.stop(); await t.settle()
+    expect(n).toBe(MAX_RECAPS_PER_TURN)
   })
 })
 
@@ -224,6 +311,21 @@ describe('cancelled mid-flight', () => {
     s.release(); await t.settle()
     expect(t.store.listRecaps('s1')[0]).toMatchObject({ status: 'unavailable', reason: 'AI recaps were turned off.' })
   })
+  test('the turn that ended is recapped, even when a new one starts while it waits in line', async () => {
+    const s = slow()
+    const t = setup(s.provider)
+    t.turn('a'); t.stop('a')
+    await vi.advanceTimersByTimeAsync(0)
+    const asked = t.add('b', 'UserPrompt', { prompt: 'Add checkout' })
+    t.add('b', 'Write', { file_path: '/work/shop/app/a.ts', content: 'x' })
+    t.stop('b')
+    // b's next turn begins before a's call is done
+    t.add('b', 'UserPrompt', { prompt: 'Now add emails' })
+    t.add('b', 'Write', { file_path: '/work/shop/app/b.ts', content: 'x' })
+    s.release(); await t.settle()
+    expect(t.store.listRecaps('b').map((r) => r.turnId)).toEqual([asked.id])
+  })
+
   test('stop() ends it: no more calls or writes', async () => {
     const f = fake()
     const t = setup(f.provider)
