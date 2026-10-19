@@ -109,6 +109,7 @@ export function createApp(o: AppOptions): Hono {
   app.get('/api/explainer', (c) => c.json(o.explainer.state()))
   app.get('/api/sessions/:id/decisions', (c) => c.json(o.store.listDecisions(c.req.param('id'))))
   app.get('/api/sessions/:id/glossary', (c) => c.json(o.store.listGlossary(c.req.param('id'))))
+  app.get('/api/sessions/:id/recaps', (c) => c.json(o.store.listRecaps(c.req.param('id'))))
   app.delete('/api/sessions/:id', (c) => {
     const id = c.req.param('id')
     o.store.deleteSession(id)

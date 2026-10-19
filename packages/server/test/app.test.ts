@@ -120,6 +120,13 @@ describe('explainer routes', () => {
     expect(await (await app.request(U('/api/sessions/s1/decisions'), { headers: AUTH })).json()).toHaveLength(1)
     expect(await (await app.request(U('/api/sessions/s1/glossary'), { headers: AUTH })).json()).toEqual([expect.objectContaining({ term: 'SDK' })])
   })
+  test('recaps per session, and only with the token', async () => {
+    const app = make()
+    app.store.saveRecap({ sessionId: 's1', turnId: 'p1', lastStepId: 'x', at: 1, status: 'done', ai: { summary: 'S', meaning: 'M' } })
+    expect(await (await app.request(U('/api/sessions/s1/recaps'), { headers: AUTH })).json()).toEqual([expect.objectContaining({ turnId: 'p1', ai: { summary: 'S', meaning: 'M' } })])
+    expect(await (await app.request(U('/api/sessions/other/recaps'), { headers: AUTH })).json()).toEqual([])
+    expect((await app.request(U('/api/sessions/s1/recaps'))).status).toBe(401)
+  })
   test('deleting a session or everything publishes and removes data', async () => {
     const app = make()
     const got: ServerMessage[] = []
