@@ -11,6 +11,7 @@ describe('segments', () => {
     ['npm run dev &> log.txt', ['npm run dev &> log.txt']],
     ['cd app && NODE_ENV=test FOO=1 npm test', ['cd app', 'npm test']],
     ['sudo npm install -g pnpm', ['npm install -g pnpm']],
+    [`MSG="a b" X='' npm test`, ['npm test']],
     ['(cd web && npm run build)', ['cd web', 'npm run build)']],
     ['npm install \\\n  stripe', ['npm install \\\n  stripe']],
   ])('%j', (cmd, want) => {
@@ -29,6 +30,13 @@ describe('segments', () => {
     const out = segments(cmd)
     expect(out).toHaveLength(1)
     expect(out[0]).toMatch(/^git commit -m "\s+"$/)
+  })
+
+  test('raw keeps the quoted text and drops the quotes, part for part', () => {
+    expect(segments('cd a && pip install "django>=4" && git commit -m "x; y"', { raw: true })).toEqual(['cd a', 'pip install django>=4', 'git commit -m x; y'])
+    expect(segments("sudo npm i '@s/p'", { raw: true })).toEqual(['npm i @s/p'])
+    expect(segments(`FOO="a b" npm i '@s/p'`, { raw: true })).toEqual(['npm i @s/p'])
+    expect(segments('echo "" && npm test', { raw: true })).toEqual(['echo', 'npm test'])
   })
 
   test('unbalanced quotes and empty input never throw', () => {
