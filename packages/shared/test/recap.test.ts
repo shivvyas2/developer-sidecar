@@ -77,3 +77,13 @@ describe('buildRecap', () => {
     })
   })
 })
+
+describe('AiRecapSchema', () => {
+  test('takes a summary and meaning, with next only when given', async () => {
+    const { AiRecapSchema } = await import('../src/recap')
+    expect(AiRecapSchema.safeParse({ summary: 'Added checkout.', meaning: 'People can pay.' }).success).toBe(true)
+    expect(AiRecapSchema.safeParse({ summary: 'x', meaning: 'y', next: 'Fix the test' }).success).toBe(true)
+    expect(AiRecapSchema.safeParse({ summary: '', meaning: 'y' }).success).toBe(false)
+    expect(AiRecapSchema.safeParse({ summary: 'x'.repeat(601), meaning: 'y' }).success).toBe(false)
+  })
+})

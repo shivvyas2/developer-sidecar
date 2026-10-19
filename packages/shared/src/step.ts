@@ -1,4 +1,5 @@
 import type { DecisionEntry, ExplainerState, GlossaryEntry, StepExplanation } from './explain'
+import type { RecapEntry } from './recap'
 import type { SceneSpec } from './scene'
 
 export type StepStatus = 'running' | 'ok' | 'failed' | 'interrupted'
@@ -48,5 +49,8 @@ export type ServerMessage =
   | { type: 'decision'; decision: DecisionEntry }
   | { type: 'concept'; concept: GlossaryEntry }
   | { type: 'explainer'; state: ExplainerState }
+  /** Claude's turn ended (the Stop hook); open steps were closed first. */
+  | { type: 'turn_end'; sessionId: string; at: number }
+  | { type: 'recap'; recap: RecapEntry }
   | { type: 'session_deleted'; id: string }
   | { type: 'reset' }

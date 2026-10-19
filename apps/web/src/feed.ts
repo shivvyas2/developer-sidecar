@@ -125,5 +125,8 @@ export function feedReducer(state: FeedState, action: FeedAction): FeedState {
     }
     case 'reset':
       return { ...initialFeed, explainer: state.explainer, readySince: state.readySince }
+    case 'turn_end':
+    case 'recap':
+      return state
   }
 }
