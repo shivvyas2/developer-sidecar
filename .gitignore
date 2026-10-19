@@ -9,6 +9,7 @@ coverage/
 release-tree/
 playwright-report/
 test-results/
+bench/explainer/out/
 
 # Local AI tooling and planning notes (kept out of the public repo)
 .claude/

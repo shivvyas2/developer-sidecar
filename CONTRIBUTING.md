@@ -64,12 +64,20 @@ The scene renderer and the text renderer have snapshot tests. If you change how 
 1. Move the `Unreleased` notes in `CHANGELOG.md` under a new `## [X.Y.Z] - YYYY-MM-DD` heading.
 2. Set `version` in `plugin/.claude-plugin/plugin.json` to `X.Y.Z`.
 3. Run `pnpm release:check`.
-4. Commit `chore: release vX.Y.Z` on `main`.
-5. Tag `vX.Y.Z` and push the tag. CI builds the plugin, commits it to the `release` branch and opens a GitHub Release with the changelog notes.
+4. Open a pull request `chore: release vX.Y.Z` and merge it once the other maintainer approves.
+5. Tag the merge commit on `main` as `vX.Y.Z` and push the tag. CI builds the plugin, commits it to the `release` branch and opens a GitHub Release with the changelog notes.
 
 The `release` branch is written only by CI; never commit to it by hand.
 
 ## Pull requests
+
+`main` only changes through pull requests, and every pull request needs an approval from a code owner who is not its author. Both maintainers own every file (see `.github/CODEOWNERS`), and GitHub never lets authors approve their own work, so each maintainer reviews the other's. CI must pass and every review conversation must be resolved. A new push dismisses earlier approvals. There are no exceptions: admins cannot bypass it, and `main` cannot be force-pushed or deleted.
+
+The rule lives in `.github/rulesets/main.json`. A repository admin applies it once, either under Settings, Rules, Rulesets, New ruleset, Import a ruleset, or with:
+
+```bash
+gh api --method POST repos/shivvyas2/developer-sidecar/rulesets --input .github/rulesets/main.json
+```
 
 - Keep one change per pull request. A refactor and a feature are two pull requests.
 - Fill in the template: what changed, why, and how you verified it. Add a screenshot or a short recording for anything visual.

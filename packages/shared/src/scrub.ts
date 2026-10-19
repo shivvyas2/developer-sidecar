@@ -51,12 +51,18 @@ export function scrubDeep<T>(v: T, extra: string[] = []): T {
 }
 
 const MAX_STRING = 1000
+/** How much of a cut string's end is kept: test and build summaries, and the last error, come last. */
+const KEEP_TAIL = 400
 const MAX_PROMPT = 4000
 
+/** Keeps the start and the end of a long string and says how much was cut from the middle. */
+export function headTail(s: string, max: number, tail = Math.min(KEEP_TAIL, Math.floor(max / 2))): string {
+  if (s.length <= max) return s
+  return `${s.slice(0, max - tail)}…[truncated ${s.length - max} chars]…${s.slice(s.length - tail)}`
+}
+
 function truncateStrings(v: unknown): unknown {
-  if (typeof v === 'string') {
-    return v.length > MAX_STRING ? `${v.slice(0, MAX_STRING)}…[truncated ${v.length - MAX_STRING} chars]` : v
-  }
+  if (typeof v === 'string') return headTail(v, MAX_STRING)
   if (Array.isArray(v)) return v.map(truncateStrings)
   if (v && typeof v === 'object') {
     const out: Record<string, unknown> = {}

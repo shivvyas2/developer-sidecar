@@ -32,6 +32,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
+    "bench:tokens": "vitest run -c bench/explainer/vitest.config.ts",
     "typecheck": "tsc -p .",
     "lint": "eslint .",
     "build": "node scripts/build.mjs",

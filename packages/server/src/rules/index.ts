@@ -1,4 +1,4 @@
-import type { Category, SceneSpec, Step, Translation } from '@sidecar/shared'
+import { isRecord, type Category, type SceneSpec, type Step, type Translation } from '@sidecar/shared'
 import { scenes } from '@sidecar/ui-kit/catalog'
 import { detectVendor } from './vendors'
 
@@ -30,6 +30,19 @@ const RUN = /\b(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start|build|preview)\b|\b(nex
 const DATA_FILE = /(schema\.prisma|\/migrations?\/|\.sql$|drizzle|schema\.(ts|js)$|models?\.py$)/i
 const DATA_CMD = /\b(prisma\s+(migrate|db)|drizzle-kit|alembic|knex\s+migrate|supabase\s+db)\b/
 const GIT = /^\s*(git\s+(commit|push|merge|tag|checkout\s+-b|switch\s+-c|branch)|gh\s+pr\s+(create|merge))\b/
+/** One command that only looks. Anything chained (a newline too), piped, redirected or substituted is not read-only. */
+const LOOK = /^\s*(ls|pwd|cat|head|tail|wc|tree|file|stat|which|find|grep|rg|git\s+(status|diff|log|show))\b/
+const NOT_ONLY_LOOKING = new RegExp([
+  /[|;&<>`\n\r]|\$\(/.source,
+  // flags that write a file, run a command or never return
+  /\s-(exec|execdir|delete|ok|okdir|fprint\w*|fls)\b/.source,
+  /^\s*git\b.*\s--output\b/.source,
+  /^\s*tree\b.*\s-o\b/.source,
+  /^\s*tail\b.*\s(-[a-zA-Z0-9]*[fF]|--follow)\b/.source,
+].join('|'))
+
+/** A shell command that names a .env file: handled like the Read tool on one, as secrets, never as a quick look. */
+const ENV_FILE = /(^|[\s/'"=])\.env(\.[\w.-]+)?(?=$|[\s'";|&>)])/
 
 function packagesFrom(command: string): string {
   const m = command.match(/\b(?:i|install|add|get)\b(.*)$/)
@@ -71,6 +84,14 @@ const RULES: Rule[] = [
     }),
   },
   {
+    id: 'read',
+    match: (c) => LOOK.test(c.command) && !NOT_ONLY_LOOKING.test(c.command) && !ENV_FILE.test(c.command),
+    build: (c) => ({
+      caption: /^\s*git\b/.test(c.command) ? 'Checking what has changed in your code' : 'Looking around your project',
+      scene: scenes.read,
+    }),
+  },
+  {
     id: 'install',
     match: (c) => INSTALL.test(c.command),
     build: (c) => {
@@ -106,9 +127,9 @@ const RULES: Rule[] = [
   },
   {
     id: 'external',
-    match: (c) => c.name === 'WebFetch' || c.name === 'WebSearch' || /^\.env(\.|$)/.test(basename(c.file)) || /\b(curl|wget)\s+\S*https?:/.test(c.command),
+    match: (c) => c.name === 'WebFetch' || c.name === 'WebSearch' || /^\.env(\.|$)/.test(basename(c.file)) || ENV_FILE.test(c.command) || /\b(curl|wget)\s+\S*https?:/.test(c.command),
     build: (c) => {
-      if (/^\.env/.test(basename(c.file))) {
+      if (/^\.env/.test(basename(c.file)) || ENV_FILE.test(c.command)) {
         return { caption: 'Storing secret settings (like API keys) safely outside the code', scene: (cap) => scenes.connect(cap, undefined, c.failed) }
       }
       if (c.name === 'WebSearch') {
@@ -158,7 +179,7 @@ function techLabel(c: Ctx): string {
 }
 
 export function translate(step: Step): Translation {
-  const input = step.input && typeof step.input === 'object' && !Array.isArray(step.input) ? (step.input as Record<string, unknown>) : {}
+  const input = isRecord(step.input) ? step.input : {}
   const ctx: Ctx = {
     step,
     input,

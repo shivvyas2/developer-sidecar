@@ -29,6 +29,27 @@ All notable changes to Developer Sidecar are recorded here. The format follows
   plays when the system asks for reduced motion. Add `?intro=1` to the address
   to see it again.
 
+### Changed
+
+- **Lighter explanations.** The explainer skips steps whose caption already
+  says enough: successful reads and searches, read-only shell commands like
+  `ls` and `git status`, and repeat edits to a file already changed since your
+  last prompt. Failed steps are always explained. What it does send is
+  trimmed: file bodies go as a line count and a short preview, successful
+  output keeps only its end, and steps are numbered instead of carrying long
+  ids. On the sample sessions in `bench/explainer`, that is about 68% fewer
+  input and 57% fewer output tokens. A queued explanation never waits more
+  than 15 seconds.
+- **Read-only commands look like reading.** `ls`, `cat`, `grep`, `find`,
+  `git status` and similar show the bookshelf scene with a plain caption
+  instead of "Running a command".
+
+### Fixed
+
+- Long command output keeps its end, where test summaries and the last error
+  are, instead of being cut after the first 1,000 characters.
+- `cat app.test.ts` and `grep vitest` no longer show the test scene.
+
 ## [0.1.0] - 2026-10-15
 
 ### Changed

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { FeedStep, ServerMessage } from '@sidecar/shared'
-import { createExplainer, MAX_BATCH, QUIET_MS, UNAVAILABLE_REASON } from '../src/explainer/service'
+import { createExplainer, MAX_BATCH, MAX_TRACKED_SESSIONS, MAX_WAIT_MS, QUIET_MS, UNAVAILABLE_REASON } from '../src/explainer/service'
 import { ExplainError, type Provider } from '../src/explainer/providers'
 import { Hub } from '../src/hub'
 import { memorySettings } from '../src/settings'
@@ -16,12 +16,18 @@ function fakeProvider(behaviour: (ids: string[]) => Promise<unknown> | unknown =
   decision: stepId === 'd' ? { title: 'Payments', choice: 'Stripe', alternatives: ['Paddle'], reason: 'common' } : null,
 })) })) {
   const calls: string[][] = []
+  // Requests number their steps 1…n; tests name steps by their caption (= id) and answer with those names.
   const provider: Provider = {
     id: 'api',
     async explain(req) {
-      const ids = [...req.user.matchAll(/"stepId":"([^"]+)"/g)].map((m) => m[1]!)
+      const sent = req.user.split('\n').filter((l) => l.startsWith('{"stepId"')).map((l) => JSON.parse(l) as { stepId: string; caption: string })
+      const ids = sent.map((s) => s.caption)
       calls.push(ids)
-      const out = await behaviour(ids)
+      const out = await behaviour(ids) as { items?: Array<{ stepId: string }> } | null
+      for (const it of out?.items ?? []) {
+        const i = ids.indexOf(it.stepId)
+        if (i >= 0) it.stepId = sent[i]!.stepId
+      }
       return { output: out as never, usage: { input: 10, output: 5 } }
     },
   }
@@ -81,6 +87,150 @@ describe('explainer', () => {
     await vi.advanceTimersByTimeAsync(QUIET_MS)
     await ex.idle()
     expect(calls).toEqual([])
+  })
+
+  describe('routine steps', () => {
+    const read = (id: string, status: FeedStep['status'] = 'ok') =>
+      step(id, { toolName: 'Read', category: 'read', input: { file_path: '/work/shop/a.ts' }, status })
+    const write = (id: string, file: string) => step(id, { toolName: 'Write', category: 'create', input: { file_path: file, content: 'x' } })
+    const edit = (id: string, file: string, status: FeedStep['status'] = 'ok') =>
+      step(id, { toolName: 'Edit', category: 'edit', input: { file_path: file, old_string: 'a', new_string: 'b' }, status })
+    const prompt = (id: string) => step(id, { toolName: 'UserPrompt', category: 'prompt', input: { prompt: 'go' } })
+    const flushed = async (ex: { idle(): Promise<void> }) => { await vi.advanceTimersByTimeAsync(QUIET_MS); await ex.idle() }
+
+    test('a successful read is skipped; a failed one is explained', async () => {
+      const { provider, calls } = fakeProvider()
+      const { ex, send } = setup(provider)
+      send(read('r1')); send(read('r2', 'failed'))
+      await flushed(ex)
+      expect(calls).toEqual([['r2']])
+    })
+
+    test('the first edit to a file is explained, repeats are not, a failed repeat is, and a prompt starts over', async () => {
+      const { provider, calls } = fakeProvider()
+      const { ex, send } = setup(provider)
+      send(write('w', '/a.ts')); send(edit('e1', '/a.ts')); send(edit('e2', '/b.ts')); send(edit('e3', '/b.ts'))
+      send(edit('e4', '/b.ts', 'failed'))
+      send(prompt('p')); send(edit('e5', '/b.ts')); send(edit('e6', '/b.ts'))
+      await flushed(ex)
+      expect(calls.flat()).toEqual(['w', 'e2', 'e4', 'e5'])
+    })
+
+    test('routine steps keep the batch waiting, so it is not split around them', async () => {
+      const { provider, calls } = fakeProvider()
+      const { ex, send } = setup(provider)
+      send(step('a'))
+      for (let i = 0; i < 3; i++) { await vi.advanceTimersByTimeAsync(QUIET_MS - 500); send(read(`r${i}`)) }
+      await vi.advanceTimersByTimeAsync(QUIET_MS - 500)
+      send(step('b'))
+      await flushed(ex)
+      expect(calls).toEqual([['a', 'b']])
+    })
+
+    test('a long run of routine steps still flushes once the oldest step has waited MAX_WAIT_MS', async () => {
+      const { provider, calls } = fakeProvider()
+      const { ex, send } = setup(provider)
+      send(step('a'))
+      for (let t = QUIET_MS - 500; t < MAX_WAIT_MS; t += QUIET_MS - 500) {
+        await vi.advanceTimersByTimeAsync(QUIET_MS - 500)
+        send(read(`r${t}`))
+      }
+      expect(calls).toEqual([])
+      await vi.advanceTimersByTimeAsync(QUIET_MS - 500)
+      await ex.idle()
+      expect(calls).toEqual([['a']])
+    })
+
+    test('after a restart, files written earlier in the request are read back from the store', async () => {
+      const { provider, calls } = fakeProvider()
+      const hub = new Hub()
+      const store = openStore(':memory:')
+      store.touchSession('s1', '/work/shop', 1)
+      for (const s of [prompt('p'), write('w', '/a.ts')]) store.saveStep(s)
+      const ex = createExplainer({ hub, store, settings: memorySettings({ explanations: 'haiku' }), provider, retryDelayMs: 10 })
+      const send = (s: FeedStep) => { store.saveStep(s); hub.publish({ type: 'step', step: s }) }
+      send(edit('e1', '/a.ts')); send(edit('e2', '/c.ts'))
+      await flushed(ex)
+      expect(calls.flat()).toEqual(['e2'])
+    })
+
+    test('with explanations off, no written-files work is done', async () => {
+      const { provider } = fakeProvider()
+      const { ex, send, store } = setup(provider, 'off')
+      const scan = vi.spyOn(store, 'stepsForSession')
+      send(write('w', '/a.ts')); send(edit('e1', '/a.ts'))
+      await flushed(ex)
+      expect(scan).not.toHaveBeenCalled()
+    })
+
+    test('only recently active sessions are tracked; an evicted one is read back from the store', async () => {
+      const { provider, calls } = fakeProvider()
+      const { ex, send, store } = setup(provider)
+      const scan = vi.spyOn(store, 'stepsForSession')
+      send(write('w', '/a.ts'))
+      for (let i = 0; i < MAX_TRACKED_SESSIONS; i++) {
+        store.touchSession(`other${i}`, '/work/x', 1)
+        send(step(`o${i}`, { sessionId: `other${i}` }))
+      }
+      expect(scan).toHaveBeenCalledTimes(MAX_TRACKED_SESSIONS + 1)
+      send(edit('e1', '/a.ts')) // s1 was evicted: re-read, and the earlier write still counts
+      expect(scan).toHaveBeenCalledTimes(MAX_TRACKED_SESSIONS + 2)
+      await flushed(ex)
+      expect(calls.flat()).not.toContain('e1')
+    })
+
+    test('deleting a session forgets its written files', async () => {
+      const { provider, calls } = fakeProvider()
+      const { ex, send, hub, store } = setup(provider)
+      send(edit('e1', '/a.ts'))
+      await flushed(ex)
+      hub.publish({ type: 'session_deleted', id: 's1' })
+      store.deleteSession('s1')
+      store.touchSession('s1', '/work/shop', 2)
+      send(edit('e2', '/a.ts'))
+      await flushed(ex)
+      expect(calls.flat()).toEqual(['e1', 'e2'])
+    })
+  })
+
+  describe('short step ids', () => {
+    const answer = (stepId: string, plain: string) => ({ stepId, plain, why: 'w', concept: null, decision: null, next: null })
+
+    test('requests label steps s1…sn instead of sending tool-use ids, and answers map back in any order', async () => {
+      const users: string[] = []
+      const provider: Provider = {
+        id: 'api',
+        async explain(req) {
+          users.push(req.user)
+          return { output: { items: [answer('s2', 'second'), answer('s1', 'first')] }, usage: { input: 1, output: 1 } }
+        },
+      }
+      const { ex, send, store } = setup(provider)
+      send(step('toolu_01AAAAAAAAAAAAAAAAAAAAAA')); send(step('toolu_01BBBBBBBBBBBBBBBBBBBBBB'))
+      await vi.advanceTimersByTimeAsync(QUIET_MS)
+      await ex.idle()
+      // not bare numbers: a model answering through the CLI (no schema enforcement) could send stepId: 1
+      expect(users[0]).toContain('"stepId":"s1"')
+      expect(users[0]).toContain('"stepId":"s2"')
+      expect(users[0]).not.toContain('"stepId":"toolu_')
+      const plain = (id: string) => { const e = store.stepsForSession('s1').find((x) => x.id === id)?.explanation; return e && 'plain' in e ? e.plain : e }
+      expect(plain('toolu_01AAAAAAAAAAAAAAAAAAAAAA')).toBe('first')
+      expect(plain('toolu_01BBBBBBBBBBBBBBBBBBBBBB')).toBe('second')
+    })
+
+    test('an answer with an unknown label, or a real id, lands on no step', async () => {
+      const provider: Provider = {
+        id: 'api',
+        async explain() {
+          return { output: { items: [answer('s9', 'ghost'), answer('a', 'by real id')] }, usage: { input: 1, output: 1 } }
+        },
+      }
+      const { ex, send, store } = setup(provider)
+      send(step('a'))
+      await vi.advanceTimersByTimeAsync(QUIET_MS)
+      await ex.idle()
+      expect(store.stepsForSession('s1')[0]!.explanation).toEqual({ unavailable: 'No explanation was returned for this step.' })
+    })
   })
 
   test('a 20-step burst becomes batches of at most MAX_BATCH, one request at a time (Review Focus 5)', async () => {

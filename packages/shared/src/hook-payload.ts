@@ -11,7 +11,8 @@ export const KIND_BY_HOOK: Record<string, EventKind> = {
   Stop: 'turn_end',
 }
 
-function isRecord(v: unknown): v is Record<string, unknown> {
+/** A plain object (not null, not an array). */
+export function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
