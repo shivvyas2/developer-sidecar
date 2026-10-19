@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { SceneSpecSchema, type Step } from '@sidecar/shared'
 import { render } from '@sidecar/ui-kit'
-import { RULE_IDS, detectVendor, translate } from '../src/rules'
+import { RULE_IDS, detectVendor, segments, translate } from '../src/rules'
 
 const step = (toolName: string, input: unknown, over: Partial<Step> = {}): Step =>
   ({ id: 'x', sessionId: 's', toolName, input, startedAt: 0, status: 'ok', ...over })
@@ -104,5 +104,42 @@ describe('detectVendor', () => {
     ['@anthropic-ai/sdk', 'Anthropic'], ['supabase.co', 'Supabase'], ['ls', undefined],
   ])('%s → %s', (text, vendor) => {
     expect(detectVendor(text)).toBe(vendor)
+  })
+})
+
+describe('segments', () => {
+  test.each<[string, string[]]>([
+    ['npm test', ['npm test']],
+    ['git add -A && git commit -m "x"', ['git add -A', 'git commit -m " "']],
+    ['a || b; c | d & e', ['a', 'b', 'c', 'd', 'e']],
+    ['ls src\nrm -rf dist\r\ngit status', ['ls src', 'rm -rf dist', 'git status']],
+    ['npm test 2>&1 | tail -20', ['npm test 2>&1', 'tail -20']],
+    ['npm run dev &> log.txt', ['npm run dev &> log.txt']],
+    ['cd app && NODE_ENV=test FOO=1 npm test', ['cd app', 'npm test']],
+    ['sudo npm install -g pnpm', ['npm install -g pnpm']],
+    ['(cd web && npm run build)', ['cd web', 'npm run build)']],
+    ['npm install \\\n  stripe', ['npm install \\\n  stripe']],
+  ])('%j', (cmd, want) => {
+    expect(segments(cmd)).toEqual(want)
+  })
+
+  test('quoted text is blanked, separators inside quotes included', () => {
+    const blank = (s: string) => ' '.repeat(s.length)
+    expect(segments(`git commit -m "fix test && deploy to vercel"`)).toEqual([`git commit -m "${blank('fix test && deploy to vercel')}"`])
+    expect(segments(`echo 'npm install x; rm -rf /'`)).toEqual([`echo '${blank('npm install x; rm -rf /')}'`])
+    expect(segments('git commit -m "say \\"hi\\" && go"')).toHaveLength(1)
+  })
+
+  test('a heredoc commit message, the way Claude Code writes one, is one blank command', () => {
+    const cmd = `git commit -m "$(cat <<'EOF'\nAdd tests; run vitest\n\nnpm install stripe\nEOF\n)"`
+    const out = segments(cmd)
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatch(/^git commit -m "\s+"$/)
+  })
+
+  test('unbalanced quotes and empty input never throw', () => {
+    expect(segments('')).toEqual([])
+    expect(segments('  &&  ;; ')).toEqual([])
+    expect(segments('echo "never closed && npm test')).toEqual(['echo "'])
   })
 })
