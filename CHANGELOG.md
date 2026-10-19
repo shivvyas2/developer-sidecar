@@ -8,6 +8,13 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 
 ### Added
 
+- **What you're building.** The Whiteboard tab shows a map of the project
+  from what Claude has looked at and changed: pages and screens, behind the
+  scenes, your data (with table names), outside services, secret settings,
+  checks, helpers and building blocks. Each part says whether Claude looked
+  at it, made or changed it, or it needs a fix, and a tap lists its files
+  and the steps that touched it. The stage uses the same names: the service
+  reads STRIPE, the database ORDERS, the packages how many were added.
 - **The stage says how things stand, in plain words.** The frame shows a
   status light (all good, needs a fix, needs you, working), how many files
   Claude has made, and whether the last checks passed. Step cards say what a
