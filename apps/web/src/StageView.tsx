@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { isExplained, projectMap, routineIds, SceneSpecSchema, type Attention, type ExplainerState, type FeedStep, type StepExplanation } from '@sidecar/shared'
+import { isExplained, projectMap, routineIds, SceneSpecSchema, storyOf, type Attention, type ExplainerState, type FeedStep, type StepExplanation } from '@sidecar/shared'
 import { checksOf, HEALTH_LIGHT, HEALTH_WORD, healthOf, nameTown, townFrom, type Readout } from '@sidecar/ui-kit'
 import { forStatus } from '@sidecar/ui-kit/catalog'
 import { Scene } from '@sidecar/ui-kit/react'
-import { Chip, PulledCard, ReadoutPanel, RoundButton, StepCard, StepDrawer, TickRuler } from './ds'
+import { Chip, PulledCard, ReadoutPanel, RoundButton, TickRuler } from './ds'
 import { readoutFields, useFramed } from './framed'
 import { formatElapsed, stepKind } from './format'
 import { nextAsk, UNDO_HINT } from './next'
 import { isPendingExplanation } from './pending'
 import { initialSelection, selectedId, selectionReducer, stepNumber } from './selection'
 import { initialStage, replayAdvance, stageReducer, type Replay } from './stage'
+import { StoryDrawer } from './StoryDrawer'
 
 const END = Number.MAX_SAFE_INTEGER
 
@@ -61,6 +62,7 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
   const card = cardIndex >= 0 ? steps[cardIndex] : undefined
 
   const routine = useMemo(() => routineIds(steps), [steps])
+  const chapters = useMemo(() => storyOf(steps, attention === 'working'), [steps, attention])
 
   const upTo = useMemo(() => steps.slice(0, index + 1), [steps, index])
   const town = useMemo(() => nameTown(townFrom(upTo), projectMap(upTo, cwd)), [upTo, cwd])
@@ -116,22 +118,7 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
   return (
     <div className="stagetab">
       <div className="stagetab__drawer">
-        <StepDrawer count={steps.length}>
-          {[...steps].reverse().map((s, r) => {
-            const i = steps.length - 1 - r
-            return (
-              <StepCard
-                key={s.id}
-                num={i + 1}
-                title={stepKind(s)}
-                caption={s.caption}
-                status={s.status}
-                selected={i === cardIndex}
-                onSelect={() => pick(s.id)}
-              />
-            )
-          })}
-        </StepDrawer>
+        <StoryDrawer steps={steps} chapters={chapters} selectedId={cardIndex >= 0 ? steps[cardIndex]!.id : null} following={live} onPick={pick} />
       </div>
       <div className="stagetab__main">
         {!framed && shown ? (

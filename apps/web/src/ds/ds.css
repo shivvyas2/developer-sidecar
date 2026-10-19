@@ -124,6 +124,7 @@
   letter-spacing: 1.2px;
 }
 .ds-step__mark { font: 700 10px/1 var(--ds-mono); color: var(--sk-ink); }
+.ds-step__badge { flex: none; padding: 2px 5px; background: var(--sk-label); color: var(--ds-on-label); font: 700 8px/1 var(--ds-mono); letter-spacing: 1px; }
 .ds-step[data-status="running"] .ds-step__mark,
 .ds-step[data-status="failed"] .ds-step__mark { color: var(--sk-accent); }
 .ds-step[data-status="interrupted"] .ds-step__mark { color: var(--sk-ink2); }
