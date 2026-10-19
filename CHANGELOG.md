@@ -8,6 +8,11 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 
 ### Added
 
+- **The steps read as a story.** The step drawer groups steps under each
+  thing you asked, with how it ended (done, done after a fix, needs a fix,
+  stopped early). Runs of reading fold into one line like "Read 3 files,
+  searched once", repeat changes to a file into "Changed page.tsx 3 times",
+  and a check run that fixed an earlier failure is marked FIXED.
 - **What you're building.** The Whiteboard tab shows a map of the project
   from what Claude has looked at and changed: pages and screens, behind the
   scenes, your data (with table names), outside services, secret settings,
