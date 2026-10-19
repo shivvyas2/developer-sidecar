@@ -280,3 +280,17 @@ body {
 .recap__summary, .recap__meaning { margin: 0; font: 400 13px/1.5 var(--ds-sans); color: var(--sk-ink); }
 .recap__ai .ds-kicker { margin-top: 4px; }
 .recap__note--pending { font-style: italic; }
+
+/* ---- what am I looking at? ---- */
+.legend { margin-top: 10px; display: grid; gap: 8px; }
+.legend__bar { display: flex; gap: 12px; align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
+.legend__hit { margin: 0; flex: 1 1 280px; font: 400 13px/1.45 var(--ds-sans); color: var(--sk-ink2); }
+.legend__hit strong { color: var(--sk-ink); }
+.legend__toggle { flex: none; padding: 6px 12px; border: 1.5px solid var(--sk-ink); border-radius: 999px; background: none; color: var(--sk-ink); font: 700 9px/1.3 var(--ds-mono); letter-spacing: 1.2px; cursor: pointer; }
+.legend__toggle:focus-visible { outline: 2px solid var(--sk-ink); outline-offset: 2px; }
+.legend__list { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+.legend__row { padding: 8px 10px; background: var(--sk-card); border: 1px solid var(--sk-grid); }
+.legend__row[data-on] { border-color: var(--sk-accent); }
+.legend__row dt { font: 700 10px/1.3 var(--ds-mono); letter-spacing: 1px; text-transform: uppercase; color: var(--sk-ink); }
+.legend__row dd { margin: 4px 0 0; font: 400 12px/1.45 var(--ds-sans); color: var(--sk-ink2); }
+.stagetab__stage .sk-place { cursor: pointer; }
