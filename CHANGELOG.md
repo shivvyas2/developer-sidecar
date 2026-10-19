@@ -8,6 +8,13 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 
 ### Added
 
+- **AI recaps replace step-by-step explanations.** When Claude finishes a
+  turn, one short request writes a plain summary of it, what it means for
+  your app, and any decisions and terms worth knowing, shown on the Where
+  things stand card. It used to be a request every few seconds while Claude
+  worked. On the sample sessions in `bench/explainer` that is 5 requests
+  instead of 9 and about 75% fewer tokens, and a long turn costs no more than
+  a short one. Explanations already stored still show on older steps.
 - **Where things stand.** The Stage opens with a card that sums up the last
   thing you asked: how it ended, the parts made or changed, building blocks
   added and whether the checks pass. When a dev server is up there is an
@@ -67,6 +74,10 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 
 ### Fixed
 
+- Stripe secret keys (`sk_live_`, `sk_test_`, `rk_`) and webhook secrets
+  (`whsec_`) are scrubbed wherever they appear. Before, they were caught only
+  in an `ENV=value` line, so one printed in an error message could reach the
+  database and the model.
 - The stage keeps up with Claude. It used to fall up to about three scenes
   (some 11 seconds) behind while still reading LIVE, and could show DONE on
   an older step. Now at most one scene waits, and when Claude stops or needs
