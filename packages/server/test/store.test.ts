@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import type { DecisionEntry, FeedStep, GlossaryEntry, SidecarEvent } from '@sidecar/shared'
+import type { DecisionEntry, FeedStep, GlossaryEntry, RecapEntry, SidecarEvent } from '@sidecar/shared'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -184,5 +184,43 @@ describe('session attention', () => {
     expect(s.touchSession('s1', '/a', 3, { state: 'done' }).attention).toBe('done')
     s.close()
     expect(() => openStore(path).close()).not.toThrow()
+  })
+})
+
+describe('recaps', () => {
+  const recap = (turnId: string, status: RecapEntry['status'], at = 1, sessionId = 's1'): RecapEntry =>
+    ({ sessionId, turnId, lastStepId: `${turnId}-last`, at, status, ...(status === 'done' ? { ai: { summary: 'S', meaning: 'M' } } : {}) })
+
+  test('a turn has one recap that is replaced; only a call (pending) is counted', () => {
+    const s = openStore(':memory:')
+    expect(s.saveRecap(recap('p1', 'pending'))).toBe(1)
+    expect(s.saveRecap(recap('p1', 'done', 2))).toBe(1)
+    expect(s.getRecap('p1')).toMatchObject({ status: 'done', ai: { summary: 'S' }, count: 1 })
+    expect(s.saveRecap(recap('p1', 'pending', 3))).toBe(2)
+    expect(s.saveRecap(recap('p2', 'skipped', 4))).toBe(0)
+    expect(s.getRecap('nope')).toBeUndefined()
+  })
+
+  test('listed per session, oldest first, and deleted with the session', () => {
+    const s = openStore(':memory:')
+    s.saveRecap(recap('b', 'done', 5))
+    s.saveRecap(recap('a', 'skipped', 2))
+    s.saveRecap(recap('x', 'done', 1, 's2'))
+    expect(s.listRecaps('s1').map((r) => r.turnId)).toEqual(['a', 'b'])
+    s.deleteSession('s1')
+    expect(s.listRecaps('s1')).toEqual([])
+    expect(s.listRecaps('s2')).toHaveLength(1)
+    s.deleteAll()
+    expect(s.listRecaps('s2')).toEqual([])
+  })
+
+  test('a database from before recaps gains the table on open', () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'sidecar-store-')), 'old.db')
+    const old = new DatabaseSync(path)
+    old.exec('CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT NOT NULL, started_at INTEGER NOT NULL, last_at INTEGER NOT NULL)')
+    old.close()
+    const s = openStore(path)
+    expect(s.saveRecap(recap('p1', 'pending'))).toBe(1)
+    s.close()
   })
 })

@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite'
 import type {
-  Attention, DecisionEntry, FeedStep, GlossaryEntry, SessionSummary, SidecarEvent, StepExplanation, TokenUsage,
+  Attention, DecisionEntry, FeedStep, GlossaryEntry, RecapEntry, SessionSummary, SidecarEvent, StepExplanation, TokenUsage,
 } from '@sidecar/shared'
 
 export interface Store {
@@ -19,6 +19,10 @@ export interface Store {
   listDecisions(sessionId: string): DecisionEntry[]
   addConcept(c: GlossaryEntry): boolean
   listGlossary(sessionId: string): GlossaryEntry[]
+  /** Replaces the turn's recap and counts it; returns how many times the turn has been recapped. */
+  saveRecap(r: RecapEntry): number
+  getRecap(turnId: string): (RecapEntry & { count: number }) | undefined
+  listRecaps(sessionId: string): RecapEntry[]
   addUsage(u: TokenUsage): TokenUsage
   usage(): TokenUsage
   getSession(id: string): SessionSummary | undefined
@@ -78,6 +82,10 @@ export function openStore(path: string): Store {
       session_id TEXT NOT NULL, term_key TEXT NOT NULL, at INTEGER NOT NULL, json TEXT NOT NULL,
       PRIMARY KEY (session_id, term_key)
     );
+    CREATE TABLE IF NOT EXISTS recaps (
+      turn_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, at INTEGER NOT NULL, count INTEGER NOT NULL DEFAULT 0, json TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS recaps_session ON recaps(session_id, at);
     CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
   `)
   const sessionCols = new Set((db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[]).map((c) => c.name))
@@ -127,12 +135,19 @@ export function openStore(path: string): Store {
   const decisionsFor = db.prepare('SELECT json FROM decisions WHERE session_id = ? ORDER BY at ASC, id ASC')
   const insConcept = db.prepare('INSERT OR IGNORE INTO concepts (session_id, term_key, at, json) VALUES (?, ?, ?, ?)')
   const conceptsFor = db.prepare('SELECT json FROM concepts WHERE session_id = ? ORDER BY term_key ASC')
+  // count goes up only when a call was made (pending), so pending, then done, counts once
+  const upRecap = db.prepare(`
+    INSERT INTO recaps (turn_id, session_id, at, count, json) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(turn_id) DO UPDATE SET at = excluded.at, json = excluded.json, count = recaps.count + excluded.count
+    RETURNING count`)
+  const getRecapStmt = db.prepare('SELECT json, count FROM recaps WHERE turn_id = ?')
+  const recapsFor = db.prepare('SELECT json FROM recaps WHERE session_id = ? ORDER BY at ASC, turn_id ASC')
   const getMeta = db.prepare('SELECT value FROM meta WHERE key = ?')
   const upMeta = db.prepare('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
   const lastPromptStmt = db.prepare(`
     SELECT json FROM steps WHERE session_id = ? AND json_extract(json, '$.category') = 'prompt'
     ORDER BY started_at DESC, seq DESC LIMIT 1`)
-  const SESSION_TABLES = ['events', 'sessions', 'steps', 'explanations', 'decisions', 'concepts'] as const
+  const SESSION_TABLES = ['events', 'sessions', 'steps', 'explanations', 'decisions', 'concepts', 'recaps'] as const
   const delBySession = SESSION_TABLES.map((t) => db.prepare(`DELETE FROM ${t} WHERE ${t === 'sessions' ? 'id' : 'session_id'} = ?`))
   const tx = (fn: () => void) => {
     db.exec('BEGIN')
@@ -189,6 +204,17 @@ export function openStore(path: string): Store {
     },
     listGlossary(sessionId) {
       return parseJson<GlossaryEntry>(conceptsFor.all(sessionId))
+    },
+    saveRecap(r) {
+      const row = upRecap.get(r.turnId, r.sessionId, r.at, r.status === 'pending' ? 1 : 0, JSON.stringify(r)) as { count: number }
+      return row.count
+    },
+    getRecap(turnId) {
+      const row = getRecapStmt.get(turnId) as { json: string; count: number } | undefined
+      return row ? { ...(JSON.parse(row.json) as RecapEntry), count: row.count } : undefined
+    },
+    listRecaps(sessionId) {
+      return parseJson<RecapEntry>(recapsFor.all(sessionId))
     },
     usage() {
       const row = getMeta.get('usage') as { value: string } | undefined
