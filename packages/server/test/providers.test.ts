@@ -2,12 +2,15 @@ import { z } from 'zod'
 import Anthropic from '@anthropic-ai/sdk'
 import { describe, expect, test } from 'vitest'
 import {
-  API_MODEL, CLI_ARGS, ExplainError, anthropicProvider, cliProvider, explainTask, extractJson, pickProvider,
+  API_MODEL, CLI_ARGS, ExplainError, anthropicProvider, cliProvider, extractJson, pickProvider,
   type MessagesClient, type Provider, type Runner,
 } from '../src/explainer/providers'
 
-const req = explainTask({ system: 'SYS', user: 'USER' })
-const output = { items: [{ stepId: 'a', plain: 'p', why: 'w', concept: null, decision: null, next: null }] }
+const output = { items: [{ stepId: 'a', plain: 'p', why: 'w' }] }
+const req = {
+  system: 'SYS', user: 'USER', maxTokens: 8000, shape: 'SHAPE',
+  schema: z.object({ items: z.array(z.object({ stepId: z.string(), plain: z.string(), why: z.string() })) }),
+}
 
 describe('anthropicProvider', () => {
   const client = (impl: (p: Record<string, unknown>) => unknown): MessagesClient => ({ messages: { create: async (p) => impl(p) } })

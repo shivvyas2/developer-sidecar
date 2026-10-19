@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import { createApp, isAllowedHost, isAllowedOrigin } from '../src/app'
 import { Hub } from '../src/hub'
-import { createExplainer } from '../src/explainer/service'
+import { createRecapper } from '../src/explainer/recap'
 import { createPipeline } from '../src/pipeline'
 import { memorySettings } from '../src/settings'
 import { openStore } from '../src/store'
@@ -21,7 +21,7 @@ function make(staticDir?: string) {
   const store = openStore(':memory:')
   const hub = new Hub()
   const settings = memorySettings()
-  const explainer = createExplainer({ hub, store, settings, provider: null })
+  const explainer = createRecapper({ hub, store, settings, provider: null })
   const pipeline = createPipeline({ store, hub })
   const app = createApp({ pipeline, store, hub, settings, explainer, token: TOKEN, port: () => PORT, version: '0.1.0', staticDir })
   return Object.assign(app, { store, hub })

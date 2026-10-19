@@ -88,7 +88,9 @@ export function encodeTurn(ctx: TurnContext, steps: readonly FeedStep[]): Encode
     const s = byId.get(b.id)!
     if (s.category === 'read' && s.status === 'ok') { if (s.toolName === 'Read') reads++; else searches++; continue }
     const d = describe(s, rel)
-    lines.push({ text: `${d.text}${STATUS[s.status] ?? ''}`, failed: s.status === 'failed', command: d.command, step: s })
+    // Claude Code reports a command you cancelled as a failure with interrupted: true; it was stopped, not broken
+    const stopped = s.status === 'failed' && isRecord(s.output) && s.output.interrupted === true
+    lines.push({ text: `${d.text}${stopped ? STATUS.interrupted : STATUS[s.status] ?? ''}`, failed: s.status === 'failed' && !stopped, command: d.command, step: s })
   }
 
   // Over the cap: every failure, then commands, then the latest other lines; kept in order.
@@ -105,7 +107,8 @@ export function encodeTurn(ctx: TurnContext, steps: readonly FeedStep[]): Encode
   const body = kept.map((l) => {
     const label = `s${labels.size + 1}`
     if (l.step) labels.set(label, l.step.id)
-    const tail = tails.has(l) && l.step?.output !== undefined ? ` :: ${failTail(l.step.output)}` : ''
+    const text = tails.has(l) && l.step?.output !== undefined ? failTail(l.step.output) : ''
+    const tail = text ? ` :: ${text}` : ''
     return clipLine(`${label} ${l.text}`, RECAP_CAPS.lineChars) + tail
   })
   if (kept.length < lines.length) body.push(`…and ${lines.length - kept.length} more steps`)

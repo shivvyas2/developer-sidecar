@@ -47,6 +47,12 @@ describe('encodeTurn', () => {
     expect(user.length).toBeLessThanOrEqual(RECAP_CAPS.userChars)
   })
 
+  test('a command you cancelled reads stopped, not failed, and an empty output adds nothing', () => {
+    const { user } = encodeTurn(ctx, [bash('npm run dev', 'failed', { stdout: '', stderr: '', interrupted: true }), bash('npm test', 'failed', '')])
+    expect(user).toContain('s1 ran `npm run dev` (stopped)\n')
+    expect(user).toContain('s2 ran checks `npm test` FAILED\n')
+    expect(user).not.toContain('::')
+  })
   test('only the latest three failures carry output', () => {
     const steps = Array.from({ length: 5 }, (_, i) => bash(`npm test -- ${i}`, 'failed', `error number ${i}`))
     const { user } = encodeTurn(ctx, steps)

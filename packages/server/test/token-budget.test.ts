@@ -1,80 +1,76 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, test } from 'vitest'
-import { routineIds } from '@sidecar/shared'
-import { SYSTEM_PROMPT } from '../src/explainer/prompt'
-import { runSession, statsOf, type SessionRun } from '../../../bench/explainer/run'
-import { EDGE_SESSIONS, SESSIONS } from '../../../bench/explainer/sessions'
+import { RECAP_CAPS, RECAP_SYSTEM_PROMPT } from '../src/explainer/recap-prompt'
+import { RECAP_MAX_TOKENS } from '../src/explainer/recap'
+import { runSession, statsOf, turnsIn, type SessionRun } from '../../../bench/explainer/run'
+import { EDGE_SESSIONS, SESSIONS, type BenchSession } from '../../../bench/explainer/sessions'
 
 /**
- * Keeps the explainer lean on the bench's sample sessions (see bench/explainer). Before routine steps were
- * skipped and requests trimmed, these sessions sent 79 steps whose lines came to 78,857 characters. The
- * ceilings leave about 20% headroom over today, so a change that puts bulk back fails here. Step lines are
- * measured apart from the system prompt, which is checked once: summed per request, it would dominate.
+ * Keeps model spend down on the bench's sample sessions (see bench/explainer). Users pay for every
+ * call, through their Claude subscription (the claude command) or an API key. The step explainer this
+ * replaced sent 9 requests, about 8,300 input and 3,700 output tokens on these sessions; a recap per
+ * turn must stay well under that, and its size must not grow with the length of a turn.
  */
-const MAX_SENT = 36
-const MAX_STEP_CHARS = 19_500
-const MAX_SYSTEM_PROMPT_CHARS = 1_800
+const MAX_CALLS = 5
+const MAX_EST_INPUT = 5_000
+const MAX_EST_OUTPUT = 1_500
+/** Recaps must cost at most this share of what per-step explanations did. */
+const MAX_SHARE_OF_PER_STEP = 0.65
 
-const runs: SessionRun[] = []
-for (const s of SESSIONS) runs.push(await runSession(s))
-const edges: SessionRun[] = []
-for (const s of EDGE_SESSIONS) edges.push(await runSession(s))
+const baseline = JSON.parse(readFileSync(new URL('../../../bench/explainer/baseline.json', import.meta.url), 'utf8')) as {
+  perStep: { total: { estInputTokens: number; estOutputTokens: number } }
+}
 
-interface Sent { tool: string; input: Record<string, unknown>; output?: unknown }
-const sentSteps = (r: SessionRun['requests'][number]) =>
-  r.user.split('\n').filter((l) => l.startsWith('{"stepId"')).map((l) => JSON.parse(l) as Sent)
-const lines = (run: SessionRun) => run.requests.flatMap(sentSteps)
+const runs: Array<{ s: BenchSession; run: SessionRun }> = []
+for (const s of [...SESSIONS, ...EDGE_SESSIONS]) runs.push({ s, run: await runSession(s) })
+const sample = runs.filter(({ s }) => SESSIONS.includes(s))
 
-describe.each([...runs, ...edges].map((r) => [r.name, r] as const))('%s', (_name, run) => {
-  test('no routine step is sent', () => {
-    const routine = routineIds(run.steps)
-    expect(routine.size).toBeGreaterThan(0)
-    expect(run.sent.filter((id) => routine.has(id))).toEqual([])
-  })
-
-  test('every failed step is sent with something that says why', () => {
-    for (const s of run.steps.filter((x) => x.status === 'failed')) {
-      const i = run.batches.findIndex((b) => b.includes(s.id))
-      expect(i, `${s.caption} was not sent`).toBeGreaterThanOrEqual(0)
-      const sent = sentSteps(run.requests[i]!)[run.batches[i]!.indexOf(s.id)]!
-      expect(sent.output, `${s.caption} was sent without output`).toBeDefined()
-      if (typeof s.output === 'string') expect(sent.output).toContain(s.output.slice(0, 40))
+describe.each(runs.map(({ s, run }) => [s.name, s, run] as const))('%s', (_name, s, run) => {
+  test('at most one call per turn that ended', () => expect(run.requests.length).toBeLessThanOrEqual(turnsIn(s)))
+  test('every request is small: the short system prompt plus at most 4,500 characters', () => {
+    for (const r of run.requests) {
+      expect(r.system).toBe(RECAP_SYSTEM_PROMPT)
+      expect(r.user.length).toBeLessThanOrEqual(RECAP_CAPS.userChars)
+      expect(r.maxTokens).toBe(RECAP_MAX_TOKENS)
     }
   })
-
-  test('no whole file goes to the model', () => {
-    for (const r of run.requests) expect(r.user).not.toContain('originalFile')
-    for (const l of lines(run).filter((x) => x.tool === 'Write')) {
-      const c = l.input.content
-      expect(typeof c === 'string' ? c.length : (c as { preview: string }).preview.length).toBeLessThanOrEqual(401)
+  test('no file body, original file or secret goes to the model', () => {
+    for (const r of run.requests) {
+      expect(r.user).not.toMatch(/originalFile|structuredPatch|sk_(test|live)_|whsec_/)
+    }
+  })
+  test('every failure in a recapped turn is sent with the end of its output', () => {
+    for (const st of run.steps.filter((x) => x.status === 'failed' && typeof x.output === 'string')) {
+      // the encoder writes each step on one line, so whitespace is collapsed
+      const end = (st.output as string).replace(/\s+/g, ' ').trim().slice(-40)
+      const sent = run.requests.some((r) => r.user.includes(end))
+      expect(sent, `${st.caption} was sent without its output`).toBe(true)
     }
   })
 })
 
-test('the sample sessions stay under the token budget', () => {
-  const total = runs.map(statsOf).reduce((a, s) => ({ sent: a.sent + s.sent, chars: a.chars + s.stepChars }), { sent: 0, chars: 0 })
-  expect(total.sent).toBeLessThanOrEqual(MAX_SENT)
-  expect(total.chars).toBeLessThanOrEqual(MAX_STEP_CHARS)
+test('the sample sessions stay under the token budget, well below per-step explanations', () => {
+  const total = sample.map(({ s, run }) => statsOf(run, turnsIn(s))).reduce((a, x) => ({
+    calls: a.calls + x.calls, input: a.input + x.estInputTokens, output: a.output + x.estOutputTokens,
+  }), { calls: 0, input: 0, output: 0 })
+  expect(total.calls).toBeLessThanOrEqual(MAX_CALLS)
+  expect(total.input).toBeLessThanOrEqual(MAX_EST_INPUT)
+  expect(total.output).toBeLessThanOrEqual(MAX_EST_OUTPUT)
+  expect(total.input + total.output).toBeLessThan(MAX_SHARE_OF_PER_STEP * (baseline.perStep.total.estInputTokens + baseline.perStep.total.estOutputTokens))
 })
 
-test('the system prompt stays short (it is sent with every request)', () => {
-  expect(SYSTEM_PROMPT.length).toBeLessThanOrEqual(MAX_SYSTEM_PROMPT_CHARS)
+test('the recap system prompt stays short (it goes with every request)', () => {
+  expect(RECAP_SYSTEM_PROMPT.length).toBeLessThanOrEqual(1200)
 })
 
 describe('edge cases', () => {
-  const edge = edges[0]!
-  const byCaption = (re: RegExp) => edge.steps.find((s) => re.test(s.caption))!
-  test('a multi-line command is explained, not skipped as a look', () => {
-    expect(edge.sent).toContain(edge.steps.find((s) => String((s.input as { command?: string }).command).startsWith('ls dist'))!.id)
+  const edge = runs.find(({ s }) => s.name === 'edge-cases')!.run
+  test('the turn is recapped once, and the cancelled dev server says it was stopped', () => {
+    expect(edge.requests).toHaveLength(1)
+    expect(edge.requests[0]!.user).toMatch(/ran `npm run dev` \(stopped\)/)
   })
-  test('a cancelled command is sent as failed and says it was interrupted', () => {
-    const run = byCaption(/starting your app/i)
-    expect(run.status).toBe('failed')
-    expect(edge.sent).toContain(run.id)
-    const i = edge.batches.findIndex((b) => b.includes(run.id))
-    expect(sentSteps(edge.requests[i]!)[edge.batches[i]!.indexOf(run.id)]!.output).toEqual({ interrupted: true })
-  })
-  test('reading secrets through the shell is explained, and the key never reaches the model', () => {
-    expect(edge.sent).toContain(byCaption(/secret settings/i).id)
-    for (const r of edge.requests) expect(r.user).not.toMatch(/sk_test_51P/)
+  test('reading secrets through the shell is described, and the key never reaches the model', () => {
+    expect(edge.requests[0]!.user).toMatch(/secret settings|\.env\.local/i)
+    expect(edge.requests[0]!.user).not.toMatch(/sk_test_51P/)
   })
 })

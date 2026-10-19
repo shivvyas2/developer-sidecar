@@ -4,7 +4,6 @@ import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import type { z } from 'zod'
 import type { TokenUsage } from '@sidecar/shared'
-import { ExplainOutputSchema, type ExplainOutput, type ExplainRequest } from './prompt'
 
 export type ModelLevel = 'haiku' | 'sonnet'
 export const API_MODEL: Record<ModelLevel, string> = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5' }
@@ -26,7 +25,7 @@ export interface ModelTask<T> {
   /** The answer's shape spelled out, for the CLI, which can't enforce a schema. */
   shape: string
 }
-export interface ProviderResult<T = ExplainOutput> { output: T; usage: TokenUsage }
+export interface ProviderResult<T> { output: T; usage: TokenUsage }
 export interface Provider {
   id: 'api' | 'cli'
   call<T>(task: ModelTask<T>, level: ModelLevel): Promise<ProviderResult<T>>
@@ -122,7 +121,6 @@ export function extractJson(text: string): unknown {
   }
 }
 
-export const JSON_SHAPE = 'Respond with ONLY one JSON object of the form {"items":[{"stepId":"…","plain":"…","why":"…","concept":{"term":"…","definition":"…"} or null,"decision":{"title":"…","choice":"…","alternatives":["…"],"reason":"…"} or null,"next":"…" or null}]} and nothing else.'
 
 /** Marks the child as Sidecar's own run and drops the markers a nested-session guard would refuse on. */
 export function childEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -160,10 +158,6 @@ export function cliProvider(run: Runner = runClaude, env: NodeJS.ProcessEnv = pr
     },
   }
 }
-
-/** The per-step explanation request as a task. */
-export const explainTask = (req: ExplainRequest): ModelTask<ExplainOutput> =>
-  ({ ...req, schema: ExplainOutputSchema, maxTokens: 8000, shape: JSON_SHAPE })
 
 export const claudeAvailable = (run: Runner = runClaude) => async (): Promise<boolean> => {
   try {
