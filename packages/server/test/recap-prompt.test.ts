@@ -50,7 +50,7 @@ describe('encodeTurn', () => {
   test('a command you cancelled reads stopped, not failed, and an empty output adds nothing', () => {
     const { user } = encodeTurn(ctx, [bash('npm run dev', 'failed', { stdout: '', stderr: '', interrupted: true }), bash('npm test', 'failed', '')])
     expect(user).toContain('s1 ran `npm run dev` (stopped)\n')
-    expect(user).toContain('s2 ran checks `npm test` FAILED\n')
+    expect(user).toMatch(/^s2 ran checks `npm test` FAILED$/m)
     expect(user).not.toContain('::')
   })
   test('only the latest three failures carry output', () => {
@@ -82,6 +82,16 @@ describe('encodeTurn', () => {
     expect(user).not.toContain(stripe.slice(-12))
     expect(user).not.toContain('api03-Zq9')
     expect(user).not.toContain('51HZq9')
+  })
+
+  test('the facts come before the steps and survive the length cap', () => {
+    // 29 long failing commands, each carrying an output tail, are far over the cap
+    const steps = Array.from({ length: 29 }, (_, i) => bash(`npm run task${i} ${'z'.repeat(150)}`, 'failed', `${i} ${'e'.repeat(400)}`))
+    const { user } = encodeTurn({ ...ctx, rule: { ...rule, checks: 'fail', outcome: 'failing', url: 'http://localhost:3000' } }, steps)
+    expect(user.length).toBeLessThanOrEqual(RECAP_CAPS.userChars)
+    expect(user).toContain('checks still FAIL')
+    expect(user).toContain('the app runs at http://localhost:3000')
+    expect(user.indexOf('Facts:')).toBeLessThan(user.indexOf('Steps:'))
   })
 
   test('a very long prompt is shortened, and an empty turn still encodes', () => {
