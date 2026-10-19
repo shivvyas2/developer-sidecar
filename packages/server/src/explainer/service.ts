@@ -1,5 +1,5 @@
 import { basename } from 'node:path'
-import type { ExplainerState, FeedStep, ServerMessage, StepExplanation } from '@sidecar/shared'
+import { isRoutine, trackTouched, type ExplainerState, type FeedStep, type ServerMessage, type StepExplanation } from '@sidecar/shared'
 import type { Hub } from '../hub'
 import type { SettingsStore } from '../settings'
 import type { Store } from '../store'
@@ -7,6 +7,8 @@ import { buildRequest, normalize, toInput } from './prompt'
 import { ExplainError, type ModelLevel, type Provider, type ProviderResult } from './providers'
 
 export const QUIET_MS = 3000
+/** Longest a queued step waits while routine steps keep the session busy. */
+export const MAX_WAIT_MS = 15_000
 export const MAX_BATCH = 8
 export const RETRY_DELAY_MS = 1000
 export const PAUSE_AFTER = 3
@@ -29,6 +31,7 @@ export interface ExplainerOptions {
   provider: Provider | null
   now?: () => number
   quietMs?: number
+  maxWaitMs?: number
   maxBatch?: number
   retryDelayMs?: number
   pauseAfter?: number
@@ -43,12 +46,14 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 export function createExplainer(o: ExplainerOptions): Explainer {
   const now = o.now ?? Date.now
   const quietMs = o.quietMs ?? QUIET_MS
+  const maxWaitMs = o.maxWaitMs ?? MAX_WAIT_MS
   const maxBatch = o.maxBatch ?? MAX_BATCH
   const retryDelayMs = o.retryDelayMs ?? RETRY_DELAY_MS
   const pauseAfter = o.pauseAfter ?? PAUSE_AFTER
 
   const queues = new Map<string, Map<string, FeedStep>>()
   const timers = new Map<string, ReturnType<typeof setTimeout>>()
+  const queuedAt = new Map<string, number>() // when each session's queue got its first step
   let chain: Promise<void> = Promise.resolve()
   let current = o.provider
   let failures = 0
@@ -56,6 +61,7 @@ export function createExplainer(o: ExplainerOptions): Explainer {
   let epoch = 0 // bumped on reset
   const sessionEpochs = new Map<string, number>() // bumped on session_deleted
   const inFlight = new Set<string>() // step ids flushed but not finished
+  const touched = new Map<string, Set<string>>() // per session: files written since the last prompt
   let stopped = false
 
   const level = () => (o.disabledReason ? 'off' : o.settings.get().explanations)
@@ -75,7 +81,19 @@ export function createExplainer(o: ExplainerOptions): Explainer {
       clearTimeout(timers.get(id))
       timers.delete(id)
       queues.delete(id)
+      queuedAt.delete(id)
     }
+  }
+
+  /** Seeded from the store the first time a session is seen (e.g. after a restart), without this step. */
+  const touchedFor = (step: FeedStep) => {
+    let t = touched.get(step.sessionId)
+    if (!t) {
+      t = new Set()
+      for (const s of o.store.stepsForSession(step.sessionId)) if (s.id !== step.id) trackTouched(t, s)
+      touched.set(step.sessionId, t)
+    }
+    return t
   }
 
   const mark = (sessionId: string, stepId: string, explanation: StepExplanation) => {
@@ -159,6 +177,7 @@ export function createExplainer(o: ExplainerOptions): Explainer {
   const flush = (sessionId: string) => {
     clearTimeout(timers.get(sessionId))
     timers.delete(sessionId)
+    queuedAt.delete(sessionId)
     const q = queues.get(sessionId)
     if (!q || q.size === 0) return
     const lvl = level()
@@ -177,21 +196,33 @@ export function createExplainer(o: ExplainerOptions): Explainer {
 
   const enqueue = (step: FeedStep) => {
     if (step.status !== 'ok' && step.status !== 'failed') return
+    const t = touchedFor(step)
+    const routine = isRoutine(step, t)
+    trackTouched(t, step)
     if (step.category === 'prompt') return
+    // a routine step is still activity: keep waiting, so the batch isn't split around it
+    if (routine) { if (queues.has(step.sessionId)) wait(step.sessionId); return }
     if (level() === 'off' || !current || paused) return
     if (inFlight.has(step.id) || o.store.hasExplanation(step.id)) return
     const q = queues.get(step.sessionId) ?? new Map<string, FeedStep>()
     q.set(step.id, step)
     queues.set(step.sessionId, q)
     if (q.size >= maxBatch) return flush(step.sessionId)
-    clearTimeout(timers.get(step.sessionId))
-    timers.set(step.sessionId, setTimeout(() => flush(step.sessionId), quietMs))
+    wait(step.sessionId)
+  }
+
+  /** Flush once the session has been quiet for quietMs, or the oldest queued step has waited maxWaitMs. */
+  const wait = (sessionId: string) => {
+    if (!queuedAt.has(sessionId)) queuedAt.set(sessionId, now())
+    const left = queuedAt.get(sessionId)! + maxWaitMs - now()
+    clearTimeout(timers.get(sessionId))
+    timers.set(sessionId, setTimeout(() => flush(sessionId), Math.max(0, Math.min(quietMs, left))))
   }
 
   const unsubscribe = o.hub.subscribe((m: ServerMessage) => {
     if (m.type === 'step') enqueue(m.step)
-    else if (m.type === 'session_deleted') { sessionEpochs.set(m.id, (sessionEpochs.get(m.id) ?? 0) + 1); drop(m.id) }
-    else if (m.type === 'reset') { epoch++; drop() }
+    else if (m.type === 'session_deleted') { sessionEpochs.set(m.id, (sessionEpochs.get(m.id) ?? 0) + 1); drop(m.id); touched.delete(m.id) }
+    else if (m.type === 'reset') { epoch++; drop(); touched.clear() }
   })
 
   return {
