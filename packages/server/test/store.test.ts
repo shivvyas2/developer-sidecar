@@ -214,6 +214,18 @@ describe('recaps', () => {
     expect(s.failPendingRecaps('again', 10)).toEqual([])
   })
 
+  test('the newest recap of each session that was never called', () => {
+    const s = openStore(':memory:')
+    s.saveRecap(recap('a1', 'unavailable', 1))
+    s.saveRecap(recap('a2', 'unavailable', 2))
+    s.saveRecap(recap('b1', 'unavailable', 1, 's2'))
+    s.saveRecap(recap('b2', 'done', 2, 's2'))
+    s.saveRecap(recap('c1', 'pending', 1, 's3'))
+    s.saveRecap(recap('c1', 'unavailable', 2, 's3'))
+    // s1's newest was never called; s2's newest is done; s3's newest was called once
+    expect(s.unavailableRecaps().map((r) => r.turnId)).toEqual(['a2'])
+  })
+
   test('listed per session, oldest first, and deleted with the session', () => {
     const s = openStore(':memory:')
     s.saveRecap(recap('b', 'done', 5))

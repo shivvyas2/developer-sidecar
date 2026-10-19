@@ -25,6 +25,8 @@ export interface Store {
   listRecaps(sessionId: string): RecapEntry[]
   /** Marks every pending recap unavailable (their calls can no longer finish) and returns them. */
   failPendingRecaps(reason: string, at: number): RecapEntry[]
+  /** Each session's newest recap when it is unavailable and no call was ever made for it (recaps were paused). */
+  unavailableRecaps(): RecapEntry[]
   addUsage(u: TokenUsage): TokenUsage
   usage(): TokenUsage
   getSession(id: string): SessionSummary | undefined
@@ -145,6 +147,10 @@ export function openStore(path: string): Store {
   const getRecapStmt = db.prepare('SELECT json, count FROM recaps WHERE turn_id = ?')
   const recapsFor = db.prepare('SELECT json FROM recaps WHERE session_id = ? ORDER BY at ASC, turn_id ASC')
   const pendingRecaps = db.prepare(`SELECT json FROM recaps WHERE json_extract(json, '$.status') = 'pending'`)
+  const uncalledRecaps = db.prepare(`
+    SELECT json FROM recaps r WHERE count = 0 AND json_extract(json, '$.status') = 'unavailable'
+      AND NOT EXISTS (SELECT 1 FROM recaps n WHERE n.session_id = r.session_id AND (n.at > r.at OR (n.at = r.at AND n.turn_id > r.turn_id)))
+    ORDER BY session_id`)
   const setRecapJson = db.prepare('UPDATE recaps SET at = ?, json = ? WHERE turn_id = ?')
   const getMeta = db.prepare('SELECT value FROM meta WHERE key = ?')
   const upMeta = db.prepare('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
@@ -224,6 +230,9 @@ export function openStore(path: string): Store {
       const failed = parseJson<RecapEntry>(pendingRecaps.all()).map((r): RecapEntry => ({ ...r, at, status: 'unavailable', reason }))
       for (const r of failed) setRecapJson.run(at, JSON.stringify(r), r.turnId)
       return failed
+    },
+    unavailableRecaps() {
+      return parseJson<RecapEntry>(uncalledRecaps.all())
     },
     usage() {
       const row = getMeta.get('usage') as { value: string } | undefined
