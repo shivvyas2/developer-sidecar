@@ -1,0 +1,4 @@
+# Every change needs a review from a code owner, and GitHub never lets authors
+# approve their own pull requests, so each maintainer's work is approved by the
+# other. The "protect main" ruleset in .github/rulesets/main.json enforces this.
+* @shivvyas2 @darshjoshi
