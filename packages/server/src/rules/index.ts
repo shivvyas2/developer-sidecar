@@ -95,7 +95,7 @@ export function segments(cmd: string, o: { raw?: boolean } = {}): string[] {
   cut()
   return out.flatMap((s) => {
     const end = s.blank.trimEnd().length
-    const start = s.blank.slice(0, end).match(/^\s*(?:[({]\s*)?(?:\w+=\S*\s+)*(?:(?:sudo|time|exec)\s+)?\s*/)![0].length
+    const start = s.blank.slice(0, end).match(/^\s*(?:[({]\s*)?(?:\w+=(?:"[^"]*"|'[^']*'|\S*)\s+)*(?:(?:sudo|time|exec)\s+)?\s*/)![0].length
     if (start >= end) return []
     return [o.raw ? s.raw.slice(start, end).replaceAll('\0', '').trim() : s.blank.slice(start, end)]
   })

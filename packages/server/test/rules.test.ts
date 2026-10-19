@@ -78,6 +78,7 @@ describe('translate', () => {
     ['quoted package spec', bash('pip install "django>=4"'), 'install', /: django>=4$/],
     ['pinned versions are package names, assignments are not', bash('pip install django==4.2 X=1'), 'install', /: django==4\.2$/],
     ['quoted scoped package', bash("npm i '@scope/pkg' zod"), 'install', /: @scope\/pkg, zod$/],
+    ['env with a quoted value then test', bash(`FOO="a b" BAR='c d' npm test`), 'test', /checking/i],
     ['installing a test browser is not a test run', bash('npx playwright install chromium'), 'fallback', /running a command/i],
     ['a typecheck with a test config is not a test run', bash('npx tsc -p tsconfig.test.json'), 'fallback', /running a command/i],
     ['linting a test folder is not a test run', bash('npx eslint src/test'), 'fallback', /running a command/i],
@@ -157,6 +158,7 @@ describe('segments', () => {
     ['npm run dev &> log.txt', ['npm run dev &> log.txt']],
     ['cd app && NODE_ENV=test FOO=1 npm test', ['cd app', 'npm test']],
     ['sudo npm install -g pnpm', ['npm install -g pnpm']],
+    [`MSG="a b" X='' npm test`, ['npm test']],
     ['(cd web && npm run build)', ['cd web', 'npm run build)']],
     ['npm install \\\n  stripe', ['npm install \\\n  stripe']],
   ])('%j', (cmd, want) => {
@@ -180,6 +182,7 @@ describe('segments', () => {
   test('raw keeps the quoted text and drops the quotes, part for part', () => {
     expect(segments('cd a && pip install "django>=4" && git commit -m "x; y"', { raw: true })).toEqual(['cd a', 'pip install django>=4', 'git commit -m x; y'])
     expect(segments("sudo npm i '@s/p'", { raw: true })).toEqual(['npm i @s/p'])
+    expect(segments(`FOO="a b" npm i '@s/p'`, { raw: true })).toEqual(['npm i @s/p'])
     expect(segments('echo "" && npm test', { raw: true })).toEqual(['echo', 'npm test'])
   })
 
