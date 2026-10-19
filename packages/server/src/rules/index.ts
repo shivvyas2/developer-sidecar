@@ -8,6 +8,8 @@ interface Ctx {
   step: Step
   input: Record<string, unknown>
   command: string
+  /** The command's simple commands with quoted text blanked (see segments). */
+  parts: string[]
   file: string
   name: string
   failed: boolean
@@ -22,14 +24,18 @@ interface Rule {
 const basename = (p: string) => p.split(/[\\/]/).pop() ?? p
 const short = (s: string, n = 100) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
+/** The first simple command that matches, so `git add -A && git commit` is a commit and a commit message never matches. */
+const part = (c: Ctx, re: RegExp) => c.parts.find((p) => re.test(p))
 
-const INSTALL = /\b(npm|pnpm|yarn|bun)\s+(i|install|add)\b|\b(pip3?|uv\s+pip|poetry)\s+(install|add)\b|\buv\s+add\b|\bcargo\s+add\b|\bgo\s+get\b/
-const TEST = /\b(test|vitest|jest|pytest|playwright|mocha|cargo\s+test|go\s+test)\b/
-const DEPLOY = /\b(vercel|netlify\s+deploy|fly\s+deploy|flyctl\s+deploy|railway\s+up|docker\s+push|wrangler\s+deploy)\b/
-const RUN = /\b(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start|build|preview)\b|\b(next|vite)\s+(dev|build)\b|\bpython3?\s+\S+\.py\b|\bnode\s+\S+\.(m?js|ts)\b/
+// Matched against one simple command at a time (see segments), from its start, so words elsewhere never count.
+const INSTALL = /^(npm|pnpm|yarn|bun)\s+(i|install|add)\b|^(pip3?|uv\s+pip|poetry)\s+(install|add)\b|^python3?\s+-m\s+pip\s+install\b|^uv\s+add\b|^cargo\s+add\b|^go\s+get\b/
+const TEST = /^(?:(?:npm|pnpm|yarn|bun|npx|bunx|python3?|uv|poetry|cargo|go|make|deno)\b.*\b(?:test|vitest|jest|pytest|playwright|mocha)|(?:vitest|jest|pytest|playwright|mocha))\b/
+const DEPLOY = /^(npx\s+|bunx\s+)?(vercel|netlify\s+deploy|fly\s+deploy|flyctl\s+deploy|railway\s+up|docker\s+push|wrangler\s+deploy)\b/
+const RUN = /^(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start|build|preview)\b|^(npx\s+)?(next|vite)\s+(dev|build)\b|^python3?\s+\S+\.py\b|^node\s+\S+\.(m?js|ts)\b/
+const BUILD = /^(npm|pnpm|yarn|bun)\s+(run\s+)?build\b|^(npx\s+)?(next|vite)\s+build\b/
 const DATA_FILE = /(schema\.prisma|\/migrations?\/|\.sql$|drizzle|schema\.(ts|js)$|models?\.py$)/i
-const DATA_CMD = /\b(prisma\s+(migrate|db)|drizzle-kit|alembic|knex\s+migrate|supabase\s+db)\b/
-const GIT = /^\s*(git\s+(commit|push|merge|tag|checkout\s+-b|switch\s+-c|branch)|gh\s+pr\s+(create|merge))\b/
+const DATA_CMD = /^(npx\s+|bunx\s+|pnpm\s+(exec\s+)?)?(prisma\s+(migrate|db)|drizzle-kit|alembic|knex\s+migrate|supabase\s+db)\b/
+const GIT = /^(git\s+(commit|push|merge|tag|checkout\s+-b|switch\s+-c|branch)|gh\s+pr\s+(create|merge))\b/
 /** One command that only looks. Anything chained (a newline too), piped, redirected or substituted is not read-only. */
 const LOOK = /^\s*(ls|pwd|cat|head|tail|wc|tree|file|stat|which|find|grep|rg|git\s+(status|diff|log|show))\b/
 const NOT_ONLY_LOOKING = new RegExp([
@@ -96,7 +102,7 @@ const RULES: Rule[] = [
   },
   {
     id: 'mcp',
-    match: (c) => c.name.startsWith('mcp__') || basename(c.file) === '.mcp.json' || /\bclaude\s+mcp\s+add\b/.test(c.command),
+    match: (c) => c.name.startsWith('mcp__') || basename(c.file) === '.mcp.json' || !!part(c, /^claude\s+mcp\s+add\b/),
     build: (c) => {
       if (c.name.startsWith('mcp__')) {
         const [, server = 'a', tool = 'tool'] = c.name.split('__')
@@ -107,9 +113,9 @@ const RULES: Rule[] = [
   },
   {
     id: 'git',
-    match: (c) => GIT.test(c.command),
+    match: (c) => !!part(c, GIT),
     build: (c) => ({
-      caption: /push|pr\s+create/.test(c.command) ? 'Saving a checkpoint and sending it to GitHub' : 'Saving a checkpoint of your code',
+      caption: part(c, /^(git\s+push|gh\s+pr\s+create)\b/) ? 'Saving a checkpoint and sending it to GitHub' : 'Saving a checkpoint of your code',
       scene: (cap) => scenes.ship(cap, c.failed),
     }),
   },
@@ -123,15 +129,15 @@ const RULES: Rule[] = [
   },
   {
     id: 'install',
-    match: (c) => INSTALL.test(c.command),
+    match: (c) => !!part(c, INSTALL),
     build: (c) => {
-      const pkgs = packagesFrom(c.command)
+      const pkgs = packagesFrom(part(c, INSTALL) ?? '')
       return { caption: pkgs ? `Adding ready-made building blocks: ${pkgs}` : 'Installing the project’s building blocks', scene: (cap) => scenes.toolbox(cap, c.failed) }
     },
   },
   {
     id: 'test',
-    match: (c) => TEST.test(c.command),
+    match: (c) => !!part(c, TEST),
     build: (c) => ({
       caption: c.step.status === 'running' ? 'Checking that the code works' : c.failed ? 'Checking the code works: some checks failed' : 'Checking the code works: all good',
       scene: (cap) => scenes.inspect(cap, c.failed),
@@ -139,20 +145,20 @@ const RULES: Rule[] = [
   },
   {
     id: 'deploy',
-    match: (c) => DEPLOY.test(c.command),
+    match: (c) => !!part(c, DEPLOY),
     build: (c) => ({ caption: 'Putting your app live on the internet', scene: (cap) => scenes.launch(cap, c.failed) }),
   },
   {
     id: 'run',
-    match: (c) => RUN.test(c.command),
+    match: (c) => !!part(c, RUN),
     build: (c) => ({
-      caption: /build/.test(c.command) ? 'Packaging your app so it can run fast' : 'Starting your app so you can try it',
+      caption: part(c, BUILD) ? 'Packaging your app so it can run fast' : 'Starting your app so you can try it',
       scene: (cap) => scenes.run(cap, c.failed),
     }),
   },
   {
     id: 'data',
-    match: (c) => DATA_FILE.test(c.file) || DATA_CMD.test(c.command),
+    match: (c) => DATA_FILE.test(c.file) || !!part(c, DATA_CMD),
     build: () => ({ caption: 'Setting up where your app’s data is stored', scene: scenes.database }),
   },
   {
@@ -210,10 +216,12 @@ function techLabel(c: Ctx): string {
 
 export function translate(step: Step): Translation {
   const input = isRecord(step.input) ? step.input : {}
+  const command = step.toolName === 'Bash' ? str(input.command) : ''
   const ctx: Ctx = {
     step,
     input,
-    command: step.toolName === 'Bash' ? str(input.command) : '',
+    command,
+    parts: segments(command),
     file: str(input.file_path) || str(input.notebook_path) || str(input.path),
     name: step.toolName,
     failed: step.status === 'failed',
