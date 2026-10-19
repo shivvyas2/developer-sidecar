@@ -15,6 +15,8 @@ export const PAUSE_AFTER = 3
 export const UNAVAILABLE_REASON = 'Set ANTHROPIC_API_KEY or install Claude Code (the claude command) to get AI recaps.'
 const EMPTY = 'The recap came back empty.'
 const TURNED_OFF = 'AI recaps were turned off.'
+export const INTERRUPTED = 'The recap was interrupted.'
+export const RESTARTED = 'Sidecar restarted before the recap finished.'
 
 export interface Explainer {
   state(): ExplainerState
@@ -96,7 +98,9 @@ export function createRecapper(o: RecapperOptions): Explainer {
     // the session up to this turn's end, so the rule recap is about this turn and not a newer one
     const steps = all.slice(0, all.findIndex((s) => s.id === lastStepId) + 1)
     const existing = o.store.getRecap(turn.id)
-    if (existing && (existing.lastStepId === lastStepId || existing.count >= MAX_RECAPS_PER_TURN)) return
+    // an unavailable recap of the same steps may be tried again; only calls count toward the cap
+    const same = existing?.lastStepId === lastStepId && existing.status !== 'unavailable'
+    if (existing && (same || existing.count >= MAX_RECAPS_PER_TURN)) return
 
     const entry = { sessionId, turnId: turn.id, lastStepId }
     if (paused) { save({ ...entry, at: now(), status: 'unavailable', reason: paused }); return }
@@ -107,50 +111,57 @@ export function createRecapper(o: RecapperOptions): Explainer {
     const { user, labels } = encodeTurn({ project: cwd ? basename(cwd) : 'this project', asked: turn.asked, rule, ...(cwd ? { cwd } : {}) }, turnSteps)
     const task = { system: RECAP_SYSTEM_PROMPT, user, schema: RecapOutputSchema, maxTokens: RECAP_MAX_TOKENS, shape: RECAP_SHAPE }
     save({ ...entry, at: now(), status: 'pending' })
+    // from here on the recap must end done or unavailable, even if something throws
+    let ended = false
+    const end = (r: RecapEntry) => { save(r); ended = true }
+    try {
+      // switched off, stopped, reset or session deleted since this recap was queued: no more calls or writes
+      const cancelled = () => stopped || level() === 'off' || stale()
+      let result: ProviderResult<RecapOutput> | null = null
+      let error: ExplainError | null = null
+      for (let attempt = 0; attempt < 2 && !result; attempt++) {
+        if (attempt > 0 && cancelled()) break
+        try {
+          result = await provider.call(task, lvl as ModelLevel)
+        } catch (err) {
+          error = err instanceof ExplainError ? err : new ExplainError(String(err), true)
+          // a failed attempt can still have spent tokens
+          if (error.usage) o.store.addUsage(error.usage)
+          if (!error.retryable) break
+          if (attempt === 0) await sleep(retryDelayMs)
+        }
+      }
+      // the tokens were spent even if the recap is dropped below
+      if (result) o.store.addUsage(result.usage)
+      if (stopped || stale()) return
+      if (level() === 'off') { end({ ...entry, at: now(), status: 'unavailable', reason: TURNED_OFF }); publishState(); return }
 
-    // switched off, stopped, reset or session deleted since this recap was queued: no more calls or writes
-    const cancelled = () => stopped || level() === 'off' || stale()
-    let result: ProviderResult<RecapOutput> | null = null
-    let error: ExplainError | null = null
-    for (let attempt = 0; attempt < 2 && !result; attempt++) {
-      if (attempt > 0 && cancelled()) break
-      try {
-        result = await provider.call(task, lvl as ModelLevel)
-      } catch (err) {
-        error = err instanceof ExplainError ? err : new ExplainError(String(err), true)
-        // a failed attempt can still have spent tokens
-        if (error.usage) o.store.addUsage(error.usage)
-        if (!error.retryable) break
-        if (attempt === 0) await sleep(retryDelayMs)
+      const recap = result ? normalizeRecap(result.output, labels, rule.outcome === 'failing') : null
+      if (recap) {
+        failures = 0
+        end({ ...entry, at: now(), status: 'done', ai: recap.ai })
+        const t = now()
+        for (const [i, d] of recap.decisions.entries()) {
+          // a recap may cite one step for two decisions
+          const decision = { ...d, id: `${d.stepId}:decision:${i}`, sessionId, at: t }
+          o.store.addDecision(decision)
+          o.hub.publish({ type: 'decision', decision })
+        }
+        for (const c of recap.concepts) {
+          const concept = { ...c, sessionId, at: t }
+          if (o.store.addConcept(concept)) o.hub.publish({ type: 'concept', concept })
+        }
+      } else {
+        const reason = error?.message ?? EMPTY
+        end({ ...entry, at: now(), status: 'unavailable', reason })
+        failures++
+        if (failures >= pauseAfter || (error && !error.retryable)) paused = reason
       }
+      publishState()
+    } finally {
+      // something threw after pending was saved: say so rather than leave the card waiting forever
+      if (!ended && !stopped && !stale()) save({ ...entry, at: now(), status: 'unavailable', reason: INTERRUPTED })
     }
-    // the tokens were spent even if the recap is dropped below
-    if (result) o.store.addUsage(result.usage)
-    if (stopped || stale()) return
-    if (level() === 'off') { save({ ...entry, at: now(), status: 'unavailable', reason: TURNED_OFF }); publishState(); return }
-
-    const recap = result ? normalizeRecap(result.output, labels, rule.outcome === 'failing') : null
-    if (recap) {
-      failures = 0
-      save({ ...entry, at: now(), status: 'done', ai: recap.ai })
-      const t = now()
-      for (const [i, d] of recap.decisions.entries()) {
-        // a recap may cite one step for two decisions
-        const decision = { ...d, id: `${d.stepId}:decision:${i}`, sessionId, at: t }
-        o.store.addDecision(decision)
-        o.hub.publish({ type: 'decision', decision })
-      }
-      for (const c of recap.concepts) {
-        const concept = { ...c, sessionId, at: t }
-        if (o.store.addConcept(concept)) o.hub.publish({ type: 'concept', concept })
-      }
-    } else {
-      const reason = error?.message ?? EMPTY
-      save({ ...entry, at: now(), status: 'unavailable', reason })
-      failures++
-      if (failures >= pauseAfter || (error && !error.retryable)) paused = reason
-    }
-    publishState()
   }
 
   const key = (sessionId: string, turnId: string) => `${sessionId}\n${turnId}`
@@ -165,6 +176,9 @@ export function createRecapper(o: RecapperOptions): Explainer {
       o.log?.(`recap failed: ${err instanceof Error ? err.message : String(err)}`)
     })
   }
+
+  // calls in flight when the server last stopped can never finish
+  for (const r of o.store.failPendingRecaps(RESTARTED, now())) o.hub.publish({ type: 'recap', recap: r })
 
   const unsubscribe = o.hub.subscribe((m: ServerMessage) => {
     if (m.type === 'turn_end') schedule(m.sessionId)

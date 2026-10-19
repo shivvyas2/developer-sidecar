@@ -194,6 +194,52 @@ describe('when the model fails', () => {
   })
 })
 
+describe('no recap is left pending', () => {
+  test('a provider that throws something odd ends unavailable', async () => {
+    const t = setup({ id: 'api', async call() { throw new TypeError('boom') } })
+    t.turn(); t.stop(); await t.settle()
+    expect(t.store.listRecaps('s1')[0]).toMatchObject({ status: 'unavailable' })
+  })
+
+  test('a store write that throws after the call ends unavailable, not pending', async () => {
+    const log: string[] = []
+    const hub = new Hub()
+    const store = openStore(':memory:')
+    const rx = createRecapper({ hub, store, settings: memorySettings(), provider: fake().provider, retryDelayMs: 0, log: (m) => log.push(m) })
+    vi.spyOn(store, 'addUsage').mockImplementation(() => { throw new Error('disk full') })
+    const s: Step = { id: 'w1', sessionId: 's1', toolName: 'Write', input: { file_path: '/a.ts', content: 'x' }, startedAt: 1, status: 'ok' }
+    store.saveStep({ ...s, ...translate(s), seq: 1 })
+    hub.publish({ type: 'turn_end', sessionId: 's1', at: 2 })
+    await vi.runAllTimersAsync(); await rx.idle()
+    expect(store.listRecaps('s1')[0]).toMatchObject({ status: 'unavailable', reason: 'The recap was interrupted.' })
+    expect(log).toEqual(['recap failed: disk full'])
+  })
+
+  test('a recap still pending from before a restart is marked unavailable, and said so', () => {
+    const hub = new Hub()
+    const store = openStore(':memory:')
+    store.saveRecap({ sessionId: 's1', turnId: 'p1', lastStepId: 'x', at: 1, status: 'pending' })
+    store.saveRecap({ sessionId: 's1', turnId: 'p0', lastStepId: 'y', at: 1, status: 'done', ai: { summary: 'S', meaning: 'M' } })
+    const got: ServerMessage[] = []
+    hub.subscribe((m) => got.push(m))
+    createRecapper({ hub, store, settings: memorySettings(), provider: null })
+    expect(store.getRecap('p1')).toMatchObject({ status: 'unavailable', reason: 'Sidecar restarted before the recap finished.', count: 1 })
+    expect(store.getRecap('p0')!.status).toBe('done')
+    expect(got).toEqual([{ type: 'recap', recap: expect.objectContaining({ turnId: 'p1', status: 'unavailable' }) }])
+  })
+
+  test('an unavailable recap is tried again on the next Stop, within the cap', async () => {
+    let n = 0
+    const t = setup(fake(() => (++n === 1 ? { summary: ' ', meaning: ' ', next: null, decisions: [], concepts: [] } : ANSWER)).provider)
+    t.turn(); t.stop(); await t.settle()
+    expect(t.store.listRecaps('s1')[0]!.status).toBe('unavailable')
+    t.stop(); await t.settle()
+    expect(t.store.listRecaps('s1')[0]!.status).toBe('done')
+    t.stop(); await t.settle()
+    expect(n).toBe(MAX_RECAPS_PER_TURN)
+  })
+})
+
 describe('cancelled mid-flight', () => {
   const slow = () => {
     let release!: () => void
