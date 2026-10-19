@@ -8,6 +8,11 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 
 ### Added
 
+- **Where things stand.** The Stage opens with a card that sums up the last
+  thing you asked: how it ended, the parts made or changed, building blocks
+  added and whether the checks pass. When a dev server is up there is an
+  "Open your app" button, and when a failure is still in the way, a request
+  to copy into Claude Code. It reads "So far" while Claude works.
 - **The steps read as a story.** The step drawer groups steps under each
   thing you asked, with how it ended (done, done after a fix, needs a fix,
   stopped early). Runs of reading fold into one line like "Read 3 files,
