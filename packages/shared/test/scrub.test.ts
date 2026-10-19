@@ -16,6 +16,21 @@ describe('scrubText', () => {
     expect(out).toContain(REDACTED)
     expect(out).not.toMatch(/sk-ant-api03-abc|sk-proj-abc|ghp_abc|gho_abc|github_pat_11|AKIAABCD|xoxb-123|dozjgNry/)
   })
+  // Fake keys, built at runtime so secret scanners don't take them for real ones.
+  const stripe = (...parts: string[]) => parts.join('_')
+  test.each([
+    ['a live secret key in output', `Invalid API key provided: ${stripe('sk', 'live', '51Habcdefghijklmnopqrstuvwx')}`],
+    ['a test secret key in a header-less curl', `curl https://api.stripe.com/v1/charges -u ${stripe('sk', 'test', '51Pabcdefghijklmnop')}:`],
+    ['a restricted key', stripe('rk', 'live', '51Habcdefghijklmnop')],
+    ['a webhook signing secret', `stripe listen printed ${stripe('whsec', 'abcdefghijklmnop1234')}`],
+  ])('redacts Stripe: %s', (_name, input) => {
+    const out = scrubText(input)
+    expect(out).toContain(REDACTED)
+    expect(out).not.toMatch(/[sr]k_(live|test)_51|whsec_abc/)
+  })
+  test('leaves Stripe publishable keys and ids alone', () => {
+    for (const s of ['pk_test_51Pabcdefghijklmnop', 'cus_Abcdefghijklmn', 'sk_live_short']) expect(scrubText(s)).toBe(s)
+  })
   test('redacts PEM private keys', () => {
     const pem = '-----BEGIN RSA PRIVATE KEY-----\nMIIabc\n-----END RSA PRIVATE KEY-----'
     expect(scrubText(`x ${pem} y`)).toBe(`x ${REDACTED} y`)
