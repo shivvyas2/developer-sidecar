@@ -3,7 +3,7 @@
  * Capture stays with the classic hooks; this module only reads the local server.
  * Every helper that takes `$` is a top-level function: the engine's validator requires it.
  */
-import type { ExplainerState, FeedStep } from '@sidecar/shared'
+import type { Attention, ExplainerState, FeedStep } from '@sidecar/shared'
 import { renderText, type Line, type Tone } from '@sidecar/ui-kit'
 import { due, FAST_MS, newCadence, recordPoll, type Cadence } from './cadence'
 import { HELP, parseCommand } from './commands'
@@ -16,6 +16,7 @@ const PANE = 'sidecar'
 const ANIM_MS = 125 // up to 8 frames a second while a scene plays
 const START_AFTER_OFFLINE_POLLS = 3
 const FETCH_TIMEOUT_MS = 3_000
+const ATTENTION = new Set<string>(['working', 'permission', 'idle', 'done'] satisfies Attention[])
 const TONE: Record<Tone, Record<string, unknown>> = {
   ink: {}, dim: { dimColor: true }, accent: { color: 'red' }, inverse: { inverse: true }, bold: { bold: true },
 }
@@ -79,14 +80,16 @@ function header(res: { headers: Record<string, string> }, name: string): string 
   return ''
 }
 
-/** The session's steps, or null when the server says they are unchanged since `rev`. */
-async function fetchSteps($: Engine): Promise<FeedStep[] | null> {
+/** The session's steps (null when the server says they are unchanged since `rev`) and what it waits on. */
+async function fetchSteps($: Engine): Promise<{ steps: FeedStep[] | null; attention?: Attention }> {
   const path = `/api/sessions/${encodeURIComponent(sessionId)}/steps${rev ? `?rev=${encodeURIComponent(rev)}` : ''}`
   const res = await within($, $.http.fetch(`http://127.0.0.1:${state.port}${path}`, { headers: { 'x-sidecar-token': token } }), FETCH_TIMEOUT_MS)
-  if (res.status === 304) return null
+  const said = header(res, 'x-sidecar-attention')
+  const attention = ATTENTION.has(said) ? { attention: said as Attention } : {}
+  if (res.status === 304) return { steps: null, ...attention }
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   rev = header(res, 'x-sidecar-rev')
-  return JSON.parse(res.text) as FeedStep[]
+  return { steps: JSON.parse(res.text) as FeedStep[], ...attention }
 }
 
 /** Status line, the latest step's start time, and a redraw. */
@@ -116,9 +119,12 @@ async function poll($: Engine): Promise<void> {
     const id = await $.session.id()
     if (id && id !== sessionId) resetSession(id, now)
     let fresh: FeedStep[] | null = null
+    let attention: Attention | undefined
     try {
       if (!token || state.offline) await locate($)
-      fresh = await fetchSteps($)
+      const got = await fetchSteps($)
+      fresh = got.steps
+      attention = got.attention
     } catch {
       cadence = recordPoll(cadence, now, 'offline')
       offlinePolls += 1
@@ -136,9 +142,11 @@ async function poll($: Engine): Promise<void> {
     const explainer = await get<ExplainerState>($, '/api/explainer').catch(() => state.explainer)
     const steps = fresh ?? state.steps
     const print = fresh ? stepsPrint(fresh) : stepsSeen
-    const changed = state.offline || print !== stepsSeen || explainerPrint(explainer) !== explainerPrint(state.explainer)
+    const changed = state.offline || print !== stepsSeen || attention !== state.attention || explainerPrint(explainer) !== explainerPrint(state.explainer)
     stepsSeen = print
     state = { ...state, steps, explainer, offline: false }
+    if (attention) state.attention = attention
+    else delete state.attention
     offlinePolls = 0
     cadence = recordPoll(cadence, now, changed ? 'changed' : 'same')
     if (changed) {
