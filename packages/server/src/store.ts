@@ -23,6 +23,8 @@ export interface Store {
   saveRecap(r: RecapEntry): number
   getRecap(turnId: string): (RecapEntry & { count: number }) | undefined
   listRecaps(sessionId: string): RecapEntry[]
+  /** Marks every pending recap unavailable (their calls can no longer finish) and returns them. */
+  failPendingRecaps(reason: string, at: number): RecapEntry[]
   addUsage(u: TokenUsage): TokenUsage
   usage(): TokenUsage
   getSession(id: string): SessionSummary | undefined
@@ -142,6 +144,8 @@ export function openStore(path: string): Store {
     RETURNING count`)
   const getRecapStmt = db.prepare('SELECT json, count FROM recaps WHERE turn_id = ?')
   const recapsFor = db.prepare('SELECT json FROM recaps WHERE session_id = ? ORDER BY at ASC, turn_id ASC')
+  const pendingRecaps = db.prepare(`SELECT json FROM recaps WHERE json_extract(json, '$.status') = 'pending'`)
+  const setRecapJson = db.prepare('UPDATE recaps SET at = ?, json = ? WHERE turn_id = ?')
   const getMeta = db.prepare('SELECT value FROM meta WHERE key = ?')
   const upMeta = db.prepare('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
   const lastPromptStmt = db.prepare(`
@@ -215,6 +219,11 @@ export function openStore(path: string): Store {
     },
     listRecaps(sessionId) {
       return parseJson<RecapEntry>(recapsFor.all(sessionId))
+    },
+    failPendingRecaps(reason, at) {
+      const failed = parseJson<RecapEntry>(pendingRecaps.all()).map((r): RecapEntry => ({ ...r, at, status: 'unavailable', reason }))
+      for (const r of failed) setRecapJson.run(at, JSON.stringify(r), r.turnId)
+      return failed
     },
     usage() {
       const row = getMeta.get('usage') as { value: string } | undefined

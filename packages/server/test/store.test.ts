@@ -201,6 +201,19 @@ describe('recaps', () => {
     expect(s.getRecap('nope')).toBeUndefined()
   })
 
+  test('pending recaps can all be failed at once, keeping their count', () => {
+    const s = openStore(':memory:')
+    s.saveRecap(recap('p1', 'pending'))
+    s.saveRecap(recap('p2', 'done'))
+    s.saveRecap(recap('p3', 'pending', 1, 's2'))
+    const failed = s.failPendingRecaps('restarted', 9)
+    expect(failed.map((r) => r.turnId).sort()).toEqual(['p1', 'p3'])
+    expect(failed[0]).toMatchObject({ status: 'unavailable', reason: 'restarted', at: 9 })
+    expect(s.getRecap('p1')).toMatchObject({ status: 'unavailable', reason: 'restarted', lastStepId: 'p1-last', count: 1 })
+    expect(s.getRecap('p2')!.status).toBe('done')
+    expect(s.failPendingRecaps('again', 10)).toEqual([])
+  })
+
   test('listed per session, oldest first, and deleted with the session', () => {
     const s = openStore(':memory:')
     s.saveRecap(recap('b', 'done', 5))
