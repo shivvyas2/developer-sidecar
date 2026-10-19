@@ -135,7 +135,7 @@ describe('one recap per turn', () => {
     expect(f.tasks).toHaveLength(MAX_RECAPS_PER_TURN + 1)
   })
 
-  test('a burst of Stops makes at most one more call, which reads the newest turn', async () => {
+  test('a burst of Stops on one turn makes one call', async () => {
     const f = fake()
     const t = setup(f.provider)
     t.turn()
@@ -231,6 +231,21 @@ describe('cancelled mid-flight', () => {
     s.release(); await t.settle()
     expect(t.store.listRecaps('s1')[0]).toMatchObject({ status: 'unavailable', reason: 'AI recaps were turned off.' })
   })
+  test('the turn that ended is recapped, even when a new one starts while it waits in line', async () => {
+    const s = slow()
+    const t = setup(s.provider)
+    t.turn('a'); t.stop('a')
+    await vi.advanceTimersByTimeAsync(0)
+    const asked = t.add('b', 'UserPrompt', { prompt: 'Add checkout' })
+    t.add('b', 'Write', { file_path: '/work/shop/app/a.ts', content: 'x' })
+    t.stop('b')
+    // b's next turn begins before a's call is done
+    t.add('b', 'UserPrompt', { prompt: 'Now add emails' })
+    t.add('b', 'Write', { file_path: '/work/shop/app/b.ts', content: 'x' })
+    s.release(); await t.settle()
+    expect(t.store.listRecaps('b').map((r) => r.turnId)).toEqual([asked.id])
+  })
+
   test('stop() ends it: no more calls or writes', async () => {
     const f = fake()
     const t = setup(f.provider)
