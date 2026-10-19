@@ -8,6 +8,11 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 
 ### Added
 
+- **The stage says how things stand, in plain words.** The frame shows a
+  status light (all good, needs a fix, needs you, working), how many files
+  Claude has made, and whether the last checks passed. Step cards say what a
+  step is (looking, new file, checks, checkpoint) instead of the tool and its
+  command, which stays under "Show technical".
 - **Claude is waiting for you.** When Claude Code asks for permission, the
   workstation shows a banner with Claude's own words and says to answer in the
   Claude Code window. The tab title starts with "(waiting)", the session picker
@@ -45,6 +50,10 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 
 ### Fixed
 
+- The stage keeps up with Claude. It used to fall up to about three scenes
+  (some 11 seconds) behind while still reading LIVE, and could show DONE on
+  an older step. Now at most one scene waits, and when Claude stops or needs
+  you the stage jumps to the newest step.
 - Long command output keeps its end, where test summaries and the last error
   are, instead of being cut after the first 1,000 characters.
 - `cat app.test.ts` and `grep vitest` no longer show the test scene.
