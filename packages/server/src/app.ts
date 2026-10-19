@@ -92,6 +92,9 @@ export function createApp(o: AppOptions): Hono {
     const id = c.req.param('id')
     const rev = o.store.revision(id)
     c.header('x-sidecar-rev', rev)
+    // what the session waits on can change without a new step, so it rides along even when unchanged
+    const attention = o.store.getSession(id)?.attention
+    if (attention) c.header('x-sidecar-attention', attention)
     if (c.req.query('rev') === rev) return c.body(null, 304)
     return c.json(o.store.stepsForSession(id))
   })

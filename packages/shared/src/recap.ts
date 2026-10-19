@@ -11,8 +11,8 @@ import { storyOf, type ChapterOutcome, type StoryStep } from './story'
 export interface RecapPart { kind: MapKind; name: string; failed: boolean }
 
 export interface RuleRecap {
-  /** The prompt step this recap is about, or null before the first prompt. */
-  turnId: string | null
+  /** The turn (story chapter) this recap is about: its prompt's id, or its first step's when there was no prompt. */
+  turnId: string
   asked: string
   /** working: Claude is at it. done: its turn ended. you: it is waiting for your permission. */
   state: 'working' | 'done' | 'you'
@@ -90,7 +90,7 @@ export function buildRecap(steps: readonly RecapStep[], opts: { attention?: Atte
     : undefined
   const url = serverUrl(steps)
   return {
-    turnId: last.promptId,
+    turnId: last.id,
     asked: last.asked,
     state: opts.attention === 'permission' ? 'you' : opts.attention === 'working' ? 'working' : 'done',
     outcome: last.outcome,

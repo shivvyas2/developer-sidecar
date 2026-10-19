@@ -2,13 +2,15 @@
  * What the mod polled, and what each Claude Code surface shows from it.
  * Pure: no engine, no Node, no DOM.
  */
-import { isExplained, type ExplainerState, type FeedStep } from '@sidecar/shared'
+import { isExplained, type Attention, type ExplainerState, type FeedStep } from '@sidecar/shared'
 import { checksOf, formatElapsed, HEALTH_LIGHT, HEALTH_WORD, healthOf, stepKind, stepTitle, type Readout, type TextModel, type TextStep } from '@sidecar/ui-kit'
 
 export interface ModState {
   /** Every step of this session, oldest first. */
   steps: FeedStep[]
   explainer: ExplainerState | null
+  /** What the session waits on, from the steps poll; unknown until the server says. */
+  attention?: Attention
   offline: boolean
   project: string
   port: number
@@ -36,7 +38,7 @@ const filesOf = (steps: readonly FeedStep[]) => steps.filter((st) => st.category
 export function readoutOf(s: ModState): Readout {
   const first = s.steps[0]
   const last = s.steps.at(-1)
-  const health = healthOf(s.steps)
+  const health = healthOf(s.steps, s.attention)
   return {
     step: s.steps.length,
     files: filesOf(s.steps),
