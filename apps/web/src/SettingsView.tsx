@@ -12,9 +12,9 @@ const OPTIONS: RotaryOption<ExplainLevel>[] = [
   { value: 'sonnet', label: 'DETAILED' },
 ]
 const HINTS: Record<ExplainLevel, string> = {
-  off: 'Off: no explanations. Nothing leaves your computer.',
-  haiku: 'Quick (Haiku): fast, low-cost explanations. Recommended.',
-  sonnet: 'Detailed (Sonnet): richer explanations, higher cost.',
+  off: 'Off: no AI recaps. Nothing leaves your computer.',
+  haiku: 'Quick (Haiku): one short recap each time Claude finishes, at low cost. Recommended.',
+  sonnet: 'Detailed (Sonnet): richer recaps, higher cost.',
 }
 
 export function SettingsView({ explainer, selected, onChanged }: {
@@ -47,10 +47,10 @@ export function SettingsView({ explainer, selected, onChanged }: {
   const provider = explainer?.provider ? (explainer.provider === 'api' ? 'API' : 'CLI') : '--'
   return (
     <section className="settings">
-      <h2 className="settings__h">Plain-English explanations</h2>
+      <h2 className="settings__h">AI recaps</h2>
       <div className="settings__grid">
         <div className={level === null ? 'settings__dial settings__dial--wait' : 'settings__dial'}>
-          <RotarySelect label="Explanation level" value={level ?? 'off'} options={OPTIONS}
+          <RotarySelect label="Recap level" value={level ?? 'off'} options={OPTIONS}
             disabled={level === null} busy={level === null} onChange={(v) => { if (level !== null) choose(v) }} />
           <p className="settings__hint">{level ? HINTS[level] : 'Loading...'}</p>
         </div>
@@ -69,7 +69,7 @@ export function SettingsView({ explainer, selected, onChanged }: {
           </div>
         )}
       </div>
-      <p className="settings__privacy">Explanations send step details, with known secret patterns and .env values removed, to Anthropic directly or through your Claude Code login. Everything else stays on this computer.</p>
+      <p className="settings__privacy">Each time Claude finishes, an AI recap sends a short summary of that turn (the steps in a line each, and the end of any failed output), with known secret patterns and .env values removed, to Anthropic directly or through your Claude Code login. File contents are never sent. Everything else stays on this computer.</p>
       <h2 className="settings__h">Data</h2>
       <div className="settings__danger">
         <button type="button" className="settings__btn" onClick={removeSession} disabled={!selected}>Delete this session</button>

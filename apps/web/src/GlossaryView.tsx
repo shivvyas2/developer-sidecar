@@ -5,9 +5,9 @@ import { CardCatalog } from './ds'
 
 const EMPTY: Record<ExplainerState['status'], string> = {
   ready: 'Terms Claude uses will be explained here, one line each.',
-  off: 'The glossary is built from plain-English explanations, which are off. Turn them on in Settings.',
-  paused: 'The glossary is built from plain-English explanations, which are paused. See the banner or Settings.',
-  unavailable: 'The glossary is built from plain-English explanations, which need an Anthropic API key or the claude command.',
+  off: 'The glossary is built from AI recaps, which are off. Turn them on in Settings.',
+  paused: 'The glossary is built from AI recaps, which are paused. See the banner or Settings.',
+  unavailable: 'The glossary is built from AI recaps, which need an Anthropic API key or the claude command.',
 }
 
 export function GlossaryView({ entries, status, project }: { entries: GlossaryEntry[]; status: ExplainerState['status'] | null; project?: string }) {

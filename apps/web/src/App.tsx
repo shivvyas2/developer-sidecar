@@ -117,7 +117,7 @@ export function App() {
         </div>
         <div className="hdr__tools">
           {explainer && explainer.level !== 'off' ? (
-            <span className="hdr__tokens" title="Tokens used for explanations">
+            <span className="hdr__tokens" title="Tokens used for AI recaps">
               <span className="hdr__tokens-k">TOKENS</span>
               <span className="hdr__tokens-v">{formatTokens(explainer.tokens.input + explainer.tokens.output)}</span>
             </span>
@@ -144,11 +144,11 @@ export function App() {
       ) : null}
       {status === 'paused' ? (
         <StatusStrip tag="PAUSED" action={{ label: '↻', title: 'Try again', onPress: resume }}>
-          Explanations paused: {explainer?.reason}
+          AI recaps paused: {explainer?.reason}
         </StatusStrip>
       ) : status === 'unavailable' ? (
         <StatusStrip tag="OFF" action={{ label: '→', title: 'Open settings', onPress: () => setTab('settings') }}>
-          Explanations are not available{explainer?.reason ? `: ${explainer.reason}` : '.'}
+          AI recaps are not available{explainer?.reason ? `: ${explainer.reason}` : '.'}
         </StatusStrip>
       ) : null}
       <main className="panel" role="tabpanel" aria-label={TABS.find((t) => t.id === tab)?.label ?? 'Stage'}>
