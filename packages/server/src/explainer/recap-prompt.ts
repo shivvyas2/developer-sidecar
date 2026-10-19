@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import {
-  AiRecapSchema, ConceptSchema, DecisionSchema, isRecord, packagesIn, scrubDeep, segments, storyOf,
+  AiRecapSchema, ConceptSchema, DecisionSchema, isRecord, packagesIn, scrubText, segments, storyOf,
   type AiRecap, type Concept, type Decision, type FeedStep, type RuleRecap, type StoryBeat,
 } from '@sidecar/shared'
 
@@ -30,13 +30,15 @@ export interface EncodedTurn {
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
 const clipLine = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
 const oneLine = (s: string) => s.replace(/\s+/g, ' ').trim()
+/** Scrubbed before it is shortened: a key cut in half no longer matches the scrubber's patterns. */
+const safe = (s: string) => scrubText(oneLine(s))
 
 /** The end of a failure's output, where the error usually is. */
 function failTail(output: unknown): string {
   const parts = isRecord(output)
     ? ['stderr', 'stdout', 'error'].map((k) => str(output[k])).filter((s) => s.trim())
     : [typeof output === 'string' ? output : output === undefined ? '' : JSON.stringify(output)]
-  const text = oneLine(parts.join(' | '))
+  const text = safe(parts.join(' | '))
   return text.length > RECAP_CAPS.failTail ? `…${text.slice(text.length - RECAP_CAPS.failTail)}` : text
 }
 
@@ -45,8 +47,8 @@ interface Line { text: string; failed: boolean; command: boolean; step?: FeedSte
 /** The step's plain description: what it did, and to what. Never a file body. */
 function describe(s: FeedStep, rel: (p: string) => string): { text: string; command: boolean } {
   const input = isRecord(s.input) ? s.input : {}
-  const path = rel(str(input.file_path) || str(input.notebook_path))
-  const cmd = oneLine(str(input.command))
+  const path = safe(rel(str(input.file_path) || str(input.notebook_path)))
+  const cmd = safe(str(input.command))
   const quoted = cmd ? `\`${clipLine(cmd, 120)}\`` : ''
   switch (s.category) {
     case 'create': return { text: `wrote ${path || 'a file'}`, command: false }
@@ -60,8 +62,8 @@ function describe(s: FeedStep, rel: (p: string) => string): { text: string; comm
     case 'git': return { text: `saved a checkpoint ${quoted}`, command: true }
     case 'deploy': return { text: `deployed ${quoted}`, command: true }
     case 'data': return { text: path ? `changed the data setup in ${path}` : `changed the data setup ${quoted}`, command: !path }
-    case 'external': return { text: path ? `edited secret settings ${path}` : `${oneLine(s.caption)} ${quoted || str(input.url)}`.trim(), command: !!cmd }
-    default: return { text: `${oneLine(s.caption)}${quoted ? ` ${quoted}` : ''}`, command: !!cmd }
+    case 'external': return { text: path ? `edited secret settings ${path}` : `${safe(s.caption)} ${quoted || safe(str(input.url))}`.trim(), command: !!cmd }
+    default: return { text: `${safe(s.caption)}${quoted ? ` ${quoted}` : ''}`, command: !!cmd }
   }
 }
 
@@ -82,7 +84,7 @@ export function encodeTurn(ctx: TurnContext, steps: readonly FeedStep[]): Encode
     }
     if (b.type === 'edits') {
       const last = byId.get(b.ids.at(-1)!)!
-      lines.push({ text: `changed ${rel(b.file)} ×${b.ids.length}`, failed: false, command: false, step: last })
+      lines.push({ text: `changed ${safe(rel(b.file))} ×${b.ids.length}`, failed: false, command: false, step: last })
       continue
     }
     const s = byId.get(b.id)!
@@ -125,9 +127,10 @@ export function encodeTurn(ctx: TurnContext, steps: readonly FeedStep[]): Encode
     r.url ? `the app runs at ${r.url}` : '',
   ].filter(Boolean).join('; ')
 
-  const asked = ctx.asked ? clipLine(oneLine(ctx.asked), RECAP_CAPS.promptChars) : '(not seen)'
+  const asked = ctx.asked ? clipLine(safe(ctx.asked), RECAP_CAPS.promptChars) : '(not seen)'
   const text = `Project: ${ctx.project}\nAsked: "${asked}"\nSteps:\n${body.join('\n') || '(none)'}\nFacts: ${facts}`
-  const user = scrubDeep(text)
+  // every piece was scrubbed before it was clipped; this pass catches anything that only matches whole
+  const user = scrubText(text)
   return { user: user.length > RECAP_CAPS.userChars ? `${user.slice(0, RECAP_CAPS.userChars - 1)}…` : user, labels }
 }
 

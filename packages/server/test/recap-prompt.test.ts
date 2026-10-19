@@ -70,6 +70,20 @@ describe('encodeTurn', () => {
     expect(user).not.toContain(key.slice(0, 16))
   })
 
+  test('a key cut in half by the output tail or the command clip is still scrubbed', () => {
+    // fake keys, built at runtime so secret scanners don't take them for real ones
+    const stripe = ['sk', 'live', '51H' + 'Zq9Xw2Vb7Nm4Kp8Lr3Ts6Yu1Jh5Gf0Dc'].join('_')
+    const anthropic = ['sk', 'ant', 'api03', 'Zq9Xw2Vb7Nm4Kp8Lr3Ts6'].join('-')
+    // 380 chars after the key, so the 400-char tail starts inside it
+    const output = { stdout: `key ${stripe} ${'y'.repeat(380)}`, stderr: '' }
+    // the key starts at char 103, so the 120-char clip cuts it after 16 chars
+    const cmd = `echo ${'a'.repeat(97)} ${anthropic} done`
+    const { user } = encodeTurn({ ...ctx, asked: `${'b'.repeat(RECAP_CAPS.promptChars - 17)} ${stripe}` }, [bash('npm test', 'failed', output), bash(cmd)])
+    expect(user).not.toContain(stripe.slice(-12))
+    expect(user).not.toContain('api03-Zq9')
+    expect(user).not.toContain('51HZq9')
+  })
+
   test('a very long prompt is shortened, and an empty turn still encodes', () => {
     expect(encodeTurn({ ...ctx, asked: 'a'.repeat(1000) }, []).user).toContain(`Asked: "${'a'.repeat(RECAP_CAPS.promptChars - 1)}…"`)
     expect(encodeTurn({ ...ctx, asked: '' }, []).user).toContain('Steps:\n(none)')
