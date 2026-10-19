@@ -36,20 +36,27 @@ describe('toInput', () => {
     const key = 'sk-ant-api03-' + 'b'.repeat(40)
     expect(JSON.stringify(toInput(step({ caption: `Running with ${key}` })))).not.toContain(key)
   })
-  test('a long Write body becomes its line count and a preview; a short one is kept', () => {
+  test('a long Write body becomes a preview of its start; a short one is kept', () => {
     const content = Array.from({ length: 80 }, (_, i) => `const line${i} = ${i}`).join('\n')
     const w = toInput(step({ toolName: 'Write', category: 'create', input: { file_path: '/p/a.ts', content } }))
-    expect(w.input).toEqual({ file_path: '/p/a.ts', content: { lines: 80, preview: `${content.slice(0, 400)}…` } })
+    expect(w.input).toEqual({ file_path: '/p/a.ts', content: { preview: `${content.slice(0, 400)}…` } })
     const short = toInput(step({ toolName: 'Write', category: 'create', input: { file_path: '/p/b.ts', content: 'export {}' } }))
     expect(short.input).toEqual({ file_path: '/p/b.ts', content: 'export {}' })
   })
   test('Edit and MultiEdit strings are summarised; MultiEdit keeps 3 edits and counts the rest', () => {
     const long = 'x'.repeat(900)
     const e = toInput(step({ toolName: 'Edit', category: 'edit', input: { file_path: '/p/a.ts', old_string: long, new_string: 'y' } }))
-    expect(e.input).toMatchObject({ old_string: { lines: 1 }, new_string: 'y' })
+    expect(e.input).toMatchObject({ old_string: { preview: `${'x'.repeat(300)}…` }, new_string: 'y' })
     const m = toInput(step({ toolName: 'MultiEdit', category: 'edit', input: { file_path: '/p/a.ts', edits: Array.from({ length: 5 }, () => ({ old_string: long, new_string: 'z' })) } }))
     expect((m.input as { edits: unknown[] }).edits).toHaveLength(3)
     expect(m.input).toMatchObject({ moreEdits: 2 })
+  })
+  test('no line count is claimed: bodies are already cut at ingest, so it would be wrong', () => {
+    // as stored: scrubEvent keeps the first 600 and last 400 characters of a 300-line file
+    const content = `${'line\n'.repeat(120)}…[truncated 8000 chars]…${'line\n'.repeat(80)}`
+    const w = toInput(step({ toolName: 'Write', category: 'create', input: { file_path: '/p/a.ts', content } }))
+    expect(JSON.stringify(w)).not.toMatch(/"lines"/)
+    expect(SYSTEM_PROMPT).not.toMatch(/line count/)
   })
   test('secrets are scrubbed before a preview is taken', () => {
     const key = 'sk-ant-api03-' + 'c'.repeat(40)
