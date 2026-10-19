@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import {
-  ExplanationSchema, limitSize, scrubDeep,
+  ExplanationSchema, limitSize, scrubDeep, writtenFile,
   type Category, type Explanation, type FeedStep, type StepStatus,
 } from '@sidecar/shared'
 
@@ -9,7 +9,6 @@ export interface ExplainInput {
   category: Category
   status: StepStatus
   caption: string
-  techLabel: string
   tool: string
   input: unknown
   output?: unknown
@@ -17,12 +16,18 @@ export interface ExplainInput {
 
 const FIELD_CHARS = 1500
 
+/**
+ * What the model sees of a step. techLabel is left out: it is built from the input the model already gets.
+ * A successful write or edit leaves out its output too: it only echoes the input (and Edit adds the whole
+ * original file).
+ */
 export function toInput(step: FeedStep): ExplainInput {
   const out: ExplainInput = {
     stepId: step.id, category: step.category, status: step.status, caption: scrubDeep(step.caption),
-    techLabel: scrubDeep(step.techLabel), tool: step.toolName, input: limitSize(scrubDeep(step.input), FIELD_CHARS),
+    tool: step.toolName, input: limitSize(scrubDeep(step.input), FIELD_CHARS),
   }
-  if (step.output !== undefined) out.output = limitSize(scrubDeep(step.output), FIELD_CHARS)
+  const echo = step.status === 'ok' && writtenFile(step) !== undefined
+  if (step.output !== undefined && !echo) out.output = limitSize(scrubDeep(step.output), FIELD_CHARS)
   return out
 }
 

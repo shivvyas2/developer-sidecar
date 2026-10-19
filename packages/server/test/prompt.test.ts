@@ -9,11 +9,23 @@ const step = (over: Partial<FeedStep> = {}): FeedStep => ({
 })
 
 describe('toInput', () => {
-  test('keeps what the model needs', () => {
+  test('keeps what the model needs, without techLabel (built from the input)', () => {
     expect(toInput(step())).toEqual({
-      stepId: 'st1', category: 'install', status: 'ok', caption: 'Adding stripe', techLabel: 'npm install stripe',
+      stepId: 'st1', category: 'install', status: 'ok', caption: 'Adding stripe',
       tool: 'Bash', input: { command: 'npm install stripe' }, output: 'added 1 package',
     })
+  })
+  test('a successful write or edit leaves out its output, which only echoes the input', () => {
+    const edit = step({
+      toolName: 'Edit', category: 'edit', input: { file_path: '/p/a.ts', old_string: 'a', new_string: 'b' },
+      output: { filePath: '/p/a.ts', originalFile: 'the whole file', structuredPatch: [] },
+    })
+    expect(toInput(edit)).not.toHaveProperty('output')
+    expect(toInput({ ...edit, toolName: 'Write', category: 'data' })).not.toHaveProperty('output')
+  })
+  test('a failed write or edit keeps its output: the error is the point', () => {
+    const failed = step({ toolName: 'Edit', category: 'edit', input: { file_path: '/p/a.ts' }, status: 'failed', output: 'String to replace not found in file.' })
+    expect(toInput(failed).output).toBe('String to replace not found in file.')
   })
   test('scrubs secrets before they can reach the model (Review Focus 2)', () => {
     const key = 'sk-ant-api03-' + 'a'.repeat(40)
