@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import type { ServerMessage } from '@sidecar/shared'
-import { fetchDecisions, fetchExplainer, fetchGlossary, fetchSessions, fetchSteps, token } from './api'
+import { fetchDecisions, fetchExplainer, fetchGlossary, fetchRecaps, fetchSessions, fetchSteps, token } from './api'
 import { feedReducer, initialFeed, type FeedAction } from './feed'
 
 export type Connection = 'connecting' | 'live' | 'offline'
@@ -34,7 +34,7 @@ export function useFeed() {
       ws.onopen = () => {
         setConnection('live')
         retry = 1000
-        // after a reconnect, catch up on anything missed while offline (explanations ride along with steps)
+        // after a reconnect, catch up on anything missed while offline
         if (opened) {
           // sessions carry whether Claude is waiting, which no replayed step would update
           fetchSessions().then((sessions) => dispatch({ type: 'sessions', sessions })).catch(() => undefined)
@@ -68,4 +68,5 @@ function loadSession(id: string, dispatch: (a: FeedAction) => void) {
   fetchSteps(id).then((steps) => dispatch({ type: 'steps', sessionId: id, steps })).catch(() => undefined)
   fetchDecisions(id).then((decisions) => dispatch({ type: 'decisions', sessionId: id, decisions })).catch(() => undefined)
   fetchGlossary(id).then((entries) => dispatch({ type: 'glossary', sessionId: id, entries })).catch(() => undefined)
+  fetchRecaps(id).then((recaps) => dispatch({ type: 'recaps', sessionId: id, recaps })).catch(() => undefined)
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { RuleRecap } from '@sidecar/shared'
-import { MAX_PARTS, recapText } from '../src/recapView'
+import { MAX_PARTS, recapAsk, recapText } from '../src/recapView'
 
 const base: RuleRecap = { turnId: 'p', asked: 'Add checkout', state: 'done', outcome: 'good', built: [], packages: 0, checks: 'none', fixes: 0 }
 const part = (name: string, failed = false) => ({ kind: 'page' as const, name, failed })
@@ -27,5 +27,17 @@ describe('recapText', () => {
     expect(t.packages).toBe('Added 1 building block')
     expect(t.checks).toBe('Checks fail')
     expect(recapText({ ...base, packages: 4, checks: 'pass' })).toMatchObject({ packages: 'Added 4 building blocks', checks: 'Checks pass' })
+  })
+})
+
+describe('recapAsk', () => {
+  const entry = (status: 'pending' | 'done' | 'unavailable', next?: string) =>
+    ({ sessionId: 's', turnId: 'p', lastStepId: 'x', at: 1, status, ...(status === 'done' ? { ai: { summary: 's', meaning: 'm', ...(next ? { next } : {}) } } : {}) })
+  test('nothing failing, no ask, whatever the recap says', () => expect(recapAsk(entry('done', 'Fix it'), null)).toBeNull())
+  test('the AI recap’s ask wins once it is written', () => expect(recapAsk(entry('done', 'Fix the total'), 'The last step failed')).toBe('Fix the total'))
+  test('otherwise the rule-based ask', () => {
+    expect(recapAsk(undefined, 'The last step failed')).toBe('The last step failed')
+    expect(recapAsk(entry('pending'), 'The last step failed')).toBe('The last step failed')
+    expect(recapAsk(entry('done'), 'The last step failed')).toBe('The last step failed')
   })
 })

@@ -158,8 +158,7 @@ export function App() {
             loaded={sid ? !!state.loaded[sid] : false}
             steps={steps}
             explanations={state.explanations}
-            explainer={explainer}
-            readySince={state.readySince}
+            recaps={sid ? state.recaps[sid] ?? {} : {}}
             pickRequest={pickRequest}
             {...(tag ? { liveTag: tag } : {})}
             {...(selectedSession?.attention ? { attention: selectedSession.attention } : {})}

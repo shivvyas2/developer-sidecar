@@ -45,7 +45,6 @@ export interface SessionSummary {
 export type ServerMessage =
   | { type: 'step'; step: FeedStep }
   | { type: 'session'; session: SessionSummary }
-  | { type: 'explanation'; sessionId: string; stepId: string; explanation: StepExplanation }
   | { type: 'decision'; decision: DecisionEntry }
   | { type: 'concept'; concept: GlossaryEntry }
   | { type: 'explainer'; state: ExplainerState }

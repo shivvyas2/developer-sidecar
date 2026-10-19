@@ -1,4 +1,4 @@
-import type { RuleRecap } from '@sidecar/shared'
+import type { RecapEntry, RuleRecap } from '@sidecar/shared'
 
 export interface RecapText {
   kicker: string
@@ -13,6 +13,15 @@ export interface RecapText {
 export const MAX_PARTS = 8
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+
+/**
+ * The request to copy into Claude Code while something still fails: the AI recap's, which knows the
+ * whole turn, else the rule-based one naming the failed step. Null when nothing fails.
+ */
+export function recapAsk(ai: RecapEntry | undefined, ruleAsk: string | null): string | null {
+  if (!ruleAsk) return null
+  return (ai?.status === 'done' && ai.ai?.next) || ruleAsk
+}
 
 /** The recap card's words: plain sentences, no tool names. */
 export function recapText(r: RuleRecap): RecapText {
