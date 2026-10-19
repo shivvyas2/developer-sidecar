@@ -33,6 +33,12 @@ test('readout counts every step and new files, and says how things stand', () =>
   expect(r).toMatchObject({ step: 3, files: 1, checks: 'none', status: 'NEEDS A FIX', light: 'alert', elapsed: '00:02', live: true, project: 'shop' })
 })
 
+test('readout says NEEDS YOU while Claude waits for a permission, and WORKING mid-turn', () => {
+  expect(readoutOf(state({ steps: [step(1)], attention: 'permission' }))).toMatchObject({ status: 'NEEDS YOU' })
+  expect(readoutOf(state({ steps: [step(1)], attention: 'working' }))).toMatchObject({ status: 'WORKING', light: 'busy' })
+  expect(readoutOf(state({ steps: [step(1)] })).status).toBe('ALL GOOD')
+})
+
 test('the pane still counts both token kinds', () => {
   expect(textModel(state({ steps: [step(1)], explainer: explainer(1000, 234) })).readout.tokens).toBe(1234)
 })
