@@ -9,6 +9,8 @@ import { ExplainError, type ModelLevel, type Provider, type ProviderResult } fro
 export const QUIET_MS = 3000
 /** Longest a queued step waits while routine steps keep the session busy. */
 export const MAX_WAIT_MS = 15_000
+/** Sessions whose written files are kept in memory; an older one is read back from the store if it returns. */
+export const MAX_TRACKED_SESSIONS = 16
 export const MAX_BATCH = 8
 export const RETRY_DELAY_MS = 1000
 export const PAUSE_AFTER = 3
@@ -91,14 +93,19 @@ export function createExplainer(o: ExplainerOptions): Explainer {
     }
   }
 
-  /** Seeded from the store the first time a session is seen (e.g. after a restart), without this step. */
+  /**
+   * Seeded from the store the first time a session is seen (e.g. after a restart), without this step.
+   * Kept for the most recently active sessions only: the map is in order of use, oldest first.
+   */
   const touchedFor = (step: FeedStep) => {
     let t = touched.get(step.sessionId)
-    if (!t) {
+    if (t) touched.delete(step.sessionId)
+    else {
       t = new Set()
       for (const s of o.store.stepsForSession(step.sessionId)) if (s.id !== step.id) trackTouched(t, s)
-      touched.set(step.sessionId, t)
     }
+    touched.set(step.sessionId, t)
+    if (touched.size > MAX_TRACKED_SESSIONS) touched.delete(touched.keys().next().value!)
     return t
   }
 
@@ -202,13 +209,14 @@ export function createExplainer(o: ExplainerOptions): Explainer {
 
   const enqueue = (step: FeedStep) => {
     if (step.status !== 'ok' && step.status !== 'failed') return
+    // nothing will be explained: skip the bookkeeping too, and re-read it from the store if that changes
+    if (level() === 'off' || !current || paused) { touched.delete(step.sessionId); return }
     const t = touchedFor(step)
     const routine = isRoutine(step, t)
     trackTouched(t, step)
     if (step.category === 'prompt') return
     // a routine step is still activity: keep waiting, so the batch isn't split around it
     if (routine) { if (queues.has(step.sessionId)) wait(step.sessionId); return }
-    if (level() === 'off' || !current || paused) return
     if (inFlight.has(step.id) || o.store.hasExplanation(step.id)) return
     const q = queues.get(step.sessionId) ?? new Map<string, FeedStep>()
     q.set(step.id, step)

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { FeedStep, ServerMessage } from '@sidecar/shared'
-import { createExplainer, MAX_BATCH, MAX_WAIT_MS, QUIET_MS, UNAVAILABLE_REASON } from '../src/explainer/service'
+import { createExplainer, MAX_BATCH, MAX_TRACKED_SESSIONS, MAX_WAIT_MS, QUIET_MS, UNAVAILABLE_REASON } from '../src/explainer/service'
 import { ExplainError, type Provider } from '../src/explainer/providers'
 import { Hub } from '../src/hub'
 import { memorySettings } from '../src/settings'
@@ -140,6 +140,31 @@ describe('explainer', () => {
       send(edit('e1', '/a.ts')); send(edit('e2', '/c.ts'))
       await flushed(ex)
       expect(calls.flat()).toEqual(['e2'])
+    })
+
+    test('with explanations off, no written-files work is done', async () => {
+      const { provider } = fakeProvider()
+      const { ex, send, store } = setup(provider, 'off')
+      const scan = vi.spyOn(store, 'stepsForSession')
+      send(write('w', '/a.ts')); send(edit('e1', '/a.ts'))
+      await flushed(ex)
+      expect(scan).not.toHaveBeenCalled()
+    })
+
+    test('only recently active sessions are tracked; an evicted one is read back from the store', async () => {
+      const { provider, calls } = fakeProvider()
+      const { ex, send, store } = setup(provider)
+      const scan = vi.spyOn(store, 'stepsForSession')
+      send(write('w', '/a.ts'))
+      for (let i = 0; i < MAX_TRACKED_SESSIONS; i++) {
+        store.touchSession(`other${i}`, '/work/x', 1)
+        send(step(`o${i}`, { sessionId: `other${i}` }))
+      }
+      expect(scan).toHaveBeenCalledTimes(MAX_TRACKED_SESSIONS + 1)
+      send(edit('e1', '/a.ts')) // s1 was evicted: re-read, and the earlier write still counts
+      expect(scan).toHaveBeenCalledTimes(MAX_TRACKED_SESSIONS + 2)
+      await flushed(ex)
+      expect(calls.flat()).not.toContain('e1')
     })
 
     test('deleting a session forgets its written files', async () => {
