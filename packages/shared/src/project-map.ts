@@ -152,10 +152,12 @@ export function projectMap(steps: readonly MapStep[], cwd?: string): ProjectMap 
       if (vendor && c?.kind !== 'service' && CODE.test(r)) touch('service', vendor, vendor, step, r)
     }
     if (command) {
-      for (const part of segments(command)) {
+      // the blanked parts find the install, the raw ones name its packages (quoted names included)
+      const raw = segments(command, { raw: true })
+      for (const [i, part] of segments(command).entries()) {
         if (!INSTALL.test(part)) continue
-        for (const pkg of packagesIn(part)) {
-          const name = pkg.replace(/(.)@[^/]*$/, '$1')
+        for (const pkg of packagesIn(raw[i] ?? '')) {
+          const name = pkg.replace(/(.)@[^/]*$/, '$1').replace(/(.)[<>=!~].*$/, '$1')
           touch('blocks', name, name, step)
           const vendor = detectVendor(name)
           if (vendor) touch('service', vendor, vendor, step)
