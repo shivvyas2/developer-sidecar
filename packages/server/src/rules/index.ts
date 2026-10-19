@@ -1,4 +1,4 @@
-import type { Category, SceneSpec, Step, Translation } from '@sidecar/shared'
+import { isRecord, type Category, type SceneSpec, type Step, type Translation } from '@sidecar/shared'
 import { scenes } from '@sidecar/ui-kit/catalog'
 import { detectVendor } from './vendors'
 
@@ -179,7 +179,7 @@ function techLabel(c: Ctx): string {
 }
 
 export function translate(step: Step): Translation {
-  const input = step.input && typeof step.input === 'object' && !Array.isArray(step.input) ? (step.input as Record<string, unknown>) : {}
+  const input = isRecord(step.input) ? step.input : {}
   const ctx: Ctx = {
     step,
     input,

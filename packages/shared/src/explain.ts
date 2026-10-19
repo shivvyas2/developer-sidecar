@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isRecord } from './hook-payload'
 import type { Category, Step } from './step'
 
 export const ConceptSchema = z.object({ term: z.string().min(1), definition: z.string().min(1) })
@@ -47,9 +48,8 @@ type Routinable = Pick<Step, 'id' | 'toolName' | 'input' | 'status'> & { categor
 
 /** The file a step wrote, if it is a write or edit tool. */
 export function writtenFile(step: Pick<Step, 'toolName' | 'input'>): string | undefined {
-  if (!WRITERS.has(step.toolName) || !step.input || typeof step.input !== 'object') return undefined
-  const input = step.input as Record<string, unknown>
-  const file = input.file_path ?? input.notebook_path
+  if (!WRITERS.has(step.toolName) || !isRecord(step.input)) return undefined
+  const file = step.input.file_path ?? step.input.notebook_path
   return typeof file === 'string' && file ? file : undefined
 }
 

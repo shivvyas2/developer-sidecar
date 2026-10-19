@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import {
-  ExplanationSchema, headTail, limitSize, scrubDeep, writtenFile,
+  ExplanationSchema, headTail, isRecord, limitSize, scrubDeep, writtenFile,
   type Category, type Explanation, type FeedStep, type StepStatus,
 } from '@sidecar/shared'
 
@@ -19,8 +19,6 @@ const FIELD_CHARS = 1500
 const OK_OUTPUT_CHARS = 400
 const PREVIEW = { file: 400, edit: 300 }
 const MAX_EDITS = 3
-
-const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
 
 /**
  * A long body becomes a preview of its start; a short one is kept as it is. No line count: the body was
