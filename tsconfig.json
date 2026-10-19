@@ -17,6 +17,7 @@
   "include": [
     "packages/*/src", "packages/*/test",
     "plugin/src", "plugin/test",
-    "apps/web/src", "apps/web/test"
+    "apps/web/src", "apps/web/test",
+    "bench"
   ]
 }

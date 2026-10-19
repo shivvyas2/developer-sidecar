@@ -55,6 +55,11 @@ describe('limitSize', () => {
     expect(out.content.length).toBeLessThan(1100)
     expect(out.content).toContain('[truncated 4000 chars]')
   })
+  test('keeps the end of a long string, where summaries and errors are', () => {
+    const out = limitSize({ stdout: `${'noise\n'.repeat(1000)}Tests  1 failed | 5 passed (6)` }) as { stdout: string }
+    expect(out.stdout).toMatch(/^noise/)
+    expect(out.stdout).toMatch(/Tests {2}1 failed \| 5 passed \(6\)$/)
+  })
   test('caps total JSON size at maxChars', () => {
     const big = Array.from({ length: 200 }, (_, i) => ({ i, s: 'x'.repeat(900) }))
     const out = limitSize(big)

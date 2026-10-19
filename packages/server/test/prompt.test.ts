@@ -9,11 +9,23 @@ const step = (over: Partial<FeedStep> = {}): FeedStep => ({
 })
 
 describe('toInput', () => {
-  test('keeps what the model needs', () => {
+  test('keeps what the model needs, without techLabel (built from the input)', () => {
     expect(toInput(step())).toEqual({
-      stepId: 'st1', category: 'install', status: 'ok', caption: 'Adding stripe', techLabel: 'npm install stripe',
+      stepId: 'st1', category: 'install', status: 'ok', caption: 'Adding stripe',
       tool: 'Bash', input: { command: 'npm install stripe' }, output: 'added 1 package',
     })
+  })
+  test('a successful write or edit leaves out its output, which only echoes the input', () => {
+    const edit = step({
+      toolName: 'Edit', category: 'edit', input: { file_path: '/p/a.ts', old_string: 'a', new_string: 'b' },
+      output: { filePath: '/p/a.ts', originalFile: 'the whole file', structuredPatch: [] },
+    })
+    expect(toInput(edit)).not.toHaveProperty('output')
+    expect(toInput({ ...edit, toolName: 'Write', category: 'data' })).not.toHaveProperty('output')
+  })
+  test('a failed write or edit keeps its output: the error is the point', () => {
+    const failed = step({ toolName: 'Edit', category: 'edit', input: { file_path: '/p/a.ts' }, status: 'failed', output: 'String to replace not found in file.' })
+    expect(toInput(failed).output).toBe('String to replace not found in file.')
   })
   test('scrubs secrets before they can reach the model (Review Focus 2)', () => {
     const key = 'sk-ant-api03-' + 'a'.repeat(40)
@@ -23,6 +35,61 @@ describe('toInput', () => {
   test('scrubs secrets placed in the caption', () => {
     const key = 'sk-ant-api03-' + 'b'.repeat(40)
     expect(JSON.stringify(toInput(step({ caption: `Running with ${key}` })))).not.toContain(key)
+  })
+  test('a long Write body becomes a preview of its start; a short one is kept', () => {
+    const content = Array.from({ length: 80 }, (_, i) => `const line${i} = ${i}`).join('\n')
+    const w = toInput(step({ toolName: 'Write', category: 'create', input: { file_path: '/p/a.ts', content } }))
+    expect(w.input).toEqual({ file_path: '/p/a.ts', content: { preview: `${content.slice(0, 400)}…` } })
+    const short = toInput(step({ toolName: 'Write', category: 'create', input: { file_path: '/p/b.ts', content: 'export {}' } }))
+    expect(short.input).toEqual({ file_path: '/p/b.ts', content: 'export {}' })
+  })
+  test('Edit and MultiEdit strings are summarised; MultiEdit keeps 3 edits and counts the rest', () => {
+    const long = 'x'.repeat(900)
+    const e = toInput(step({ toolName: 'Edit', category: 'edit', input: { file_path: '/p/a.ts', old_string: long, new_string: 'y' } }))
+    expect(e.input).toMatchObject({ old_string: { preview: `${'x'.repeat(300)}…` }, new_string: 'y' })
+    const m = toInput(step({ toolName: 'MultiEdit', category: 'edit', input: { file_path: '/p/a.ts', edits: Array.from({ length: 5 }, () => ({ old_string: long, new_string: 'z' })) } }))
+    expect((m.input as { edits: unknown[] }).edits).toHaveLength(3)
+    expect(m.input).toMatchObject({ moreEdits: 2 })
+  })
+  test('no line count is claimed: bodies are already cut at ingest, so it would be wrong', () => {
+    // as stored: scrubEvent keeps the first 600 and last 400 characters of a 300-line file
+    const content = `${'line\n'.repeat(120)}…[truncated 8000 chars]…${'line\n'.repeat(80)}`
+    const w = toInput(step({ toolName: 'Write', category: 'create', input: { file_path: '/p/a.ts', content } }))
+    expect(JSON.stringify(w)).not.toMatch(/"lines"/)
+    expect(SYSTEM_PROMPT).not.toMatch(/line count/)
+  })
+  test('secrets are scrubbed before a preview is taken', () => {
+    const key = 'sk-ant-api03-' + 'c'.repeat(40)
+    const content = `const key = '${key}'\n${'filler\n'.repeat(200)}`
+    expect(JSON.stringify(toInput(step({ toolName: 'Write', category: 'create', input: { file_path: '/p/a.ts', content } })))).not.toContain(key)
+  })
+  test('a successful step keeps the end of its output; shell noise fields are dropped', () => {
+    const stdout = `${'compiling…\n'.repeat(200)}Tests  6 passed (6)`
+    const t = toInput(step({ category: 'test', output: { stdout, stderr: '', interrupted: false, isImage: false } }))
+    const out = t.output as { stdout: string }
+    expect(Object.keys(out)).toEqual(['stdout'])
+    expect(out.stdout.length).toBeLessThanOrEqual(401)
+    expect(out.stdout).toMatch(/Tests {2}6 passed \(6\)$/)
+  })
+  test('a failed step keeps the start and the end of its output', () => {
+    const error = `Exit code 1\n${'stack frame\n'.repeat(400)}Tests  1 failed | 5 passed (6)`
+    const out = toInput(step({ category: 'test', status: 'failed', output: error })).output as string
+    expect(out).toMatch(/^Exit code 1/)
+    expect(out).toMatch(/1 failed \| 5 passed \(6\)$/)
+    expect(out.length).toBeLessThan(1600)
+  })
+  test('a failed shell step keeps what says why, even with empty stdout and stderr', () => {
+    const cancelled = toInput(step({ category: 'test', status: 'failed', output: { stdout: '', stderr: '', interrupted: true, isImage: false } }))
+    expect(cancelled.output).toEqual({ interrupted: true })
+    const flagged = toInput(step({ category: 'run', status: 'failed', output: { stdout: 'partial', stderr: '', is_error: true, returnCodeInterpretation: 'Exit code 137', isImage: false } }))
+    expect(flagged.output).toEqual({ stdout: 'partial', is_error: true, returnCodeInterpretation: 'Exit code 137' })
+  })
+  test('a failed step with no recognised fields still sends its output', () => {
+    const odd = toInput(step({ status: 'failed', output: { stdout: '', stderr: '', reason: 'killed by timeout' } }))
+    expect(JSON.stringify(odd.output)).toContain('killed by timeout')
+  })
+  test('an empty shell output is left out', () => {
+    expect(toInput(step({ output: { stdout: '', stderr: '  ', interrupted: false } }))).not.toHaveProperty('output')
   })
   test('limits huge outputs', () => {
     expect(JSON.stringify(toInput(step({ output: 'x'.repeat(100_000) }))).length).toBeLessThan(4000)
