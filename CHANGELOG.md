@@ -14,8 +14,8 @@ All notable changes to Developer Sidecar are recorded here. The format follows
   last prompt. Failed steps are always explained. What it does send is
   trimmed: file bodies go as a line count and a short preview, successful
   output keeps only its end, and steps are numbered instead of carrying long
-  ids. On the sample sessions in `bench/explainer`, that is about 69% fewer
-  input and 59% fewer output tokens. A queued explanation never waits more
+  ids. On the sample sessions in `bench/explainer`, that is about 68% fewer
+  input and 57% fewer output tokens. A queued explanation never waits more
   than 15 seconds.
 - **Read-only commands look like reading.** `ls`, `cat`, `grep`, `find`,
   `git status` and similar show the bookshelf scene with a plain caption
