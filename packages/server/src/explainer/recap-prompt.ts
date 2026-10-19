@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import {
-  AiRecapSchema, ConceptSchema, DecisionSchema, isRecord, packagesIn, scrubText, segments, storyOf,
+  AiRecapSchema, ConceptSchema, DecisionSchema, INSTALL, isRecord, packagesIn, scrubText, segments, storyOf,
   type AiRecap, type Concept, type Decision, type FeedStep, type RuleRecap, type StoryBeat,
 } from '@sidecar/shared'
 
@@ -54,7 +54,7 @@ function describe(s: FeedStep, rel: (p: string) => string): { text: string; comm
     case 'create': return { text: `wrote ${path || 'a file'}`, command: false }
     case 'edit': return { text: `changed ${path || 'a file'}`, command: false }
     case 'install': {
-      const pkgs = segments(cmd).flatMap(packagesIn)
+      const pkgs = segments(cmd, { raw: true }).filter((p) => INSTALL.test(p)).flatMap(packagesIn)
       return { text: pkgs.length ? `installed ${pkgs.slice(0, 6).join(', ')}` : `installed packages ${quoted}`, command: true }
     }
     case 'test': return { text: `ran checks ${quoted}`, command: true }

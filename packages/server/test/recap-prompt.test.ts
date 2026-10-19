@@ -94,6 +94,10 @@ describe('encodeTurn', () => {
     expect(user.indexOf('Facts:')).toBeLessThan(user.indexOf('Steps:'))
   })
 
+  test('quoted package names are named, not their quotes', () => {
+    expect(encodeTurn(ctx, [bash(`cd api && pip install "django>=4" 'requests'`)]).user).toContain('s1 installed django>=4, requests')
+  })
+
   test('a very long prompt is shortened, and an empty turn still encodes', () => {
     expect(encodeTurn({ ...ctx, asked: 'a'.repeat(1000) }, []).user).toContain(`Asked: "${'a'.repeat(RECAP_CAPS.promptChars - 1)}…"`)
     expect(encodeTurn({ ...ctx, asked: '' }, []).user).toContain('Steps:\n(none)')
