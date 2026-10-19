@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { Category, Step } from './step'
 
 export const ConceptSchema = z.object({ term: z.string().min(1), definition: z.string().min(1) })
 export const DecisionSchema = z.object({
@@ -39,3 +40,45 @@ export interface ExplainerState {
 
 export type DecisionEntry = Decision & { id: string; sessionId: string; stepId: string; at: number }
 export type GlossaryEntry = Concept & { sessionId: string; stepId: string; at: number }
+
+/** The tools that write a file, and the input field naming it. */
+const WRITERS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
+type Routinable = Pick<Step, 'id' | 'toolName' | 'input' | 'status'> & { category: Category }
+
+/** The file a step wrote, if it is a write or edit tool. */
+export function writtenFile(step: Pick<Step, 'toolName' | 'input'>): string | undefined {
+  if (!WRITERS.has(step.toolName) || !step.input || typeof step.input !== 'object') return undefined
+  const input = step.input as Record<string, unknown>
+  const file = input.file_path ?? input.notebook_path
+  return typeof file === 'string' && file ? file : undefined
+}
+
+/**
+ * A finished step whose caption already says enough, so it is not sent to the explainer: a successful
+ * read, or a successful edit to a file already written since the last prompt (`touched`). Failures are
+ * always explained: what went wrong is the most useful thing to explain.
+ */
+export function isRoutine(step: Routinable, touched: ReadonlySet<string>): boolean {
+  if (step.status !== 'ok') return false
+  if (step.category === 'read') return true
+  const file = step.category === 'edit' ? writtenFile(step) : undefined
+  return file !== undefined && touched.has(file)
+}
+
+/** Adds the step to the files-written-since-the-last-prompt set; a prompt starts a new set. */
+export function trackTouched(touched: Set<string>, step: Routinable): void {
+  if (step.category === 'prompt') { touched.clear(); return }
+  const file = step.status === 'ok' ? writtenFile(step) : undefined
+  if (file) touched.add(file)
+}
+
+/** Ids of the routine steps in a session's steps, in order. */
+export function routineIds(steps: readonly Routinable[]): Set<string> {
+  const touched = new Set<string>()
+  const out = new Set<string>()
+  for (const s of steps) {
+    if (isRoutine(s, touched)) out.add(s.id)
+    trackTouched(touched, s)
+  }
+  return out
+}
