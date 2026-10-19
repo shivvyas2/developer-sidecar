@@ -82,6 +82,12 @@ describe('explainer state', () => {
     expect(Object.keys(s.recaps)).toEqual(['s2'])
     expect(feedReducer(s, { type: 'reset' }).recaps).toEqual({})
   })
+  test('listed turns true with the first session list and survives a reset, so an empty list means none', () => {
+    expect(initialFeed.listed).toBe(false)
+    const s = feedReducer(initialFeed, { type: 'sessions', sessions: [] })
+    expect(s.listed).toBe(true)
+    expect(feedReducer(s, { type: 'reset' }).listed).toBe(true)
+  })
   test('turn_end changes nothing in the feed', () => {
     expect(feedReducer(initialFeed, { type: 'turn_end', sessionId: 's1', at: 1 })).toBe(initialFeed)
   })
