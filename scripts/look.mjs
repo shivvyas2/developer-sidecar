@@ -1,5 +1,5 @@
 // Replays the token bench's sample sessions into a throwaway server and saves screenshots of the
-// workstation, for reviewing a visual change by eye (before and after shots in a pull request).
+// workstation (the Stage mid-session and at the end, and the Whiteboard), for reviewing a visual change by eye (before and after shots in a pull request).
 // The explainer is off, so this never calls a model. Needs a build first (pnpm build).
 //
 //   pnpm look                      every sample session
@@ -47,7 +47,11 @@ try {
     }
     await page.waitForTimeout(3000)
     await page.screenshot({ path: join(OUT, `${s.name}-end.png`) })
-    console.log(`look: ${s.name}-mid.png, ${s.name}-end.png`)
+    await page.getByRole('tab', { name: 'Whiteboard' }).click()
+    await page.locator('.board__name').first().click().catch(() => {})
+    await page.screenshot({ path: join(OUT, `${s.name}-map.png`) })
+    await page.getByRole('tab', { name: 'Stage' }).click()
+    console.log(`look: ${s.name}-mid.png, ${s.name}-end.png, ${s.name}-map.png`)
   }
   await page.goto(`http://127.0.0.1:${port}/#/kit`)
   await page.waitForTimeout(1000)

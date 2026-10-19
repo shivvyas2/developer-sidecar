@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { projectMap } from '@sidecar/shared'
 import { saveSettings } from './api'
 import { attentionNotice, liveTag, sessionMark, titleFor } from './attention'
 import { SidecarMark } from './brand/Brand'
@@ -12,6 +13,7 @@ import { tabFromSearch } from './selection'
 import { StageTab } from './StageView'
 import { applyTheme, initialTheme, safeStorage, writeTheme, type ThemePref } from './theme'
 import { useFeed } from './useFeed'
+import { WhiteboardView } from './WhiteboardView'
 
 type Tab = 'stage' | 'decisions' | 'glossary' | 'whiteboard' | 'settings'
 const TABS: FolderTab[] = [
@@ -21,7 +23,6 @@ const TABS: FolderTab[] = [
   { id: 'whiteboard', label: 'Whiteboard' },
   { id: 'settings', label: 'Settings' },
 ]
-const WHITEBOARD = 'A live diagram of how your app fits together. Coming in v2.'
 const CONNECTION = { connecting: 'CONNECTING', live: 'LIVE', offline: 'OFFLINE' } as const
 /** A blip shorter than this (a reload of the server, a brief sleep) does not raise the offline banner. */
 const OFFLINE_GRACE_MS = 3000
@@ -169,7 +170,9 @@ export function App() {
         {tab === 'decisions' && <div className="panel__narrow"><DecisionsView decisions={sid ? state.decisions[sid] ?? [] : []} status={status} stepIds={steps.map((x) => x.id)} onPick={pickStep} /></div>}
         {tab === 'glossary' && <div className="panel__narrow"><GlossaryView entries={sid ? state.glossary[sid] ?? [] : []} status={status} {...(project ? { project } : {})} /></div>}
         {tab === 'settings' && <div className="panel__narrow"><SettingsView explainer={explainer} selected={selectedSession} onChanged={(s) => dispatch({ type: 'explainer', state: s })} /></div>}
-        {tab === 'whiteboard' && <p className="empty">{WHITEBOARD}</p>}
+        {tab === 'whiteboard' && (
+          <WhiteboardView map={projectMap(steps, selectedSession?.cwd)} stepIds={steps.map((x) => x.id)} liveId={steps.at(-1)?.id ?? null} onPick={pickStep} />
+        )}
       </main>
     </div>
   )
