@@ -7,7 +7,8 @@ import { runSession, statsOf, idsIn, type SessionRun, type Stats } from './run'
 import { SESSIONS } from './sessions'
 
 const LIVE = process.env.BENCH_LIVE === '1'
-const COUNT = process.env.BENCH_COUNT === '1'
+// a live run reports exact input tokens itself, so counting them too would only pay for calls thrown away
+const COUNT = process.env.BENCH_COUNT === '1' && !LIVE
 const UPDATE = process.env.BENCH_UPDATE === '1'
 
 const here = (p: string) => new URL(p, import.meta.url)

@@ -23,7 +23,8 @@ BENCH_LIVE=1 pnpm bench:tokens       # real Claude Haiku calls: real input and o
 BENCH_UPDATE=1 pnpm bench:tokens     # also rewrite baseline.json with this run's numbers
 ```
 
-`BENCH_COUNT` and `BENCH_LIVE` need `ANTHROPIC_API_KEY`. A live run sends about a dozen small
+`BENCH_COUNT` and `BENCH_LIVE` need `ANTHROPIC_API_KEY`. With both set, only the live run happens: it
+reports exact input tokens itself. A live run sends about a dozen small
 requests to Haiku and costs a few cents.
 
 Each run writes to `out/` (ignored by git):
