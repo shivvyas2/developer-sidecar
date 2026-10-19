@@ -78,7 +78,9 @@ All notable changes to Developer Sidecar are recorded here. The format follows
   `git add -A && git commit` is a checkpoint, not "Running a command", and
   `cd app && npm install stripe` is an install. Words inside a commit
   message, an echo or a folder name (like "test" or "vercel") no longer
-  pick the scene.
+  pick the scene. Only a real test runner shows the checking scene, so
+  `npx playwright install` and `tsc -p tsconfig.test.json` don't, and quoted
+  package names (`pip install "django>=4"`) show up in the install caption.
 
 ## [0.1.0] - 2026-10-15
 
