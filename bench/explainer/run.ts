@@ -82,6 +82,8 @@ export interface Stats {
   finished: number
   sent: number
   batches: number
+  /** Just the step lines of every request: what trimming protects, without the prompt repeated per request. */
+  stepChars: number
   requestChars: number
   estInputTokens: number
   estOutputTokens: number
@@ -89,11 +91,13 @@ export interface Stats {
 
 export function statsOf(run: SessionRun): Stats {
   const requestChars = run.requests.reduce((n, r) => n + r.system.length + r.user.length, 0)
+  const stepChars = run.requests.reduce((n, r) => n + r.user.split('\n').filter((l) => l.startsWith('{"stepId"')).reduce((m, l) => m + l.length, 0), 0)
   const outputChars = run.requests.reduce((n, r) => n + JSON.stringify({ items: idsIn(r).map(cannedItem) }).length, 0)
   return {
     finished: run.steps.filter((s) => s.category !== 'prompt' && (s.status === 'ok' || s.status === 'failed')).length,
     sent: run.sent.length,
     batches: run.requests.length,
+    stepChars,
     requestChars,
     estInputTokens: estimateTokens(requestChars),
     estOutputTokens: estimateTokens(outputChars),

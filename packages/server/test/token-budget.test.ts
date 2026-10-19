@@ -1,15 +1,18 @@
 import { describe, expect, test } from 'vitest'
 import { routineIds } from '@sidecar/shared'
+import { SYSTEM_PROMPT } from '../src/explainer/prompt'
 import { runSession, statsOf, type SessionRun } from '../../../bench/explainer/run'
 import { EDGE_SESSIONS, SESSIONS } from '../../../bench/explainer/sessions'
 
 /**
  * Keeps the explainer lean on the bench's sample sessions (see bench/explainer). Before routine steps were
- * skipped and requests trimmed, these sessions sent 79 steps in 97,425 request characters; the ceilings
- * leave about 20% headroom over what they send now, so a change that puts bulk back fails here.
+ * skipped and requests trimmed, these sessions sent 79 steps whose lines came to 78,857 characters. The
+ * ceilings leave about 20% headroom over today, so a change that puts bulk back fails here. Step lines are
+ * measured apart from the system prompt, which is checked once: summed per request, it would dominate.
  */
 const MAX_SENT = 36
-const MAX_REQUEST_CHARS = 36_000
+const MAX_STEP_CHARS = 19_500
+const MAX_SYSTEM_PROMPT_CHARS = 1_800
 
 const runs: SessionRun[] = []
 for (const s of SESSIONS) runs.push(await runSession(s))
@@ -48,9 +51,13 @@ describe.each([...runs, ...edges].map((r) => [r.name, r] as const))('%s', (_name
 })
 
 test('the sample sessions stay under the token budget', () => {
-  const total = runs.map(statsOf).reduce((a, s) => ({ sent: a.sent + s.sent, chars: a.chars + s.requestChars }), { sent: 0, chars: 0 })
+  const total = runs.map(statsOf).reduce((a, s) => ({ sent: a.sent + s.sent, chars: a.chars + s.stepChars }), { sent: 0, chars: 0 })
   expect(total.sent).toBeLessThanOrEqual(MAX_SENT)
-  expect(total.chars).toBeLessThanOrEqual(MAX_REQUEST_CHARS)
+  expect(total.chars).toBeLessThanOrEqual(MAX_STEP_CHARS)
+})
+
+test('the system prompt stays short (it is sent with every request)', () => {
+  expect(SYSTEM_PROMPT.length).toBeLessThanOrEqual(MAX_SYSTEM_PROMPT_CHARS)
 })
 
 describe('edge cases', () => {

@@ -39,7 +39,7 @@ const pct = (now: number, was: number | undefined) =>
 
 function table(rows: Record<string, Row>, base: Baseline): string {
   const cols: Array<[keyof Row, string]> = [
-    ['finished', 'finished'], ['sent', 'sent'], ['batches', 'batches'], ['requestChars', 'request chars'],
+    ['finished', 'finished'], ['sent', 'sent'], ['batches', 'batches'], ['stepChars', 'step chars'], ['requestChars', 'request chars'],
     ['estInputTokens', 'est. input tok'], ['estOutputTokens', 'est. output tok'], ['inputTokens', 'input tok'], ['outputTokens', 'output tok'],
   ]
   const used = cols.filter(([k]) => Object.values(rows).some((r) => r[k] !== undefined))
@@ -50,7 +50,7 @@ function table(rows: Record<string, Row>, base: Baseline): string {
 }
 
 function sum(rows: Row[]): Row {
-  const out: Row = { finished: 0, sent: 0, batches: 0, requestChars: 0, estInputTokens: 0, estOutputTokens: 0 }
+  const out: Row = { finished: 0, sent: 0, batches: 0, stepChars: 0, requestChars: 0, estInputTokens: 0, estOutputTokens: 0 }
   for (const r of rows) {
     for (const k of Object.keys(r) as Array<keyof Row>) out[k] = (out[k] ?? 0) + (r[k] ?? 0)
   }
