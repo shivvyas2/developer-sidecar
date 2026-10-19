@@ -49,6 +49,11 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 - Long command output keeps its end, where test summaries and the last error
   are, instead of being cut after the first 1,000 characters.
 - `cat app.test.ts` and `grep vitest` no longer show the test scene.
+- Chained commands show the scene of the part that matters:
+  `git add -A && git commit` is a checkpoint, not "Running a command", and
+  `cd app && npm install stripe` is an install. Words inside a commit
+  message, an echo or a folder name (like "test" or "vercel") no longer
+  pick the scene.
 
 ## [0.1.0] - 2026-10-15
 
