@@ -57,6 +57,28 @@ describe('pipeline', () => {
 })
 
 describe('closing open steps', () => {
+  test('turn_end is announced once, after the open steps are closed and stored', () => {
+    const { store, hub, got, p } = setup()
+    let seenSteps: string[] = []
+    hub.subscribe((m) => { if (m.type === 'turn_end') seenSteps = store.stepsForSession('s1').map((s) => s.status) })
+    p.ingest(ev('a', 'tool_start', { tool: { name: 'Bash', useId: 'u', input: { command: 'npm run dev' } } }))
+    p.ingest(ev('b', 'turn_end', { ts: 1200 }))
+    const types = got.map((m) => m.type)
+    expect(types.filter((t) => t === 'turn_end')).toHaveLength(1)
+    expect(types.lastIndexOf('step')).toBeLessThan(types.indexOf('turn_end'))
+    expect(got.find((m) => m.type === 'turn_end')).toEqual({ type: 'turn_end', sessionId: 's1', at: 1200 })
+    expect(seenSteps).toEqual(['interrupted'])
+    // a repeated Stop event (same id) is not announced again
+    p.ingest(ev('b', 'turn_end', { ts: 1200 }))
+    expect(got.filter((m) => m.type === 'turn_end')).toHaveLength(1)
+  })
+  test('other events never announce a turn end', () => {
+    const { got, p } = setup()
+    p.ingest(ev('a', 'prompt', { prompt: 'hi' }))
+    p.ingest(ev('b', 'subagent_end'))
+    p.ingest(ev('c', 'notice', { raw: { message: 'Claude needs your permission', notification_type: 'permission_prompt' } }))
+    expect(got.some((m) => m.type === 'turn_end')).toBe(false)
+  })
   test('turn_end closes the session’s running steps as interrupted', () => {
     const { store, p } = setup()
     p.ingest(ev('a', 'tool_start', { tool: { name: 'Bash', useId: 'denied', input: { command: 'rm -rf build' } } }))

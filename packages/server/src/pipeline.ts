@@ -61,6 +61,8 @@ export function createPipeline(o: { store: Store; tracker?: StepTracker; hub: Hu
       if (e.kind === 'turn_end' || e.kind === 'prompt') publishInterrupted(tracker.closeSession(e.sessionId, e.ts))
       const step = tracker.apply(e)
       if (step) publishStep(step, seq)
+      // after the open steps are closed, so whoever hears this sees the finished turn in the store
+      if (e.kind === 'turn_end') o.hub.publish({ type: 'turn_end', sessionId: e.sessionId, at: e.ts })
       return { seq }
     },
     sweep() {
