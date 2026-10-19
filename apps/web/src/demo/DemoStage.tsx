@@ -1,19 +1,28 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import type { RecapEntry, StepExplanation } from '@sidecar/shared'
 import { StatusStrip } from '../ds'
 import { StageTab } from '../StageView'
 import { DEMO, demoAt } from './demo'
 
 const SAMPLE_TEXT = 'This is a sample session, so you can see what Sidecar shows. Run claude in your project with the Developer Sidecar plugin, and your own work takes its place.'
+// the same objects every render, so the stage's memos hold
+const NO_EXPLANATIONS: Record<string, StepExplanation> = {}
+const NO_RECAPS: Record<string, RecapEntry> = {}
 
 /** The first-run demo: the sample session plays on the Stage, step by step, clearly marked SAMPLE. Browser only. */
 export function DemoStage() {
-  const [started] = useState(() => Date.now())
-  const [now, setNow] = useState(started)
+  const [at, setAt] = useState(() => demoAt(0, DEMO.steps.length))
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 500)
+    const started = Date.now()
+    // ticks twice a second, but only a new step, loop or ending re-renders
+    const timer = setInterval(() => {
+      const next = demoAt(Date.now() - started, DEMO.steps.length)
+      setAt((prev) => (prev.count === next.count && prev.loop === next.loop && prev.done === next.done ? prev : next))
+    }, 500)
     return () => clearInterval(timer)
   }, [])
-  const { loop, count, done } = demoAt(now - started, DEMO.steps.length)
+  const { loop, count, done } = at
+  const steps = useMemo(() => DEMO.steps.slice(0, count), [count])
   return (
     <>
       <StatusStrip tag="SAMPLE">{SAMPLE_TEXT}</StatusStrip>
@@ -21,9 +30,9 @@ export function DemoStage() {
         // a new loop is a new session to the stage, so it starts clean
         sessionId={`demo-${loop}`}
         loaded
-        steps={DEMO.steps.slice(0, count)}
-        explanations={{}}
-        recaps={{}}
+        steps={steps}
+        explanations={NO_EXPLANATIONS}
+        recaps={NO_RECAPS}
         project={DEMO.project}
         cwd={DEMO.cwd}
         liveTag="SAMPLE"
