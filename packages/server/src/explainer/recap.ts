@@ -165,16 +165,24 @@ export function createRecapper(o: RecapperOptions): Explainer {
   }
 
   const key = (sessionId: string, turnId: string) => `${sessionId}\n${turnId}`
-  /** Queues the turn that just ended: which turn is read now, since a new one may start before the call. */
-  const schedule = (sessionId: string) => {
-    if (stopped) return
-    const turnId = storyOf(o.store.stepsForSession(sessionId)).at(-1)?.id
-    if (!turnId || waiting.has(key(sessionId, turnId))) return
+  const queue = (sessionId: string, turnId: string) => {
+    if (stopped || waiting.has(key(sessionId, turnId))) return
     waiting.add(key(sessionId, turnId))
     const at = { epoch, session: sessionEpochs.get(sessionId) ?? 0 }
     chain = chain.then(() => run(sessionId, turnId, at)).catch((err: unknown) => {
       o.log?.(`recap failed: ${err instanceof Error ? err.message : String(err)}`)
     })
+  }
+  /** Queues the turn that just ended: which turn is read now, since a new one may start before the call. */
+  const schedule = (sessionId: string) => {
+    const turnId = storyOf(o.store.stepsForSession(sessionId)).at(-1)?.id
+    if (turnId) queue(sessionId, turnId)
+  }
+  const started = now()
+  /** Back from a pause: the turns that ended while paused since this start, one per session, get their call now. */
+  const catchUp = () => {
+    if (state().status !== 'ready') return
+    for (const r of o.store.unavailableRecaps()) if (r.at >= started) queue(r.sessionId, r.turnId)
   }
 
   // calls in flight when the server last stopped can never finish
@@ -195,12 +203,14 @@ export function createRecapper(o: RecapperOptions): Explainer {
       paused = null
       failures = 0
       publishState()
+      catchUp()
     },
     setProvider(p) {
       current = p
       paused = null
       failures = 0
       publishState()
+      catchUp()
     },
     idle: () => chain,
     stop() {

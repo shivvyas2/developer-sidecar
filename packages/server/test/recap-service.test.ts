@@ -186,6 +186,40 @@ describe('when the model fails', () => {
     expect(t.rx.state().status).toBe('ready')
   })
 
+  test('after a pause is cleared, the turn that ended while paused gets one call', async () => {
+    let n = 0
+    const provider: Provider = {
+      id: 'api',
+      async call(task) {
+        if (++n === 1) throw new ExplainError('The Anthropic API key was rejected.', false)
+        return { output: task.schema.parse(ANSWER), usage: { input: 1, output: 1 } }
+      },
+    }
+    const t = setup(provider)
+    t.turn('s1', 'first'); t.stop(); await t.settle()
+    t.turn('s1', 'second'); t.stop(); await t.settle()
+    expect(n).toBe(1)
+    t.rx.settingsChanged(); await t.settle()
+    expect(n).toBe(2)
+    expect(t.store.listRecaps('s1').map((r) => r.status)).toEqual(['unavailable', 'done'])
+    // nothing more to catch up on
+    t.rx.setProvider(provider); await t.settle()
+    expect(n).toBe(2)
+  })
+
+  test('turns paused before this start are not caught up, so a restart spends nothing on old sessions', async () => {
+    const hub = new Hub()
+    const store = openStore(':memory:')
+    const s: Step = { id: 'w1', sessionId: 'old', toolName: 'Write', input: { file_path: '/a.ts', content: 'x' }, startedAt: 1, status: 'ok' }
+    store.saveStep({ ...s, ...translate(s), seq: 1 })
+    store.saveRecap({ sessionId: 'old', turnId: 'w1', lastStepId: 'w1', at: 1, status: 'unavailable', reason: 'paused' })
+    const f = fake()
+    const rx = createRecapper({ hub, store, settings: memorySettings(), provider: null, now: () => 100 })
+    rx.setProvider(f.provider)
+    await vi.runAllTimersAsync(); await rx.idle()
+    expect(f.tasks).toEqual([])
+  })
+
   test('three failed recaps in a row pause', async () => {
     const t = setup(fake(() => ({ summary: ' ', meaning: ' ', next: null, decisions: [], concepts: [] })).provider)
     for (let i = 0; i < 3; i++) { t.turn('s1', `t${i}`); t.stop(); await t.settle() }
