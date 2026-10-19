@@ -39,6 +39,11 @@ describe('buildRecap', () => {
     expect(r.built.map((b) => b.name)).toEqual(['Success page', 'Checkout', 'Stripe'])
   })
 
+  test('a turn with no prompt is keyed by its first step, the same id the story and the server use', () => {
+    const first = write('a.ts')
+    expect(buildRecap([first, check()])!.turnId).toBe(first.id)
+  })
+
   test('working while Claude works, you while it waits for permission', () => {
     expect(buildRecap([prompt('x'), write('a.ts')], { attention: 'working' })).toMatchObject({ state: 'working', outcome: 'working' })
     expect(buildRecap([prompt('x'), write('a.ts')], { attention: 'permission' })!.state).toBe('you')
