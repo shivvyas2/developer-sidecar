@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { isExplained, routineIds, SceneSpecSchema, type Attention, type ExplainerState, type FeedStep, type StepExplanation } from '@sidecar/shared'
-import { checksOf, HEALTH_LIGHT, HEALTH_WORD, healthOf, townFrom, type Readout } from '@sidecar/ui-kit'
+import { isExplained, projectMap, routineIds, SceneSpecSchema, type Attention, type ExplainerState, type FeedStep, type StepExplanation } from '@sidecar/shared'
+import { checksOf, HEALTH_LIGHT, HEALTH_WORD, healthOf, nameTown, townFrom, type Readout } from '@sidecar/ui-kit'
 import { forStatus } from '@sidecar/ui-kit/catalog'
 import { Scene } from '@sidecar/ui-kit/react'
 import { Chip, PulledCard, ReadoutPanel, RoundButton, StepCard, StepDrawer, TickRuler } from './ds'
@@ -27,10 +27,12 @@ export interface StageTabProps {
   liveTag?: string
   /** What the session is doing now, for the status light while following the newest step. */
   attention?: Attention
+  /** The session's folder, so the town can name parts from paths relative to it. */
+  cwd?: string
 }
 
 /** Layout B: the step drawer on the left; the framed stage, replay ruler and pulled-out card on the right. */
-export function StageTab({ sessionId, loaded, steps, explanations, explainer, readySince, project, pickRequest, liveTag, attention }: StageTabProps) {
+export function StageTab({ sessionId, loaded, steps, explanations, explainer, readySince, project, pickRequest, liveTag, attention, cwd }: StageTabProps) {
   const [stage, dispatch] = useReducer(stageReducer, initialStage)
   const [selection, select] = useReducer(selectionReducer, initialSelection)
   const [replay, setReplay] = useState<Replay | null>(null)
@@ -58,10 +60,10 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
   const cardIndex = replay ? index : pickedIndex
   const card = cardIndex >= 0 ? steps[cardIndex] : undefined
 
-  const town = useMemo(() => townFrom(steps.slice(0, index + 1)), [steps, index])
   const routine = useMemo(() => routineIds(steps), [steps])
 
   const upTo = useMemo(() => steps.slice(0, index + 1), [steps, index])
+  const town = useMemo(() => nameTown(townFrom(upTo), projectMap(upTo, cwd)), [upTo, cwd])
   const files = useMemo(() => upTo.filter((s) => s.category === 'create' && s.status === 'ok').length, [upTo])
   const checks = useMemo(() => checksOf(upTo), [upTo])
   const now = shown ? stepKind(shown) : ''

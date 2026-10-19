@@ -162,6 +162,7 @@ export function App() {
             pickRequest={pickRequest}
             {...(tag ? { liveTag: tag } : {})}
             {...(selectedSession?.attention ? { attention: selectedSession.attention } : {})}
+            {...(selectedSession?.cwd ? { cwd: selectedSession.cwd } : {})}
             {...(project ? { project } : {})}
           />
         )}
