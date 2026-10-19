@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useState } from 'react'
-import { isExplained, projectMap, routineIds, SceneSpecSchema, storyOf, type Attention, type ExplainerState, type FeedStep, type StepExplanation } from '@sidecar/shared'
+import { buildRecap, isExplained, projectMap, routineIds, SceneSpecSchema, storyOf, type Attention, type ExplainerState, type FeedStep, type StepExplanation } from '@sidecar/shared'
 import { checksOf, HEALTH_LIGHT, HEALTH_WORD, healthOf, nameTown, townFrom, type Readout } from '@sidecar/ui-kit'
 import { forStatus } from '@sidecar/ui-kit/catalog'
 import { Scene } from '@sidecar/ui-kit/react'
@@ -8,6 +8,7 @@ import { readoutFields, useFramed } from './framed'
 import { formatElapsed, stepKind } from './format'
 import { nextAsk } from './next'
 import { NextStep } from './NextStep'
+import { RecapCard } from './RecapCard'
 import { isPendingExplanation } from './pending'
 import { initialSelection, selectedId, selectionReducer, stepNumber } from './selection'
 import { initialStage, replayAdvance, stageReducer, type Replay } from './stage'
@@ -64,6 +65,7 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
 
   const routine = useMemo(() => routineIds(steps), [steps])
   const chapters = useMemo(() => storyOf(steps, attention === 'working'), [steps, attention])
+  const recap = useMemo(() => buildRecap(steps, { ...(attention ? { attention } : {}), ...(cwd ? { cwd } : {}) }), [steps, attention, cwd])
 
   const upTo = useMemo(() => steps.slice(0, index + 1), [steps, index])
   const town = useMemo(() => nameTown(townFrom(upTo), projectMap(upTo, cwd)), [upTo, cwd])
@@ -74,6 +76,8 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
   const elapsed = shown ? formatElapsed(shown.startedAt - firstAt) : '00:00'
   // LIVE only while following the newest step; a replay or an older pick reads REPLAY.
   const live = !replay && selection.follow
+  const failing = recap?.failingId ? steps.find((s) => s.id === recap.failingId) : undefined
+  const recapAsk = failing ? nextAsk(failing, explanations[failing.id]) : null
   const framed = useFramed()
   const count = steps.length
   // Built from primitives so the SVG only re-renders when a number on the frame changes.
@@ -122,6 +126,8 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
         <StoryDrawer steps={steps} chapters={chapters} selectedId={cardIndex >= 0 ? steps[cardIndex]!.id : null} following={live} onPick={pick} />
       </div>
       <div className="stagetab__main">
+        {/* how the last thing you asked stands, first on screen while following live */}
+        {live && recap ? <RecapCard recap={recap} ask={recapAsk} /> : null}
         {!framed && shown ? (
           <ReadoutPanel label="Stage readout" fields={readoutFields(readout)} note={`${tag ?? (live ? 'LIVE' : 'REPLAY')} · ${now}`} />
         ) : null}
