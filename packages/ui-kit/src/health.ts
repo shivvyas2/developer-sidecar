@@ -17,6 +17,8 @@ export type Health = 'ok' | 'fix' | 'you' | 'working'
 
 /** The status light's words, short enough for the frame. */
 export const HEALTH_WORD: Record<Health, string> = { ok: 'ALL GOOD', fix: 'NEEDS A FIX', you: 'NEEDS YOU', working: 'WORKING' }
+/** The status light's colour for each state. */
+export const HEALTH_LIGHT: Record<Health, 'ok' | 'alert' | 'busy'> = { ok: 'ok', fix: 'alert', you: 'alert', working: 'busy' }
 
 /** Steps that change nothing, so their outcome says nothing about whether the app works. */
 const QUIET = new Set<FeedStep['category']>(['prompt', 'read'])

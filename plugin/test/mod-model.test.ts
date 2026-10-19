@@ -27,10 +27,14 @@ test('basename works on posix and windows paths', () => {
   expect(basename('')).toBe('')
 })
 
-test('readout counts every step, new files and both token kinds', () => {
+test('readout counts every step and new files, and says how things stand', () => {
   const steps = [step(1), step(2, { category: 'create', techLabel: 'Write src/a.ts' }), step(3, { category: 'create', status: 'failed' })]
   const r = readoutOf(state({ steps, explainer: explainer(1000, 234) }))
-  expect(r).toMatchObject({ step: 3, files: 1, tokens: 1234, elapsed: '00:02', live: true, project: 'shop' })
+  expect(r).toMatchObject({ step: 3, files: 1, checks: 'none', status: 'NEEDS A FIX', light: 'alert', elapsed: '00:02', live: true, project: 'shop' })
+})
+
+test('the pane still counts both token kinds', () => {
+  expect(textModel(state({ steps: [step(1)], explainer: explainer(1000, 234) })).readout.tokens).toBe(1234)
 })
 
 test('textModel windows the newest steps but keeps their real numbers', () => {

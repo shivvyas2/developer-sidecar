@@ -161,6 +161,7 @@ export function App() {
             readySince={state.readySince}
             pickRequest={pickRequest}
             {...(tag ? { liveTag: tag } : {})}
+            {...(selectedSession?.attention ? { attention: selectedSession.attention } : {})}
             {...(project ? { project } : {})}
           />
         )}

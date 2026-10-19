@@ -3,7 +3,7 @@
  * Pure: no engine, no Node, no DOM.
  */
 import { isExplained, type ExplainerState, type FeedStep } from '@sidecar/shared'
-import { formatElapsed, stepTitle, type Readout, type TextModel, type TextStep } from '@sidecar/ui-kit'
+import { checksOf, formatElapsed, HEALTH_LIGHT, HEALTH_WORD, healthOf, stepTitle, type Readout, type TextModel, type TextStep } from '@sidecar/ui-kit'
 
 export interface ModState {
   /** Every step of this session, oldest first. */
@@ -36,10 +36,13 @@ const filesOf = (steps: readonly FeedStep[]) => steps.filter((st) => st.category
 export function readoutOf(s: ModState): Readout {
   const first = s.steps[0]
   const last = s.steps.at(-1)
+  const health = healthOf(s.steps)
   return {
     step: s.steps.length,
     files: filesOf(s.steps),
-    tokens: tokensOf(s),
+    checks: checksOf(s.steps),
+    status: HEALTH_WORD[health],
+    light: HEALTH_LIGHT[health],
     now: last ? stepTitle(last) : '',
     elapsed: first && last ? formatElapsed(last.startedAt - first.startedAt) : '00:00',
     live: !s.offline,
@@ -64,7 +67,7 @@ export function textModel(s: ModState): TextModel {
     project: s.project,
     live: !s.offline,
     ...(s.offline ? { offline: true } : {}),
-    readout: { step: r.step, files: r.files, tokens: r.tokens, elapsed: r.elapsed },
+    readout: { step: r.step, files: r.files, tokens: tokensOf(s), elapsed: r.elapsed },
     steps: s.steps.slice(offset).map((st, i) => textStep(st, offset + i + 1)),
   }
 }
