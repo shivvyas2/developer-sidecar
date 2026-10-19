@@ -8,6 +8,11 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 
 ### Added
 
+- **A first look, before your first session.** With no sessions yet, the
+  Stage plays a sample session, clearly marked SAMPLE, with a line on how to
+  start. It runs in the browser only and costs nothing. Under the stage, tap
+  anything to see what it is, or open "What am I looking at?" for the whole
+  key in plain words.
 - **AI recaps replace step-by-step explanations.** When Claude finishes a
   turn, one short request writes a plain summary of it, what it means for
   your app, and any decisions and terms worth knowing, shown on the Where
