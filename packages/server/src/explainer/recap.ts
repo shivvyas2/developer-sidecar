@@ -132,8 +132,9 @@ export function createRecapper(o: RecapperOptions): Explainer {
       failures = 0
       save({ ...entry, at: now(), status: 'done', ai: recap.ai })
       const t = now()
-      for (const d of recap.decisions) {
-        const decision = { ...d, id: `${d.stepId}:decision`, sessionId, at: t }
+      for (const [i, d] of recap.decisions.entries()) {
+        // a recap may cite one step for two decisions
+        const decision = { ...d, id: `${d.stepId}:decision:${i}`, sessionId, at: t }
         o.store.addDecision(decision)
         o.hub.publish({ type: 'decision', decision })
       }

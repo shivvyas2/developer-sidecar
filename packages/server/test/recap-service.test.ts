@@ -76,9 +76,16 @@ describe('one recap per turn', () => {
     expect(done).toMatchObject({ status: 'done', lastStepId: last.id, ai: { summary: 'Claude added a checkout page.', meaning: 'People can pay you now.' } })
     // nothing is failing, so the next ask is dropped
     expect(done.ai!.next).toBeUndefined()
-    expect(t.store.listDecisions('s1')).toEqual([expect.objectContaining({ stepId: last.id, choice: 'Stripe', id: `${last.id}:decision` })])
+    expect(t.store.listDecisions('s1')).toEqual([expect.objectContaining({ stepId: last.id, choice: 'Stripe', id: `${last.id}:decision:0` })])
     expect(t.store.listGlossary('s1').map((g) => g.term)).toEqual(['Checkout session'])
     expect(t.store.usage()).toEqual({ input: 100, output: 40 })
+  })
+
+  test('two decisions citing the same step are both kept', async () => {
+    const second = { step: 's1', title: 'Validation', choice: 'Zod', alternatives: ['Yup'], reason: 'Types for free' }
+    const t = setup(fake(() => ({ ...ANSWER, decisions: [...ANSWER.decisions, second] })).provider)
+    t.turn(); t.stop(); await t.settle()
+    expect(t.store.listDecisions('s1').map((d) => d.choice)).toEqual(['Stripe', 'Zod'])
   })
 
   test('the next ask is kept while a check still fails', async () => {
