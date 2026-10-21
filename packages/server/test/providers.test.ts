@@ -48,14 +48,14 @@ describe('anthropicProvider', () => {
   test('malformed text (not JSON, or the wrong shape) is retryable and carries the usage spent', async () => {
     for (const bad of ['not json', '{"items":[{"bad":1}]}']) {
       const p = anthropicProvider(client(() => text(bad, 'end_turn', { input_tokens: 4, output_tokens: 2 })))
-      await expect(p.call(req, 'haiku')).rejects.toMatchObject({ message: 'The explanation came back malformed.', retryable: true, usage: { input: 4, output: 2 } })
+      await expect(p.call(req, 'haiku')).rejects.toMatchObject({ message: 'The recap came back malformed.', retryable: true, usage: { input: 4, output: 2 } })
     }
     const none = anthropicProvider(client(() => ({ stop_reason: 'end_turn', content: [], usage: { input_tokens: 4, output_tokens: 0 } })))
     await expect(none.call(req, 'haiku')).rejects.toMatchObject({ retryable: true, usage: { input: 4, output: 0 } })
   })
   test('a 404 means the key cannot use the model and is not retryable', async () => {
     const p = anthropicProvider(client(() => { throw new Anthropic.NotFoundError(404, { type: 'error' }, 'model not found', new Headers()) }))
-    await expect(p.call(req, 'haiku')).rejects.toMatchObject({ message: "This API key can't use the explanation model.", retryable: false })
+    await expect(p.call(req, 'haiku')).rejects.toMatchObject({ message: "This API key can't use the recap model.", retryable: false })
   })
   test('unknown thrown errors become retryable ExplainErrors', async () => {
     const p = anthropicProvider(client(() => { throw new Error('socket hang up') }))
@@ -101,6 +101,27 @@ describe('cliProvider', () => {
   test('extractJson finds the object inside prose and code fences', () => {
     expect(extractJson('```json\n{"a":1}\n```')).toEqual({ a: 1 })
     expect(extractJson('no json')).toBeNull()
+  })
+})
+
+describe('error wording', () => {
+  test('the errors a person can see on the card or the PAUSED strip speak of recaps, not explanations', async () => {
+    const api = (impl: () => unknown) => anthropicProvider({ messages: { create: async () => impl() } })
+    const reply = (t: string, stop_reason = 'end_turn') => ({ stop_reason, content: [{ type: 'text', text: t }], usage: { input_tokens: 1, output_tokens: 1 } })
+    const failing: Array<Promise<unknown>> = [
+      api(() => reply('', 'refusal')).call(req, 'haiku'),
+      api(() => reply('{"items":[', 'max_tokens')).call(req, 'haiku'),
+      api(() => reply('not json')).call(req, 'haiku'),
+      api(() => { throw new Anthropic.NotFoundError(404, { type: 'error' }, 'model not found', new Headers()) }).call(req, 'haiku'),
+      api(() => { throw new Anthropic.BadRequestError(400, { type: 'error' }, 'too long', new Headers()) }).call(req, 'haiku'),
+      cliProvider(async () => ({ code: 0, stdout: JSON.stringify({ is_error: false, result: '{"items":[{"bad":1}]}' }), stderr: '' })).call(req, 'haiku'),
+    ]
+    const messages = await Promise.all(failing.map((p) => p.then(() => '', (e: unknown) => (e as Error).message)))
+    for (const m of messages) {
+      expect(m).not.toMatch(/explain/i)
+      expect(m).not.toBe('')
+    }
+    expect(messages.filter((m) => /recap/.test(m))).toHaveLength(messages.length)
   })
 })
 

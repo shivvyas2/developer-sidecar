@@ -37,13 +37,13 @@ export type MessagesClient = { messages: { create: (params: any) => Promise<any>
 interface ApiUsage { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number | null; cache_creation_input_tokens?: number | null }
 interface ApiMessage { stop_reason: string | null; content: Array<{ type: string; text?: string }>; usage: ApiUsage }
 
-const MALFORMED = 'The explanation came back malformed.'
+const MALFORMED = 'The recap came back malformed.'
 
 function classify(err: unknown): ExplainError {
   if (err instanceof Anthropic.AuthenticationError) return new ExplainError('The Anthropic API key was rejected.', false)
   if (err instanceof Anthropic.PermissionDeniedError) return new ExplainError('This API key is not allowed to use the model.', false)
-  if (err instanceof Anthropic.NotFoundError) return new ExplainError("This API key can't use the explanation model.", false)
-  if (err instanceof Anthropic.BadRequestError) return new ExplainError(`The explanation request was rejected: ${err.message}`, false)
+  if (err instanceof Anthropic.NotFoundError) return new ExplainError("This API key can't use the recap model.", false)
+  if (err instanceof Anthropic.BadRequestError) return new ExplainError(`The recap request was rejected: ${err.message}`, false)
   if (err instanceof Anthropic.RateLimitError) return new ExplainError('Anthropic rate limit reached.', true)
   if (err instanceof Anthropic.APIConnectionError) return new ExplainError('Could not reach Anthropic.', true)
   if (err instanceof Anthropic.APIError) return new ExplainError(`Anthropic error ${err.status ?? ''}`.trim(), (err.status ?? 500) >= 500)
@@ -69,8 +69,8 @@ export function anthropicProvider(client: MessagesClient = new Anthropic({ maxRe
       }
       const u = res.usage
       const usage: TokenUsage = { input: u.input_tokens + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0), output: u.output_tokens }
-      if (res.stop_reason === 'refusal') throw new ExplainError('The model declined to explain these steps.', false, usage)
-      if (res.stop_reason === 'max_tokens') throw new ExplainError('The explanation came back cut off.', true, usage)
+      if (res.stop_reason === 'refusal') throw new ExplainError('The model declined to write this recap.', false, usage)
+      if (res.stop_reason === 'max_tokens') throw new ExplainError('The recap came back cut off.', true, usage)
       const block = res.content.find((b) => b.type === 'text')
       let json: unknown
       try {
@@ -149,7 +149,7 @@ export function cliProvider(run: Runner = runClaude, env: NodeJS.ProcessEnv = pr
       }
       if (outer.is_error || typeof outer.result !== 'string') throw new ExplainError('claude reported an error.', true)
       const parsed = task.schema.safeParse(extractJson(outer.result))
-      if (!parsed.success) throw new ExplainError('claude returned explanations in the wrong shape.', true)
+      if (!parsed.success) throw new ExplainError('claude returned a recap in the wrong shape.', true)
       const u = outer.usage ?? {}
       return {
         output: parsed.data,
