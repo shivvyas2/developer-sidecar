@@ -50,6 +50,13 @@ describe('nameTown', () => {
     expect(t.places).toEqual(['app', 'service', 'database', 'toolbox'])
     expect(t.labels).toEqual({ service: 'Stripe', database: 'Orders', toolbox: '2 ADDED' })
   })
+  test('a failed install is not counted as added, as the Whiteboard says it needs a fix', () => {
+    const t = nameTown(townFrom([]), map([
+      { kind: 'blocks', title: '', items: [item('blocks:stripe', 'stripe'), item('blocks:pg', 'pg', 'failed')] },
+    ]))
+    expect(t.labels.toolbox).toBe('1 ADDED')
+    expect(nameTown(townFrom([]), map([{ kind: 'blocks', title: '', items: [item('blocks:pg', 'pg', 'failed')] }])).labels.toolbox).toBeUndefined()
+  })
   test('a label a scene already gave wins, and places are not repeated', () => {
     const base = townFrom([{ category: 'external', status: 'ok', scene: spec(['claude', { place: 'service', label: 'OpenAI' }]) }])
     const t = nameTown(base, map([{ kind: 'service', title: '', items: [item('service:Stripe', 'Stripe')] }]))

@@ -12,7 +12,7 @@ const read = (p: string) => step('Read', { file_path: `/p/${p}` }, 'ok', { file:
 const write = (p: string, content = 'export const x = 1') => step('Write', { file_path: `/p/${p}`, content })
 const edit = (p: string) => step('Edit', { file_path: `/p/${p}`, old_string: 'a', new_string: 'b' }, 'ok', { originalFile: 'WHOLE ORIGINAL FILE' })
 const bash = (command: string, status: FeedStep['status'] = 'ok', output?: unknown) => step('Bash', { command }, status, output)
-const rule: RuleRecap = { turnId: 'p', asked: 'Add checkout', state: 'done', outcome: 'good', built: [{ kind: 'backend', name: 'Checkout', failed: false }], packages: 1, checks: 'pass', fixes: 0 }
+const rule: RuleRecap = { turnId: 'p', asked: 'Add checkout', state: 'done', outcome: 'good', built: [{ id: 'backend:checkout', kind: 'backend', name: 'Checkout', failed: false }], packages: 1, changed: true, checks: 'pass', fixes: 0 }
 const ctx = { project: 'shop', asked: 'Add checkout', rule, cwd: '/p' }
 
 describe('encodeTurn', () => {
@@ -35,6 +35,12 @@ describe('encodeTurn', () => {
     for (const never of ['SECRET FILE BODY', 'BODY OF THE NEW FILE', 'WHOLE ORIGINAL FILE', 'Tests 3 passed']) expect(user).not.toContain(never)
     expect(labels.size).toBe(5)
     expect([...labels.keys()]).toEqual(['s1', 's2', 's3', 's4', 's5'])
+  })
+
+  test('a turn that changed files the map leaves out does not read as nothing changed', () => {
+    const facts = (rule: RuleRecap) => encodeTurn({ ...ctx, rule }, [edit('README.md')]).user.split('\n').find((l) => l.startsWith('Facts:'))
+    expect(facts({ ...rule, built: [], packages: 0, changed: true })).toContain('Facts: changed files;')
+    expect(facts({ ...rule, built: [], packages: 0, changed: false })).toContain('Facts: nothing built or changed;')
   })
 
   test('a 150-step turn stays inside the caps: 30 lines, every failure kept, the rest counted', () => {

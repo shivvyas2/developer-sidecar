@@ -119,7 +119,7 @@ export function encodeTurn(ctx: TurnContext, steps: readonly FeedStep[]): Encode
 
   const r = ctx.rule
   const facts = [
-    r.built.length ? `built or changed ${r.built.map((p) => p.name).slice(0, 10).join(', ')}` : 'nothing built or changed',
+    r.built.length ? `built or changed ${r.built.map((p) => p.name).slice(0, 10).join(', ')}` : r.changed ? 'changed files' : 'nothing built or changed',
     r.packages ? `${r.packages} packages added` : '',
     { pass: 'checks pass', fail: 'checks still FAIL', none: 'no checks run' }[r.checks],
     r.fixes ? `${r.fixes} failure${r.fixes === 1 ? '' : 's'} fixed` : '',

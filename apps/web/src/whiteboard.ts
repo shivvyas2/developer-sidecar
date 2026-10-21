@@ -1,4 +1,4 @@
-import type { MapKind, MapState, ProjectMap } from '@sidecar/shared'
+import type { Attention, FeedStep, MapKind, MapState, ProjectMap } from '@sidecar/shared'
 import { stepNumber } from './selection'
 
 export interface BoardItem {
@@ -23,7 +23,7 @@ export const MAX_STEP_LINKS = 8
 
 /**
  * The Whiteboard's view of the project map: each part with its state in words, its files and the
- * numbered steps that touched it. `stepIds` is the session's steps in order; `liveId` the newest.
+ * numbered steps that touched it. `stepIds` is the session's steps in order; `liveId` the live one, if any (see liveStepId).
  */
 export function boardFrom(map: ProjectMap, stepIds: readonly string[], liveId: string | null): BoardSection[] {
   const index = new Map(stepIds.map((id, i) => [id, i]))
@@ -41,4 +41,14 @@ export function boardFrom(map: ProjectMap, stepIds: readonly string[], liveId: s
       live: liveId !== null && i.stepIds.includes(liveId),
     })),
   }))
+}
+
+/**
+ * The step whose part reads "working on it now": the newest one, but only while Claude is working on it
+ * (attention `working`, or the step itself still running). A finished or idle session has none.
+ */
+export function liveStepId(steps: readonly Pick<FeedStep, 'id' | 'status'>[], attention: Attention | undefined): string | null {
+  const last = steps.at(-1)
+  if (!last || attention === 'done' || attention === 'idle') return null
+  return attention === 'working' || last.status === 'running' ? last.id : null
 }
