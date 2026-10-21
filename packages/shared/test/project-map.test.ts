@@ -124,6 +124,12 @@ describe('helpers', () => {
     expect(tablesIn(Array.from({ length: 30 }, (_, i) => `pgTable('t${i}')`).join('\n'))).toHaveLength(12)
     expect(tablesIn('no tables here')).toEqual([])
   })
+  test('a schema-qualified SQL table is named by its table, not its schema', () => {
+    expect(tablesIn('CREATE TABLE public.orders (id int)')).toEqual(['orders'])
+    expect(tablesIn('create table if not exists "public"."orders" (id int)')).toEqual(['orders'])
+    expect(tablesIn('CREATE TABLE `shop`.`line_items` (id int)')).toEqual(['line_items'])
+    expect(tablesIn('CREATE TABLE [dbo].[users] (id int)')).toEqual(['users'])
+  })
   test('odd input never throws', () => {
     expect(projectMap([step('Write', 'create', { file_path: 42 }), step('Bash', 'install', { command: null }), step('X', 'fallback', 'nope' as never)]).sections).toEqual([])
   })

@@ -104,7 +104,8 @@ export function tablesIn(text: string): string[] {
   const patterns = [
     /\b(?:pg|sqlite|mysql)Table\(\s*['"`]([A-Za-z_]\w*)/g,
     /^\s*model\s+([A-Za-z_]\w*)\s*\{/gm,
-    /\bcreate\s+table\s+(?:if\s+not\s+exists\s+)?["`[]?([A-Za-z_]\w*)/gi,
+    // a schema before the name (public.orders, "public"."orders") is skipped
+    /\bcreate\s+table\s+(?:if\s+not\s+exists\s+)?(?:["`[]?\w+["`\]]?\.)?["`[]?([A-Za-z_]\w*)/gi,
     /\bmodel\(\s*['"`]([A-Za-z_]\w*)/g,
   ]
   for (const re of patterns) for (const m of text.matchAll(re)) out.add(m[1]!.toLowerCase())
