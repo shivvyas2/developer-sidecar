@@ -201,6 +201,15 @@ describe('recaps', () => {
     expect(s.getRecap('nope')).toBeUndefined()
   })
 
+  test('a call on a turn already recapped is counted without touching its recap', () => {
+    const s = openStore(':memory:')
+    s.saveRecap(recap('p1', 'pending'))
+    s.saveRecap(recap('p1', 'done', 2))
+    expect(s.countRecapCall('p1')).toBe(2)
+    expect(s.getRecap('p1')).toMatchObject({ status: 'done', ai: { summary: 'S' }, at: 2, count: 2 })
+    expect(s.countRecapCall('nope')).toBe(0)
+  })
+
   test('pending recaps can all be failed at once, keeping their count', () => {
     const s = openStore(':memory:')
     s.saveRecap(recap('p1', 'pending'))

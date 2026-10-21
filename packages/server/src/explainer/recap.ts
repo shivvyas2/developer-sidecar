@@ -61,6 +61,9 @@ export function createRecapper(o: RecapperOptions): Explainer {
   let epoch = 0 // bumped on reset
   const sessionEpochs = new Map<string, number>() // bumped on session_deleted
   const waiting = new Set<string>() // turns in line, not yet started (see key)
+  // per session, a turn with a done recap that went on while no call could be made (paused, no provider);
+  // its recap stays as it was, and catchUp recaps the rest
+  const missed = new Map<string, string>()
   let stopped = false
 
   const level = () => (o.disabledReason ? 'off' : o.settings.get().explanations)
@@ -103,17 +106,27 @@ export function createRecapper(o: RecapperOptions): Explainer {
     if (existing && (same || existing.count >= MAX_RECAPS_PER_TURN)) return
 
     const entry = { sessionId, turnId: turn.id, lastStepId }
-    if (paused) { save({ ...entry, at: now(), status: 'unavailable', reason: paused }); return }
+    // A done recap stays on the card until a new done one replaces it: a continuation's call that
+    // fails, or can't be made, never turns a good summary into "pending" or "unavailable".
+    const done = existing?.status === 'done'
+    if (paused) {
+      // saved, so catchUp recaps it once the pause is cleared
+      if (done) missed.set(sessionId, turn.id)
+      else { missed.delete(sessionId); save({ ...entry, at: now(), status: 'unavailable', reason: paused }) }
+      return
+    }
+    if (missed.get(sessionId) === turn.id) missed.delete(sessionId)
 
     const session = o.store.getSession(sessionId)
     const cwd = session?.cwd || undefined
     const rule = buildRecap(steps, { attention: 'done', ...(cwd ? { cwd } : {}) })!
     const { user, labels } = encodeTurn({ project: cwd ? basename(cwd) : 'this project', asked: turn.asked, rule, ...(cwd ? { cwd } : {}) }, turnSteps)
     const task = { system: RECAP_SYSTEM_PROMPT, user, schema: RecapOutputSchema, maxTokens: RECAP_MAX_TOKENS, shape: RECAP_SHAPE }
-    save({ ...entry, at: now(), status: 'pending' })
-    // from here on the recap must end done or unavailable, even if something throws
+    if (done) o.store.countRecapCall(turn.id)
+    else save({ ...entry, at: now(), status: 'pending' })
+    // from here on the recap must end done or unavailable, even if something throws; a done one is only replaced by done
     let ended = false
-    const end = (r: RecapEntry) => { save(r); ended = true }
+    const end = (r: RecapEntry) => { ended = true; if (r.status === 'done' || !done) save(r) }
     try {
       // switched off, stopped, reset or session deleted since this recap was queued: no more calls or writes
       const cancelled = () => stopped || level() === 'off' || stale()
@@ -160,7 +173,7 @@ export function createRecapper(o: RecapperOptions): Explainer {
       publishState()
     } finally {
       // something threw after pending was saved: say so rather than leave the card waiting forever
-      if (!ended && !stopped && !stale()) save({ ...entry, at: now(), status: 'unavailable', reason: INTERRUPTED })
+      if (!ended && !stopped && !stale()) end({ ...entry, at: now(), status: 'unavailable', reason: INTERRUPTED })
     }
   }
 
@@ -183,10 +196,15 @@ export function createRecapper(o: RecapperOptions): Explainer {
     if (turnId) queue(sessionId, turnId)
   }
   const started = now()
-  /** Back from a pause: the turns that ended while paused since this start, one per session, get their call now. */
+  /**
+   * Back from a pause, or a provider found: the turns that ended meanwhile since this start, one per session,
+   * get their call now, and so does a recapped turn that went on meanwhile.
+   */
   const catchUp = () => {
     if (state().status !== 'ready') return
     for (const r of o.store.unavailableRecaps()) if (r.at >= started) queue(r.sessionId, r.turnId)
+    for (const [sessionId, turnId] of missed) queue(sessionId, turnId)
+    missed.clear()
   }
 
   // calls in flight when the server last stopped can never finish
@@ -196,9 +214,10 @@ export function createRecapper(o: RecapperOptions): Explainer {
     if (m.type === 'turn_end') schedule(m.sessionId, m.lastStepId)
     else if (m.type === 'session_deleted') {
       sessionEpochs.set(m.id, (sessionEpochs.get(m.id) ?? 0) + 1)
+      missed.delete(m.id)
       for (const k of waiting) if (k.startsWith(`${m.id}\n`)) waiting.delete(k)
     }
-    else if (m.type === 'reset') { epoch++; waiting.clear() }
+    else if (m.type === 'reset') { epoch++; waiting.clear(); missed.clear() }
   })
 
   return {

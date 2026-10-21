@@ -154,6 +154,80 @@ describe('one recap per turn', () => {
   })
 })
 
+describe('a continued turn keeps its recap', () => {
+  const EMPTY_ANSWER = { summary: ' ', meaning: ' ', next: null, decisions: [], concepts: [] }
+  const more = (t: ReturnType<typeof setup>, i = 0) => t.add('s1', 'Edit', { file_path: `/work/shop/lib/more${i}.ts`, old_string: 'a', new_string: 'b' })
+
+  test('a continuation whose call fails leaves the done recap as it was, and still counts toward the cap', async () => {
+    let n = 0
+    const f = fake(() => (++n === 1 ? ANSWER : EMPTY_ANSWER))
+    const t = setup(f.provider)
+    const last = t.turn(); t.stop(); await t.settle()
+    more(t); t.stop(); await t.settle()
+    expect(f.tasks).toHaveLength(2)
+    expect(t.store.listRecaps('s1')).toEqual([expect.objectContaining({ status: 'done', lastStepId: last.id, ai: expect.objectContaining({ summary: 'Claude added a checkout page.' }) })])
+    // the card never went from the summary to Summarizing or No AI recap
+    expect(t.recaps().map((r) => r.status)).toEqual(['pending', 'done'])
+    more(t, 1); t.stop(); await t.settle()
+    expect(f.tasks).toHaveLength(MAX_RECAPS_PER_TURN)
+  })
+
+  test('a continuation switched off mid-call, or one that throws, leaves the done recap too', async () => {
+    let release!: () => void
+    let n = 0
+    const provider: Provider = {
+      id: 'api',
+      async call(task) {
+        if (++n === 1) return { output: task.schema.parse(ANSWER), usage: { input: 1, output: 1 } }
+        await new Promise<void>((r) => { release = r })
+        return { output: task.schema.parse(ANSWER), usage: { input: 1, output: 1 } }
+      },
+    }
+    const t = setup(provider)
+    const last = t.turn(); t.stop(); await t.settle()
+    more(t); t.stop()
+    await vi.advanceTimersByTimeAsync(0)
+    t.settings.set({ explanations: 'off' })
+    release(); await t.settle()
+    expect(t.store.listRecaps('s1')).toEqual([expect.objectContaining({ status: 'done', lastStepId: last.id })])
+
+    const boom = setup({ id: 'api', async call(task) { if (++n === 3) return { output: task.schema.parse(ANSWER), usage: { input: 1, output: 1 } }; throw new TypeError('boom') } })
+    const first = boom.turn(); boom.stop(); await boom.settle()
+    more(boom); boom.stop(); await boom.settle()
+    expect(boom.store.listRecaps('s1')).toEqual([expect.objectContaining({ status: 'done', lastStepId: first.id })])
+  })
+
+  test('a continuation that succeeds replaces the recap', async () => {
+    const t = setup(fake().provider)
+    t.turn(); t.stop(); await t.settle()
+    const newer = more(t); t.stop(); await t.settle()
+    expect(t.store.listRecaps('s1')).toEqual([expect.objectContaining({ status: 'done', lastStepId: newer.id })])
+  })
+
+  test('a continuation while paused keeps the done recap, and is recapped on resume', async () => {
+    let n = 0
+    const provider: Provider = {
+      id: 'api',
+      async call(task) {
+        if (++n === 2) throw new ExplainError('The Anthropic API key was rejected.', false)
+        return { output: task.schema.parse(ANSWER), usage: { input: 1, output: 1 } }
+      },
+    }
+    const t = setup(provider)
+    // a first turn recapped, then another session's failure pauses recaps
+    const last = t.turn(); t.stop(); await t.settle()
+    t.turn('other'); t.stop('other'); await t.settle()
+    expect(t.rx.state().status).toBe('paused')
+    const newer = more(t); t.stop(); await t.settle()
+    expect(n).toBe(2)
+    expect(t.store.listRecaps('s1')).toEqual([expect.objectContaining({ status: 'done', lastStepId: last.id })])
+    t.rx.settingsChanged(); await t.settle()
+    expect(t.store.listRecaps('s1')).toEqual([expect.objectContaining({ status: 'done', lastStepId: newer.id })])
+    // the other session's turn, which failed with a call made, is not called again
+    expect(n).toBe(3)
+  })
+})
+
 describe('when the model fails', () => {
   test('a retryable error is tried once more, and both attempts count their tokens', async () => {
     let n = 0

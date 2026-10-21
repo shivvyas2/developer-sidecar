@@ -22,6 +22,8 @@ export interface Store {
   /** Replaces the turn's recap and counts it; returns how many times the turn has been recapped. */
   saveRecap(r: RecapEntry): number
   getRecap(turnId: string): (RecapEntry & { count: number }) | undefined
+  /** Counts a call on a turn whose recap stays as stored until the call writes a new one; returns the count, 0 for no recap. */
+  countRecapCall(turnId: string): number
   listRecaps(sessionId: string): RecapEntry[]
   /** Marks every pending recap unavailable (their calls can no longer finish) and returns them. */
   failPendingRecaps(reason: string, at: number): RecapEntry[]
@@ -145,6 +147,7 @@ export function openStore(path: string): Store {
     ON CONFLICT(turn_id) DO UPDATE SET at = excluded.at, json = excluded.json, count = recaps.count + excluded.count
     RETURNING count`)
   const getRecapStmt = db.prepare('SELECT json, count FROM recaps WHERE turn_id = ?')
+  const countCall = db.prepare('UPDATE recaps SET count = count + 1 WHERE turn_id = ? RETURNING count')
   const recapsFor = db.prepare('SELECT json FROM recaps WHERE session_id = ? ORDER BY at ASC, turn_id ASC')
   const pendingRecaps = db.prepare(`SELECT json FROM recaps WHERE json_extract(json, '$.status') = 'pending'`)
   const uncalledRecaps = db.prepare(`
@@ -222,6 +225,9 @@ export function openStore(path: string): Store {
     getRecap(turnId) {
       const row = getRecapStmt.get(turnId) as { json: string; count: number } | undefined
       return row ? { ...(JSON.parse(row.json) as RecapEntry), count: row.count } : undefined
+    },
+    countRecapCall(turnId) {
+      return (countCall.get(turnId) as { count: number } | undefined)?.count ?? 0
     },
     listRecaps(sessionId) {
       return parseJson<RecapEntry>(recapsFor.all(sessionId))
