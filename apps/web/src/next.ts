@@ -1,4 +1,4 @@
-import { isExplained, type FeedStep, type StepExplanation } from '@sidecar/shared'
+import { ellipsis, isExplained, type FeedStep, type StepExplanation } from '@sidecar/shared'
 
 const LABEL_CHARS = 80
 
@@ -10,6 +10,6 @@ export function nextAsk(step: FeedStep, explanation: StepExplanation | undefined
   if (step.status !== 'failed') return null
   if (isExplained(explanation) && explanation.next) return explanation.next
   const label = step.techLabel.replace(/\s+/g, ' ').trim()
-  const what = label.length > LABEL_CHARS ? `${label.slice(0, LABEL_CHARS - 1)}…` : label
+  const what = ellipsis(label, LABEL_CHARS)
   return what ? `The last step failed (${what}). Find out why and fix it.` : 'The last step failed. Find out why and fix it.'
 }

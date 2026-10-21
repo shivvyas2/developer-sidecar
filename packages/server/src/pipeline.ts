@@ -1,4 +1,4 @@
-import { scrubEvent, type Attention, type SidecarEvent, type Step } from '@sidecar/shared'
+import { ellipsis, scrubEvent, type Attention, type SidecarEvent, type Step } from '@sidecar/shared'
 import type { Hub } from './hub'
 import { translate } from './rules'
 import { StepTracker } from './steps'
@@ -27,7 +27,7 @@ export function attentionOf(e: SidecarEvent): { state: Attention; text?: string 
       : type === 'idle_prompt' || (!type && /waiting for your input/i.test(message)) ? 'idle'
         : undefined
   if (!state) return undefined
-  const text = message.length > ATTENTION_TEXT ? `${message.slice(0, ATTENTION_TEXT - 1)}…` : message
+  const text = ellipsis(message, ATTENTION_TEXT)
   return text ? { state, text } : { state }
 }
 

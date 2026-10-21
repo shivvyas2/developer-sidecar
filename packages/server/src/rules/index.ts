@@ -1,4 +1,4 @@
-import { detectVendor, ENV_FILE, INSTALL, isRecord, oneOf, packagesIn, segments, TEST, viaRunner, type Category, type SceneSpec, type Step, type Translation } from '@sidecar/shared'
+import { detectVendor, ellipsis, ENV_FILE, INSTALL, isRecord, oneOf, packagesIn, segments, TEST, viaRunner, type Category, type SceneSpec, type Step, type Translation } from '@sidecar/shared'
 import { scenes } from '@sidecar/ui-kit/catalog'
 
 export { detectVendor, segments } from '@sidecar/shared'
@@ -23,7 +23,7 @@ interface Rule {
 }
 
 const basename = (p: string) => p.split(/[\\/]/).pop() ?? p
-const short = (s: string, n = 100) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
+const short = (s: string, n = 100) => ellipsis(s, n)
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
 /** The first simple command that matches, so `git add -A && git commit` is a commit and a commit message never matches. */
 const part = (c: Ctx, re: RegExp) => c.parts.find((p) => re.test(p))

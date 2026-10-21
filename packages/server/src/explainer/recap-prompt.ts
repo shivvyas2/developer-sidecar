@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import {
-  AiRecapSchema, ConceptSchema, DecisionSchema, INSTALL, isRecord, packagesIn, scrubText, segments, storyOf,
+  AiRecapSchema, ConceptSchema, DecisionSchema, ellipsis, INSTALL, isRecord, packagesIn, scrubText, segments, storyOf,
   type AiRecap, type Concept, type Decision, type FeedStep, type RuleRecap, type StoryBeat,
 } from '@sidecar/shared'
 
@@ -28,7 +28,6 @@ export interface EncodedTurn {
 }
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
-const clipLine = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
 const oneLine = (s: string) => s.replace(/\s+/g, ' ').trim()
 /** Scrubbed before it is shortened: a key cut in half no longer matches the scrubber's patterns. */
 const safe = (s: string) => scrubText(oneLine(s))
@@ -49,7 +48,7 @@ function describe(s: FeedStep, rel: (p: string) => string): { text: string; comm
   const input = isRecord(s.input) ? s.input : {}
   const path = safe(rel(str(input.file_path) || str(input.notebook_path)))
   const cmd = safe(str(input.command))
-  const quoted = cmd ? `\`${clipLine(cmd, 120)}\`` : ''
+  const quoted = cmd ? `\`${ellipsis(cmd, 120)}\`` : ''
   switch (s.category) {
     case 'create': return { text: `wrote ${path || 'a file'}`, command: false }
     case 'edit': return { text: `changed ${path || 'a file'}`, command: false }
@@ -111,7 +110,7 @@ export function encodeTurn(ctx: TurnContext, steps: readonly FeedStep[]): Encode
     if (l.step) labels.set(label, l.step.id)
     const text = tails.has(l) && l.step?.output !== undefined ? failTail(l.step.output) : ''
     const tail = text ? ` :: ${text}` : ''
-    return { label, failed: l.failed, tailed: !!tail, text: clipLine(`${label} ${l.text}`, RECAP_CAPS.lineChars) + tail }
+    return { label, failed: l.failed, tailed: !!tail, text: ellipsis(`${label} ${l.text}`, RECAP_CAPS.lineChars) + tail }
   })
   const also = [reads ? `looked at ${reads} file${reads === 1 ? '' : 's'}` : '', searches ? `searched ${searches} time${searches === 1 ? '' : 's'}` : ''].filter(Boolean)
   const stepsText = () => {
@@ -132,7 +131,7 @@ export function encodeTurn(ctx: TurnContext, steps: readonly FeedStep[]): Encode
     r.url ? `the app runs at ${r.url}` : '',
   ].filter(Boolean).join('; ')
 
-  const asked = ctx.asked ? clipLine(safe(ctx.asked), RECAP_CAPS.promptChars) : '(not seen)'
+  const asked = ctx.asked ? ellipsis(safe(ctx.asked), RECAP_CAPS.promptChars) : '(not seen)'
   // the facts go first and are never cut; only the step lines give way to the cap
   const head = scrubText(`Project: ${ctx.project}\nAsked: "${asked}"\nFacts: ${facts}\nSteps:\n`)
   const room = RECAP_CAPS.userChars - head.length
@@ -181,10 +180,7 @@ export const LIMITS = {
   decisions: 2, concepts: 3,
 } as const
 
-const clip = (s: string, n: number) => {
-  const t = oneLine(s)
-  return t.length > n ? `${t.slice(0, n - 1)}…` : t
-}
+const clip = (s: string, n: number) => ellipsis(oneLine(s), n)
 
 export interface NormalizedRecap {
   ai: AiRecap
