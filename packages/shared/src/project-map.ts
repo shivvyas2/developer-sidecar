@@ -98,9 +98,10 @@ function classify(rel: string): { kind: MapKind; key: string; name: string } | n
   return null
 }
 
-/** Table names a schema file declares (Drizzle, Prisma, SQL, Mongoose), from the text Claude wrote. */
+/** Table names a schema file declares (Drizzle, Prisma, SQL, Mongoose), from the text Claude wrote, in its casing. */
 export function tablesIn(text: string): string[] {
-  const out = new Set<string>()
+  // keyed by the lowercase name, so OrderItem and orderitem are one table, named as first written
+  const out = new Map<string, string>()
   const patterns = [
     /\b(?:pg|sqlite|mysql)Table\(\s*['"`]([A-Za-z_]\w*)/g,
     /^\s*model\s+([A-Za-z_]\w*)\s*\{/gm,
@@ -108,8 +109,8 @@ export function tablesIn(text: string): string[] {
     /\bcreate\s+table\s+(?:if\s+not\s+exists\s+)?(?:["`[]?\w+["`\]]?\.)?["`[]?([A-Za-z_]\w*)/gi,
     /\bmodel\(\s*['"`]([A-Za-z_]\w*)/g,
   ]
-  for (const re of patterns) for (const m of text.matchAll(re)) out.add(m[1]!.toLowerCase())
-  return [...out].slice(0, 12)
+  for (const re of patterns) for (const m of text.matchAll(re)) if (!out.has(m[1]!.toLowerCase())) out.set(m[1]!.toLowerCase(), m[1]!)
+  return [...out.values()].slice(0, 12)
 }
 
 const WRITES = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
@@ -147,7 +148,7 @@ export function projectMap(steps: readonly MapStep[], cwd?: string): ProjectMap 
       const c = classify(r)
       if (c) touch(c.kind, c.key, c.name, step, r)
       if (c?.kind === 'data' && c.key === 'tables') {
-        for (const t of tablesIn([str(input.content), str(input.new_string)].join('\n'))) touch('data', `table:${t}`, `${humanize(t)} table`, step, r)
+        for (const t of tablesIn([str(input.content), str(input.new_string)].join('\n'))) touch('data', `table:${t.toLowerCase()}`, `${humanize(t)} table`, step, r)
       }
       const vendor = detectVendor(stem(r))
       if (vendor && c?.kind !== 'service' && CODE.test(r)) touch('service', vendor, vendor, step, r)
