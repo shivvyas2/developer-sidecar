@@ -7,7 +7,8 @@ import { storyOf, type ChapterOutcome, type StoryStep } from './story'
  * to open the app and what Claude needs. Built from steps alone, with no model.
  */
 
-export interface RecapPart { kind: MapKind; name: string; failed: boolean }
+/** A part made or changed. `id` is the map item's (`kind:key`): unique, where two parts can share a name. */
+export interface RecapPart { id: string; kind: MapKind; name: string; failed: boolean }
 
 export interface RuleRecap {
   /** The turn (story chapter) this recap is about: its prompt's id, or its first step's when there was no prompt. */
@@ -81,7 +82,7 @@ export function buildRecap(steps: readonly RecapStep[], opts: { attention?: Atte
   const map = projectMap(turnSteps, opts.cwd)
   const built = map.sections
     .filter((s) => s.kind !== 'blocks')
-    .flatMap((s) => s.items.filter((i) => i.state !== 'seen').map((i) => ({ kind: s.kind, name: i.name, failed: i.state === 'failed' })))
+    .flatMap((s) => s.items.filter((i) => i.state !== 'seen').map((i) => ({ id: i.id, kind: s.kind, name: i.name, failed: i.state === 'failed' })))
   const packages = map.sections.find((s) => s.kind === 'blocks')?.items.filter((i) => i.state !== 'seen').length ?? 0
   const byId = new Map(turnSteps.map((s) => [s.id, s]))
   const ran = turnSteps.some((s) => s.category === 'test' && (s.status === 'ok' || s.status === 'failed'))

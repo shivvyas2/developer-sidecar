@@ -15,7 +15,7 @@ export function RecapCard({ recap, ask }: { recap: RuleRecap; ask: string | null
       <p className="recap__headline">{t.headline}</p>
       {t.parts.length ? (
         <ul className="recap__parts" aria-label="Made or changed">
-          {t.parts.map((p) => <li key={p.name} data-failed={p.failed || undefined}>{p.name}</li>)}
+          {t.parts.map((p) => <li key={p.id} data-failed={p.failed || undefined}>{p.name}</li>)}
           {t.more ? <li className="recap__more">and {t.more} more</li> : null}
         </ul>
       ) : null}

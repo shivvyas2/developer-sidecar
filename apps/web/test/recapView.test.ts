@@ -3,7 +3,8 @@ import type { RuleRecap } from '@sidecar/shared'
 import { MAX_PARTS, recapText } from '../src/recapView'
 
 const base: RuleRecap = { turnId: 'p', asked: 'Add checkout', state: 'done', outcome: 'good', built: [], packages: 0, checks: 'none', fixes: 0 }
-const part = (name: string, failed = false) => ({ kind: 'page' as const, name, failed })
+let n = 0
+const part = (name: string, failed = false) => ({ id: `page:${++n}`, kind: 'page' as const, name, failed })
 
 describe('recapText', () => {
   test('the kicker follows what Claude is doing', () => {
@@ -22,7 +23,7 @@ describe('recapText', () => {
     const built = Array.from({ length: MAX_PARTS + 3 }, (_, i) => part(`Part ${i}`, i === 0))
     const t = recapText({ ...base, built, packages: 1, checks: 'fail' })
     expect(t.parts).toHaveLength(MAX_PARTS)
-    expect(t.parts[0]).toEqual({ name: 'Part 0', failed: true })
+    expect(t.parts[0]).toMatchObject({ name: 'Part 0', failed: true })
     expect(t.more).toBe(3)
     expect(t.packages).toBe('Added 1 building block')
     expect(t.checks).toBe('Checks fail')
@@ -32,5 +33,10 @@ describe('recapText', () => {
     expect(recapText(base).address).toBeNull()
     expect(recapText({ ...base, url: 'http://localhost:3000' }).address).toBe('localhost:3000')
     expect(recapText({ ...base, url: 'https://localhost:3000/app' }).address).toBe('localhost:3000/app')
+  })
+  test('parts keep their map ids, so two parts with the same name stay apart', () => {
+    const t = recapText({ ...base, built: [part('Shop page'), part('Shop page')] })
+    expect(t.parts.map((p) => p.name)).toEqual(['Shop page', 'Shop page'])
+    expect(new Set(t.parts.map((p) => p.id)).size).toBe(2)
   })
 })

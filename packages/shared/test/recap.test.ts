@@ -42,6 +42,14 @@ describe('buildRecap', () => {
     expect(r.built.map((b) => b.name)).toEqual(['Success page', 'Checkout', 'Stripe'])
   })
 
+  test('each part carries its map id, which stays unique when two parts share a name', () => {
+    const r = buildRecap([prompt('x'), write('lib/utils.ts'), write('src/utils.ts')], { cwd: '/p' })!
+    expect(r.built).toEqual([
+      { id: 'code:lib/utils.ts', kind: 'code', name: 'Utils', failed: false },
+      { id: 'code:src/utils.ts', kind: 'code', name: 'Utils', failed: false },
+    ])
+  })
+
   test('a turn with no prompt is keyed by its first step, the same id the story and the server use', () => {
     const first = write('a.ts')
     expect(buildRecap([first, check()])!.turnId).toBe(first.id)

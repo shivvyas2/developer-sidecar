@@ -4,7 +4,7 @@ export interface RecapText {
   kicker: string
   headline: string
   /** Names of what was made or changed, at most MAX_PARTS, then how many more. */
-  parts: Array<{ name: string; failed: boolean }>
+  parts: Array<{ id: string; name: string; failed: boolean }>
   more: number
   packages: string | null
   checks: string
@@ -31,7 +31,7 @@ export function recapText(r: RuleRecap): RecapText {
   return {
     kicker,
     headline,
-    parts: r.built.slice(0, MAX_PARTS).map(({ name, failed }) => ({ name, failed })),
+    parts: r.built.slice(0, MAX_PARTS).map(({ id, name, failed }) => ({ id, name, failed })),
     more: Math.max(0, r.built.length - MAX_PARTS),
     packages: r.packages ? `Added ${plural(r.packages, 'building block')}` : null,
     checks: { pass: 'Checks pass', fail: 'Checks fail', none: 'No checks run yet' }[r.checks],
