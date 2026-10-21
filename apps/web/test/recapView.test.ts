@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { RuleRecap } from '@sidecar/shared'
-import { cardAsks, MAX_PARTS, recapText } from '../src/recapView'
+import { cardAsks, isStale, MAX_PARTS, recapAsk, recapText } from '../src/recapView'
 
 const base: RuleRecap = { turnId: 'p', asked: 'Add checkout', state: 'done', outcome: 'good', built: [], packages: 0, changed: false, checks: 'none', fixes: 0 }
 let n = 0
@@ -47,5 +47,26 @@ describe('recapText', () => {
     expect(cardAsks('s3', failing)).toBe(true)
     // no recap on screen (a replay or an older pick): the card keeps its own ask
     expect(cardAsks('s9', null)).toBe(true)
+  })
+})
+
+describe('recapAsk', () => {
+  const entry = (status: 'pending' | 'done' | 'unavailable', next?: string) =>
+    ({ sessionId: 's', turnId: 'p', lastStepId: 'x', at: 1, status, ...(status === 'done' ? { ai: { summary: 's', meaning: 'm', ...(next ? { next } : {}) } } : {}) })
+  test('nothing failing, no ask, whatever the recap says', () => expect(recapAsk(entry('done', 'Fix it'), null)).toBeNull())
+  test('the AI recap’s ask wins once it is written', () => expect(recapAsk(entry('done', 'Fix the total'), 'The last step failed')).toBe('Fix the total'))
+  test('otherwise the rule-based ask', () => {
+    expect(recapAsk(undefined, 'The last step failed')).toBe('The last step failed')
+    expect(recapAsk(entry('pending'), 'The last step failed')).toBe('The last step failed')
+    expect(recapAsk(entry('done'), 'The last step failed')).toBe('The last step failed')
+  })
+  test('a recap written before Claude went on is stale, and its old ask is not offered', () => {
+    // the entry covers the turn up to step x
+    expect(isStale(entry('done', 'Fix the total'), 'x')).toBe(false)
+    expect(isStale(entry('done', 'Fix the total'), 'y')).toBe(true)
+    expect(isStale(entry('pending'), 'y')).toBe(false)
+    expect(isStale(undefined, 'y')).toBe(false)
+    expect(recapAsk(entry('done', 'Fix the total'), 'The last step failed', 'y')).toBe('The last step failed')
+    expect(recapAsk(entry('done', 'Fix the total'), 'The last step failed', 'x')).toBe('Fix the total')
   })
 })

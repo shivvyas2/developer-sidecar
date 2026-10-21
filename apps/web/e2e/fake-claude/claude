@@ -1,0 +1,25 @@
+#!/usr/bin/env node
+// A stand-in for the claude command, so e2e can run AI recaps through the real CLI provider without a
+// network or a subscription. It logs each request's "Asked:" line to SIDECAR_E2E_CALLS and answers
+// with a fixed recap in Claude Code's --output-format json shape.
+import { appendFileSync } from 'node:fs'
+
+if (process.argv.includes('--version')) {
+  process.stdout.write('0.0.0 (fake claude for e2e)\n')
+  process.exit(0)
+}
+let input = ''
+process.stdin.on('data', (d) => { input += d })
+process.stdin.on('end', () => {
+  const asked = (input.match(/^Asked: "(.*)"$/m) ?? [])[1] ?? ''
+  if (process.env.SIDECAR_E2E_CALLS) appendFileSync(process.env.SIDECAR_E2E_CALLS, `${asked}\n`)
+  const failing = /checks still FAIL|the last change FAILED/.test(input)
+  const recap = {
+    summary: `Fake recap: Claude worked on "${asked.slice(0, 40)}".`,
+    meaning: 'This line comes from the fake claude command used in e2e.',
+    next: failing ? 'Fix the failing checks, fake edition' : null,
+    decisions: [],
+    concepts: [{ step: 's1', term: 'Fake term', definition: 'A term the fake claude command always teaches.' }],
+  }
+  process.stdout.write(JSON.stringify({ type: 'result', is_error: false, result: JSON.stringify(recap), usage: { input_tokens: 500, output_tokens: 120 } }))
+})

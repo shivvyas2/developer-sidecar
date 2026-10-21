@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import { createApp, isAllowedHost, isAllowedOrigin } from '../src/app'
 import { Hub } from '../src/hub'
-import { createExplainer } from '../src/explainer/service'
+import { createRecapper } from '../src/explainer/recap'
 import { createPipeline } from '../src/pipeline'
 import { memorySettings } from '../src/settings'
 import { openStore } from '../src/store'
@@ -21,7 +21,7 @@ function make(staticDir?: string) {
   const store = openStore(':memory:')
   const hub = new Hub()
   const settings = memorySettings()
-  const explainer = createExplainer({ hub, store, settings, provider: null })
+  const explainer = createRecapper({ hub, store, settings, provider: null })
   const pipeline = createPipeline({ store, hub })
   const app = createApp({ pipeline, store, hub, settings, explainer, token: TOKEN, port: () => PORT, version: '0.1.0', staticDir })
   return Object.assign(app, { store, hub })
@@ -119,6 +119,13 @@ describe('explainer routes', () => {
     app.store.addConcept({ term: 'SDK', definition: 'd', sessionId: 's1', stepId: 'a', at: 1 })
     expect(await (await app.request(U('/api/sessions/s1/decisions'), { headers: AUTH })).json()).toHaveLength(1)
     expect(await (await app.request(U('/api/sessions/s1/glossary'), { headers: AUTH })).json()).toEqual([expect.objectContaining({ term: 'SDK' })])
+  })
+  test('recaps per session, and only with the token', async () => {
+    const app = make()
+    app.store.saveRecap({ sessionId: 's1', turnId: 'p1', lastStepId: 'x', at: 1, status: 'done', ai: { summary: 'S', meaning: 'M' } })
+    expect(await (await app.request(U('/api/sessions/s1/recaps'), { headers: AUTH })).json()).toEqual([expect.objectContaining({ turnId: 'p1', ai: { summary: 'S', meaning: 'M' } })])
+    expect(await (await app.request(U('/api/sessions/other/recaps'), { headers: AUTH })).json()).toEqual([])
+    expect((await app.request(U('/api/sessions/s1/recaps'))).status).toBe(401)
   })
   test('deleting a session or everything publishes and removes data', async () => {
     const app = make()

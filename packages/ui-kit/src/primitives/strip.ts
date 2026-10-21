@@ -1,3 +1,4 @@
+import { ellipsis } from '@sidecar/shared'
 import type { P } from '../iso'
 import { color } from '../tokens'
 import { esc, n } from '../svg'
@@ -17,7 +18,7 @@ export const statusStrip = (at: P, w: number, s: { text: string; live: boolean; 
   const bw = Math.max(46, tag.length * 6 + 12)
   const room = Math.max(1, Math.floor((w - bw - 12) / CHAR))
   const t = s.text.trim()
-  const text = esc(t.length > room ? `${t.slice(0, room - 1)}…` : t)
+  const text = esc(ellipsis(t, room))
   return `<g class="sk-status-strip sk-status-strip--${s.live ? 'live' : 'replay'}">`
     + `<line x1="${n(at.x)}" y1="${n(at.y)}" x2="${n(at.x + w)}" y2="${n(at.y)}" stroke="${ink}" stroke-width=".8"/>`
     + mono(at.x, at.y + 13, 7, ink, text, { weight: 600, spacing: 1.2 })

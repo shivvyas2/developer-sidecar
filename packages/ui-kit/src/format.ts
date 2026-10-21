@@ -1,4 +1,4 @@
-import type { Category, FeedStep } from '@sidecar/shared'
+import { ellipsis, type Category, type FeedStep } from '@sidecar/shared'
 
 /** Token counts as the readout and the terminal show them: 950, 4.3k, 12k, 2.5M. Non-finite or negative reads 0. */
 export const fmtTokens = (v: number): string => {
@@ -14,7 +14,7 @@ const SUBJECT_MAX = 32
 /** Card label per category: uppercase, with a friendlier word where the id reads badly. */
 const CATEGORY: Partial<Record<Category, string>> = { create: 'NEW FILE', fallback: 'STEP', external: 'WEB', subagent: 'HELPER' }
 
-const cap = (s: string): string => (s.length > SUBJECT_MAX ? `${s.slice(0, SUBJECT_MAX - 1)}…` : s)
+const cap = (s: string): string => ellipsis(s, SUBJECT_MAX)
 
 /** A short subject from a step's techLabel: the command, the file's basename, or the tool's argument. */
 export function stepSubject(techLabel: string): string {

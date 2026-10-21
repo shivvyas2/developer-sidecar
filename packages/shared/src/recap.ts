@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { isRecord } from './hook-payload'
 import { str } from './input'
 import { makesChange, projectMap, type MapKind } from './project-map'
@@ -137,4 +138,31 @@ export function buildRecap(steps: readonly RecapStep[], opts: { attention?: Atte
     ...(url ? { url } : {}),
     ...(failing ? { failingId: failing.id } : {}),
   }
+}
+
+/** The model's recap of a turn, after clipping: what happened, what it means, and the ask when something is still broken. */
+export const AiRecapSchema = z.object({
+  summary: z.string().min(1).max(600),
+  meaning: z.string().min(1).max(400),
+  next: z.string().min(1).max(200).optional(),
+})
+export type AiRecap = z.infer<typeof AiRecapSchema>
+
+/**
+ * pending: the model is writing it. done: it's in `ai`. unavailable: the call failed, recaps are
+ * paused or no model was found yet (see `reason`); a done recap is only ever replaced by a newer done one. A turn that needed no call (recaps off, nothing changed) has no entry at all.
+ */
+export type RecapStatus = 'pending' | 'done' | 'unavailable'
+
+/** One turn's AI recap as stored and sent to the workstation. */
+export interface RecapEntry {
+  sessionId: string
+  /** The turn's prompt step id, or its first step's when the session began mid-turn. */
+  turnId: string
+  /** The newest step the recap covers: a later Stop with nothing new after it is not recapped again. */
+  lastStepId: string
+  at: number
+  status: RecapStatus
+  ai?: AiRecap
+  reason?: string
 }
