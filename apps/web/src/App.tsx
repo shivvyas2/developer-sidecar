@@ -4,6 +4,7 @@ import { saveSettings } from './api'
 import { attentionNotice, liveAttention, liveTag, sessionMark, titleFor } from './attention'
 import { SidecarMark } from './brand/Brand'
 import { DecisionsView } from './DecisionsView'
+import { DemoStage } from './demo/DemoStage'
 import { FolderTabs, StatusStrip, ThemeToggle, type FolderTab } from './ds'
 import { formatTokens } from './format'
 import { GlossaryView } from './GlossaryView'
@@ -90,6 +91,8 @@ export function App() {
   const tag = liveTag(selectedSession, offline)
   const attention = liveAttention(selectedSession, offline)
   const fresh = state.sessions.find((x) => x.id === state.newSession) ?? null
+  // no sessions yet: the Stage plays the sample, clearly marked, until a real one arrives
+  const demo = state.listed && state.sessions.length === 0
   const resume = () => {
     if (!explainer) return
     saveSettings({ explanations: explainer.level }).then((r) => dispatch({ type: 'explainer', state: r.explainer })).catch(() => undefined)
@@ -159,7 +162,8 @@ export function App() {
         </StatusStrip>
       ) : null}
       <main className="panel" role="tabpanel" aria-label={TABS.find((t) => t.id === tab)?.label ?? 'Stage'}>
-        {tab === 'stage' && (
+        {tab === 'stage' && demo && <DemoStage />}
+        {tab === 'stage' && !demo && (
           <StageTab
             sessionId={sid}
             loaded={sid ? !!state.loaded[sid] : false}

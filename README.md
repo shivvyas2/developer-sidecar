@@ -28,6 +28,7 @@ Everything runs on your machine. The only thing that ever leaves it is the optio
 - **Where things stand.** The Stage opens with a card about the last thing you asked: how it ended, the parts made or changed, whether the checks pass, an "Open your app" button when a dev server is up, and a request to copy into Claude Code when something still fails. These facts come from the steps, at no cost.
 - **AI recaps.** When Claude finishes a turn, one short request to Claude Haiku adds a plain summary, what it means for your app, and any decisions and terms worth knowing. One call per turn, however many steps it took, so it costs a fraction of explaining each step.
 - **What you're building.** The Whiteboard maps the project from what Claude has looked at and changed: pages and screens, behind the scenes, your data, outside services, secret settings, checks and building blocks. The stage town uses the same names.
+- **A first look.** Before your first session, the Stage plays a sample session marked SAMPLE. Tap anything on the stage to see what it is, or open "What am I looking at?" for the whole key.
 - **The steps as a story.** The step drawer groups steps under each thing you asked, folds runs of reading and repeat changes to one file, and marks the check run that fixed an earlier failure.
 - **Decisions.** When Claude picks a library, service, database or approach, the choice, the alternatives and the reason are recorded in the Decisions tab.
 - **Glossary.** The terms from your session, defined in one line each, sorted A to Z.
@@ -93,7 +94,7 @@ If neither is available, everything else still works, including the map, the sto
  Sidecar server  127.0.0.1:7377   (Node, Hono, node:sqlite)
    ├─ pair tool start/end events into steps
    ├─ rules engine → category, caption and scene   (instant, free)
-   ├─ explainer → plain / why / concept / decision          (batched, async, optional)
+   ├─ recapper → one AI recap per finished turn            (async, optional)
    ├─ store: ~/.developer-sidecar/sidecar.db
    └─ WebSocket + REST, token and Origin checked
         │
@@ -145,7 +146,7 @@ developer-sidecar/
 ├── packages/
 │   ├── shared/                       Event, step, scene, story, project map and recap types, zod schemas, secret scrubbing
 │   ├── ui-kit/                       Scene renderer: tokens, primitives, animators, timeline, render(), text renderer, React <Scene>
-│   └── server/                       Hono server: store, step pairing, rules, explainer, REST and WebSocket
+│   └── server/                       Hono server: store, step pairing, rules, AI recaps, REST and WebSocket
 ├── apps/web/                         The React workstation (stage, feed, tabs, settings, #/kit gallery)
 └── scripts/                          Build and end-to-end smoke scripts
 ```
