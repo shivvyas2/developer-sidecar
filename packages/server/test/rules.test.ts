@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { SceneSpecSchema, type Step } from '@sidecar/shared'
 import { render } from '@sidecar/ui-kit'
-import { RULE_IDS, detectVendor, translate } from '../src/rules'
+import { RULE_IDS, detectVendor, segments, translate } from '../src/rules'
 
 const step = (toolName: string, input: unknown, over: Partial<Step> = {}): Step =>
   ({ id: 'x', sessionId: 's', toolName, input, startedAt: 0, status: 'ok', ...over })
@@ -40,7 +40,8 @@ describe('translate', () => {
     ['not looking: find -delete', bash('find . -name "*.log" -delete'), 'fallback', /running a command/i],
     ['not looking: find -exec', bash('find . -exec rm {} +'), 'fallback', /running a command/i],
     ['not looking: substitution', bash('cat $(curl -s https://x.example)'), 'fallback', /running a command/i],
-    ['not looking: multi-line', bash('ls src\nrm -rf dist\ngit commit -m wip'), 'fallback', /running a command/i],
+    // not a quick look, so it is explained; the commit is the part that names the step
+    ['not looking: multi-line', bash('ls src\nrm -rf dist\ngit commit -m wip'), 'git', /checkpoint/i],
     ['not looking: find -fprintf', bash("find . -name '*.log' -fprintf /tmp/list.txt '%p'"), 'fallback', /running a command/i],
     ['not looking: find -fls', bash('find . -fls /tmp/list.txt'), 'fallback', /running a command/i],
     ['not looking: find -okdir', bash('find . -okdir rm {} ;'), 'fallback', /running a command/i],
@@ -56,6 +57,82 @@ describe('translate', () => {
     ['look: a file merely named like env', bash('cat src/env.ts'), 'read', /looking around/i],
     ['git branch stays git', bash('git branch -D old'), 'git', /checkpoint/i],
     ['bash fallback', bash('mkdir -p src/lib'), 'fallback', /running a command/i],
+    ['chained: add then commit', bash('git add -A && git commit -m "Add Stripe checkout"'), 'git', /checkpoint of your code/i],
+    ['chained: commit then push', bash('git add . && git commit -m "wip" && git push'), 'git', /sending it to GitHub/i],
+    ['chained: heredoc commit', bash(`git add -A && git commit -m "$(cat <<'EOF'\nRun the tests and deploy\nEOF\n)"`), 'git', /checkpoint of your code/i],
+    ['chained: cd then install', bash('cd app && npm install stripe'), 'install', /: stripe$/],
+    ['chained: install then test keeps the packages clean', bash('npm install stripe && npm test'), 'install', /: stripe$/],
+    ['chained: build then deploy', bash('npm run build && vercel deploy --prod'), 'deploy', /live/i],
+    ['chained: test piped to tail', bash('npx vitest run 2>&1 | tail -20'), 'test', /checking/i],
+    ['chained: env then test', bash('cd web && CI=1 pnpm test'), 'test', /checking/i],
+    ['subshell build', bash('(cd web && npm run build)'), 'run', /packaging/i],
+    ['commit message words never count', bash('git commit -m "fix test, npm install, deploy to vercel"'), 'git', /checkpoint of your code/i],
+    ['commit message saying push is not a push', bash('git commit -m "push the button"'), 'git', /checkpoint of your code/i],
+    ['echo of a command is not the command', bash('echo "npm test"'), 'fallback', /running a command/i],
+    ['a folder named test is not a test run', bash('mkdir test'), 'fallback', /running a command/i],
+    ['shell test builtin is not a test run', bash('test -f package.json'), 'fallback', /running a command/i],
+    ['a folder named vercel is not a deploy', bash('cd vercel-app && ls'), 'fallback', /running a command/i],
+    ['make test', bash('make test'), 'test', /checking/i],
+    ['pytest via python', bash('python3 -m pytest -q'), 'test', /checking/i],
+    ['pip via python', bash('python3 -m pip install requests'), 'install', /requests/],
+    ['quoted package spec', bash('pip install "django>=4"'), 'install', /: django>=4$/],
+    ['pinned versions are package names, assignments are not', bash('pip install django==4.2 X=1'), 'install', /: django==4\.2$/],
+    ['quoted scoped package', bash("npm i '@scope/pkg' zod"), 'install', /: @scope\/pkg, zod$/],
+    ['env with a quoted value then test', bash(`FOO="a b" BAR='c d' npm test`), 'test', /checking/i],
+    ['installing a test browser is not a test run', bash('npx playwright install chromium'), 'fallback', /running a command/i],
+    ['a typecheck with a test config is not a test run', bash('npx tsc -p tsconfig.test.json'), 'fallback', /running a command/i],
+    ['linting a test folder is not a test run', bash('npx eslint src/test'), 'fallback', /running a command/i],
+    ['a script that mentions jest is not a test run', bash('node scripts/clean-jest-cache.js'), 'run', /starting/i],
+    ['npm run test:unit', bash('npm run test:unit'), 'test', /checking/i],
+    ['yarn test', bash('yarn test --watch=false'), 'test', /checking/i],
+    ['pnpm exec vitest', bash('pnpm exec vitest run'), 'test', /checking/i],
+    ['pnpm dlx jest', bash('pnpm dlx jest'), 'test', /checking/i],
+    ['npx playwright test', bash('npx playwright test --project=chromium'), 'test', /checking/i],
+    ['cypress run', bash('npx cypress run'), 'test', /checking/i],
+    ['bare pytest', bash('pytest -q tests/'), 'test', /checking/i],
+    ['uv run pytest', bash('uv run pytest'), 'test', /checking/i],
+    ['poetry run pytest', bash('poetry run pytest -x'), 'test', /checking/i],
+    ['cargo test', bash('cargo test'), 'test', /checking/i],
+    ['go test', bash('go test ./...'), 'test', /checking/i],
+    ['deno test', bash('deno test'), 'test', /checking/i],
+    ['bun test', bash('bun test'), 'test', /checking/i],
+    ['build caption only from the run part', bash('npm run dev -- --name build-tools'), 'run', /starting/i],
+    ['dotnet test', bash('dotnet test'), 'test', /checking/i],
+    ['gradle wrapper test', bash('./gradlew test'), 'test', /checking/i],
+    ['maven test', bash('mvn -q test'), 'test', /checking/i],
+    ['mix test', bash('mix test'), 'test', /checking/i],
+    ['swift test', bash('swift test'), 'test', /checking/i],
+    ['flutter test', bash('flutter test'), 'test', /checking/i],
+    ['rails test', bash('bin/rails test'), 'test', /checking/i],
+    ['artisan test', bash('php artisan test'), 'test', /checking/i],
+    ['pnpm filtered test', bash('pnpm --filter web test'), 'test', /checking/i],
+    ['pnpm recursive test', bash('pnpm -r test'), 'test', /checking/i],
+    ['yarn workspace test', bash('yarn workspace web test'), 'test', /checking/i],
+    ['pnpm next dev', bash('pnpm next dev'), 'run', /starting/i],
+    ['yarn next build', bash('yarn next build'), 'run', /packaging/i],
+    ['bunx vite dev', bash('bunx vite dev'), 'run', /starting/i],
+    ['pnpm exec vercel deploy', bash('pnpm exec vercel deploy'), 'deploy', /live/i],
+    ['yarn prisma migrate', bash('yarn prisma migrate dev'), 'data', /data is stored/i],
+    ['bare vercel deploys', bash('vercel'), 'deploy', /live/i],
+    ['vercel with flags deploys', bash('vercel --yes 2>&1 | tail -5'), 'deploy', /live/i],
+    ['vercel env pull is not a deploy', bash('vercel env pull .env.local'), 'external', /secret settings/i],
+    ['vercel link is not a deploy', bash('vercel link'), 'fallback', /running a command/i],
+    ['vercel login is not a deploy', bash('npx vercel login'), 'fallback', /running a command/i],
+    ['a subshell install names only its packages', bash('(cd app && npm install stripe)'), 'install', /: stripe$/],
+    ['sudo with flags then install', bash('sudo -E npm install x'), 'install', /: x$/],
+    ['sudo as a user then install', bash('sudo -u deploy npm install x'), 'install', /: x$/],
+    ['env then test', bash('env CI=1 npm test'), 'test', /checking/i],
+    ['env with flags then test', bash('env -u DEBUG CI=1 npm test'), 'test', /checking/i],
+    ['a requirements file is not a package', bash('pip install -r requirements.txt'), 'install', /^Installing the project’s building blocks$/],
+    ['flag values are not packages', bash('npm install --registry https://r.example --prefix web zod'), 'install', /: zod$/],
+    ['pip constraints and requirements around a package', bash('pip install -c constraints.txt flask --requirement dev.txt'), 'install', /: flask$/],
+    ['a trailing comment is not packages', bash('npm install stripe # add payments'), 'install', /: stripe$/],
+    ['a comment never splits into a command', bash('echo hi # then && vercel deploy'), 'fallback', /running a command/i],
+    ['a heredoc body is file contents, not a command', bash(`cat > README.md <<'EOF'\n## Install\nnpm install foo\nEOF`), 'fallback', /running a command/i],
+    ['a command after a heredoc still counts', bash(`cat > notes.txt <<EOF\nnpm test\nEOF\nnpm install zod`), 'install', /: zod$/],
+    ['a command substitution is not the command', bash('FOO=$(cd x && npm test)'), 'fallback', /running a command/i],
+    ['backticks are not the command', bash('echo `npm test`'), 'fallback', /running a command/i],
+    ['a quoted heredoc with a stray quote inside', bash(`echo "$(cat <<'EOF'\nDon't break the 12" layout && npm test\nEOF\n)"`), 'fallback', /running a command/i],
     ['unknown tool', step('SomethingNew', {}), 'fallback', /working/i],
   ])('%s', (_n, s, category, caption) => {
     const t = translate(s)
@@ -104,5 +181,70 @@ describe('detectVendor', () => {
     ['@anthropic-ai/sdk', 'Anthropic'], ['supabase.co', 'Supabase'], ['ls', undefined],
   ])('%s → %s', (text, vendor) => {
     expect(detectVendor(text)).toBe(vendor)
+  })
+})
+
+describe('segments', () => {
+  test.each<[string, string[]]>([
+    ['npm test', ['npm test']],
+    ['git add -A && git commit -m "x"', ['git add -A', 'git commit -m " "']],
+    ['a || b; c | d & e', ['a', 'b', 'c', 'd', 'e']],
+    ['ls src\nrm -rf dist\r\ngit status', ['ls src', 'rm -rf dist', 'git status']],
+    ['npm test 2>&1 | tail -20', ['npm test 2>&1', 'tail -20']],
+    ['npm run dev &> log.txt', ['npm run dev &> log.txt']],
+    ['cd app && NODE_ENV=test FOO=1 npm test', ['cd app', 'npm test']],
+    ['sudo npm install -g pnpm', ['npm install -g pnpm']],
+    ['sudo -E env CI=1 time npm test', ['npm test']],
+    [`MSG="a b" X='' npm test`, ['npm test']],
+    ['(cd web && npm run build)', ['cd web', 'npm run build']],
+    ['{ cd web; npm test; } && (ls)', ['cd web', 'npm test', 'ls']],
+    ['echo {a,b} $((1 + 2))', ['echo {a,b} $(       )']],
+    ['npm install \\\n  stripe', ['npm install \\\n  stripe']],
+  ])('%j', (cmd, want) => {
+    expect(segments(cmd)).toEqual(want)
+  })
+
+  test('quoted text is blanked, separators inside quotes included', () => {
+    const blank = (s: string) => ' '.repeat(s.length)
+    expect(segments(`git commit -m "fix test && deploy to vercel"`)).toEqual([`git commit -m "${blank('fix test && deploy to vercel')}"`])
+    expect(segments(`echo 'npm install x; rm -rf /'`)).toEqual([`echo '${blank('npm install x; rm -rf /')}'`])
+    expect(segments('git commit -m "say \\"hi\\" && go"')).toHaveLength(1)
+  })
+
+  test('a heredoc commit message, the way Claude Code writes one, is one blank command', () => {
+    const cmd = `git commit -m "$(cat <<'EOF'\nAdd tests; run vitest\n\nnpm install stripe\nEOF\n)"`
+    const out = segments(cmd)
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatch(/^git commit -m "\s+"$/)
+  })
+
+  test('a heredoc body and a command substitution are never split into commands', () => {
+    expect(segments(`cat > README.md <<'EOF'\nnpm install foo\nEOF\nnpm test`)).toEqual([`cat > README.md <<'EOF'`, 'npm test'])
+    expect(segments(`cat <<-EOF > a.txt && ls\n\tnpm test; vercel\n\tEOF`)).toEqual(['cat <<-EOF > a.txt', 'ls'])
+    expect(segments('FOO=$(cd x && npm test) BAR=`date` npm run build')).toEqual(['npm run build'])
+    expect(segments('echo $(echo "a)" && (b)) && npm test')).toEqual([`echo $(${' '.repeat('echo "a)" && (b)'.length)})`, 'npm test'])
+    expect(segments('cat <<< "npm test" && ls')).toEqual(['cat <<< "        "', 'ls'])
+    expect(segments(`cat <<EOF\nnever closed && npm test`)).toEqual(['cat <<EOF'])
+    expect(segments('cat <<EOF\n')).toEqual(['cat <<EOF'])
+    expect(segments('cat <<A <<B\nnpm test\nA\nvercel\nB\nls')).toEqual(['cat <<A <<B', 'ls'])
+  })
+
+  test('a comment is blanked, but a # inside a word is not a comment', () => {
+    expect(segments('npm install stripe # add; payments')).toEqual(['npm install stripe'])
+    expect(segments('# set up\nnpm test')).toEqual(['npm test'])
+    expect(segments('echo a#b $# && ls', { raw: true })).toEqual(['echo a#b $#', 'ls'])
+  })
+
+  test('raw keeps the quoted text and drops the quotes, part for part', () => {
+    expect(segments('cd a && pip install "django>=4" && git commit -m "x; y"', { raw: true })).toEqual(['cd a', 'pip install django>=4', 'git commit -m x; y'])
+    expect(segments("sudo npm i '@s/p'", { raw: true })).toEqual(['npm i @s/p'])
+    expect(segments(`FOO="a b" npm i '@s/p'`, { raw: true })).toEqual(['npm i @s/p'])
+    expect(segments('echo "" && npm test', { raw: true })).toEqual(['echo', 'npm test'])
+  })
+
+  test('unbalanced quotes and empty input never throw', () => {
+    expect(segments('')).toEqual([])
+    expect(segments('  &&  ;; ')).toEqual([])
+    expect(segments('echo "never closed && npm test')).toEqual(['echo "'])
   })
 })

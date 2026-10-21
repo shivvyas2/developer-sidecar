@@ -35,9 +35,8 @@ All notable changes to Developer Sidecar are recorded here. The format follows
   says enough: successful reads and searches, read-only shell commands like
   `ls` and `git status`, and repeat edits to a file already changed since your
   last prompt. Failed steps are always explained. What it does send is
-  trimmed: file bodies go as a line count and a short preview, successful
-  output keeps only its end, and steps are numbered instead of carrying long
-  ids. On the sample sessions in `bench/explainer`, that is about 68% fewer
+  trimmed: file bodies go as a short preview, successful output keeps only
+  its end, and steps get short labels (s1, s2, ...) instead of long ids. On the sample sessions in `bench/explainer`, that is about 68% fewer
   input and 57% fewer output tokens. A queued explanation never waits more
   than 15 seconds.
 - **Read-only commands look like reading.** `ls`, `cat`, `grep`, `find`,
@@ -49,6 +48,16 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 - Long command output keeps its end, where test summaries and the last error
   are, instead of being cut after the first 1,000 characters.
 - `cat app.test.ts` and `grep vitest` no longer show the test scene.
+- Chained commands show the scene of the part that matters:
+  `git add -A && git commit` is a checkpoint, not "Running a command", and
+  `cd app && npm install stripe` is an install. Words inside a commit
+  message, an echo or a folder name (like "test" or "vercel") no longer
+  pick the scene. Only a real test runner shows the checking scene, so
+  `npx playwright install` and `tsc -p tsconfig.test.json` don't, and quoted
+  package names (`pip install "django>=4"`) show up in the install caption.
+  The contents of a heredoc or a `$( )` don't pick the scene either. Test
+  runs from .NET, Gradle, Maven, Elixir, Swift, Flutter, Rails and Laravel
+  count, and `vercel env pull` or `vercel link` is no longer a deploy.
 
 ## [0.1.0] - 2026-10-15
 
