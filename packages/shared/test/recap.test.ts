@@ -78,6 +78,19 @@ describe('buildRecap', () => {
     expect(fixed.failingId).toBeUndefined()
   })
 
+  test('a turn that ran no checks reads the session\'s last ones, as the status light does', () => {
+    expect(buildRecap([prompt('a'), check('failed'), prompt('b'), write('README.md')])!.checks).toBe('fail')
+    expect(buildRecap([prompt('a'), check(), prompt('b'), write('README.md')])!.checks).toBe('pass')
+    expect(buildRecap([prompt('a'), write('a.ts'), prompt('b'), write('README.md')])!.checks).toBe('none')
+  })
+
+  test('a check run that was cut short is not a run', () => {
+    const stopped = step('Bash', 'test', { command: 'npm test' }, 'failed', { stdout: '', interrupted: true })
+    expect(buildRecap([prompt('a'), check(), prompt('b'), check('interrupted')])!.checks).toBe('pass')
+    expect(buildRecap([prompt('a'), check(), prompt('b'), stopped])!.checks).toBe('pass')
+    expect(buildRecap([prompt('a'), check(), { ...stopped, id: 'stopped2' }])!.checks).toBe('pass')
+  })
+
   test('a failed change with no checks also names the step', () => {
     const bad = write('app/page.tsx', 'failed')
     expect(buildRecap([prompt('x'), bad], { cwd: '/p' })).toMatchObject({ checks: 'none', failingId: bad.id, built: [{ name: 'Home page', failed: true }] })

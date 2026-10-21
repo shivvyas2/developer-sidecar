@@ -2,7 +2,7 @@ import { isRecord } from './hook-payload'
 import { str } from './input'
 import { makesChange, projectMap, type MapKind } from './project-map'
 import { startsDevServer } from './shell'
-import { isStopped, type Attention, type FeedStep } from './step'
+import { checksOf, isStopped, type Attention, type FeedStep } from './step'
 import { storyOf, type ChapterOutcome, type StoryStep } from './story'
 
 /**
@@ -113,9 +113,12 @@ export function buildRecap(steps: readonly RecapStep[], opts: { attention?: Atte
     .flatMap((s) => s.items.filter((i) => i.state !== 'seen').map((i) => ({ id: i.id, kind: s.kind, name: i.name, failed: i.state === 'failed' })))
   const packages = map.sections.find((s) => s.kind === 'blocks')?.items.filter((i) => i.state !== 'seen').length ?? 0
   const byId = new Map(turnSteps.map((s) => [s.id, s]))
-  const ran = turnSteps.some((s) => s.category === 'test' && (s.status === 'ok' || s.status === 'failed'))
+  const ran = checksOf(turnSteps) !== 'none'
   // a failed check run that no later run covered (see storyOf) is still failing
-  const broken = last.beats.some((b) => b.type === 'step' && !b.fixedBy && byId.get(b.id)?.category === 'test' && byId.get(b.id)?.status === 'failed')
+  const broken = last.beats.some((b) => {
+    const s = b.type === 'step' && !b.fixedBy ? byId.get(b.id) : undefined
+    return s?.category === 'test' && s.status === 'failed' && !isStopped(s)
+  })
   const failing = last.outcome === 'failing'
     ? [...turnSteps].reverse().find((s) => s.status === 'failed' && s.category !== 'read')
     : undefined
@@ -128,7 +131,8 @@ export function buildRecap(steps: readonly RecapStep[], opts: { attention?: Atte
     built,
     packages,
     changed: turnSteps.some((s) => s.status === 'ok' && makesChange(s)),
-    checks: ran ? (broken ? 'fail' : 'pass') : 'none',
+    // a turn that ran no checks reads the session's last ones, so the card and the status light agree
+    checks: ran ? (broken ? 'fail' : 'pass') : checksOf(steps),
     fixes: last.fixes,
     ...(url ? { url } : {}),
     ...(failing ? { failingId: failing.id } : {}),

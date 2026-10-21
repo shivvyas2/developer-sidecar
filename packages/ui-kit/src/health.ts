@@ -1,17 +1,9 @@
-import { isStopped, type Attention, type FeedStep } from '@sidecar/shared'
+import { checksOf, isStopped, type Attention, type FeedStep } from '@sidecar/shared'
+
+// checksOf lives in shared, so the recap and the status light read the checks the same way
+export { checksOf, type Checks } from '@sidecar/shared'
 
 type Seen = Pick<FeedStep, 'category' | 'status'> & Partial<Pick<FeedStep, 'output'>>
-
-export type Checks = 'pass' | 'fail' | 'none'
-
-/** How the last check run that finished went, or none when Claude hasn't run any. */
-export function checksOf(steps: readonly Seen[]): Checks {
-  for (let i = steps.length - 1; i >= 0; i--) {
-    const s = steps[i]!
-    if (s.category === 'test' && (s.status === 'ok' || s.status === 'failed') && !isStopped(s)) return s.status === 'ok' ? 'pass' : 'fail'
-  }
-  return 'none'
-}
 
 export type Health = 'ok' | 'fix' | 'you' | 'working'
 
