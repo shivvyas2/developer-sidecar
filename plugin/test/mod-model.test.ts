@@ -64,7 +64,14 @@ test('textModel windows the newest steps but keeps their real numbers', () => {
 
 test('textModel carries the explanation and its glossary term', () => {
   const m = textModel(state({ steps: [step(1, { explanation: { plain: 'Adds Stripe.', why: 'Payments.', concept: { term: 'SDK', definition: 'A kit.' }, decision: null } })] }))
-  expect(m.steps[0]).toMatchObject({ plain: 'Adds Stripe.', why: 'Payments.', chip: 'SDK', title: 'INSTALL · pnpm add stripe' })
+  expect(m.steps[0]).toMatchObject({ plain: 'Adds Stripe.', why: 'Payments.', chip: 'SDK', title: 'BUILDING BLOCKS · pnpm add stripe' })
+})
+
+test('cards and the status line lead with the same plain word as NOW, then the technical detail', () => {
+  const s = state({ steps: [step(1, { category: 'prompt', techLabel: 'UserPromptSubmit' }), step(2, { category: 'test', techLabel: 'Bash: npx vitest run' })] })
+  expect(textModel(s).steps.map((st) => st.title)).toEqual(['YOU ASKED', 'CHECKS · npx vitest run'])
+  expect(statusLine(s)).toBe('◢ 002 CHECKS · NPX VITEST RUN ✓')
+  expect(statusLine(s)).toContain(readoutOf(s).now)
 })
 
 test('textModel marks the offline state', () => {
@@ -73,7 +80,7 @@ test('textModel marks the offline state', () => {
 
 describe('statusLine', () => {
   test('number, title and a status mark', () => {
-    expect(statusLine(state({ steps: [step(42, { status: 'running' })] }))).toBe('◢ 001 INSTALL · PNPM ADD STRIPE ●')
+    expect(statusLine(state({ steps: [step(42, { status: 'running' })] }))).toBe('◢ 001 BUILDING BLOCKS · PNPM ADD STRIPE ●')
   })
   test('cut to fit keeps the mark', () => {
     const s = statusLine(state({ steps: [step(1, { status: 'failed' })] }), 20)!
