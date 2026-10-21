@@ -2,13 +2,15 @@
  * What the mod polled, and what each Claude Code surface shows from it.
  * Pure: no engine, no Node, no DOM.
  */
-import { isExplained, type ExplainerState, type FeedStep } from '@sidecar/shared'
-import { formatElapsed, stepTitle, type Readout, type TextModel, type TextStep } from '@sidecar/ui-kit'
+import { isExplained, type Attention, type ExplainerState, type FeedStep } from '@sidecar/shared'
+import { checksOf, formatElapsed, HEALTH_LIGHT, HEALTH_WORD, healthOf, stepKind, stepSubject, type Readout, type TextModel, type TextStep } from '@sidecar/ui-kit'
 
 export interface ModState {
   /** Every step of this session, oldest first. */
   steps: FeedStep[]
   explainer: ExplainerState | null
+  /** What the session waits on, from the steps poll; unknown until the server says. */
+  attention?: Attention
   offline: boolean
   project: string
   port: number
@@ -36,11 +38,15 @@ const filesOf = (steps: readonly FeedStep[]) => steps.filter((st) => st.category
 export function readoutOf(s: ModState): Readout {
   const first = s.steps[0]
   const last = s.steps.at(-1)
+  // Offline, the server can't say what Claude is doing, so the light shows only what the steps do.
+  const health = healthOf(s.steps, s.offline ? undefined : s.attention)
   return {
     step: s.steps.length,
     files: filesOf(s.steps),
-    tokens: tokensOf(s),
-    now: last ? stepTitle(last) : '',
+    checks: checksOf(s.steps),
+    status: HEALTH_WORD[health],
+    light: HEALTH_LIGHT[health],
+    now: last ? stepKind(last) : '',
     elapsed: first && last ? formatElapsed(last.startedAt - first.startedAt) : '00:00',
     live: !s.offline,
     session: s.steps.length > 0 ? 1 : 0,
@@ -48,10 +54,16 @@ export function readoutOf(s: ModState): Readout {
   }
 }
 
+/** The plain word the readout's NOW shows, then the command or file, since the pane has no SHOW TECHNICAL. */
+const paneTitle = (st: FeedStep): string => {
+  const subject = stepSubject(st.techLabel)
+  return subject ? `${stepKind(st)} · ${subject}` : stepKind(st)
+}
+
 function textStep(st: FeedStep, num: number): TextStep {
   const e = isExplained(st.explanation) ? st.explanation : undefined
   return {
-    num, title: stepTitle(st), caption: st.caption, status: st.status,
+    num, title: paneTitle(st), caption: st.caption, status: st.status,
     ...(e ? { plain: e.plain, why: e.why } : {}),
     ...(e?.concept ? { chip: e.concept.term } : {}),
   }
@@ -64,7 +76,7 @@ export function textModel(s: ModState): TextModel {
     project: s.project,
     live: !s.offline,
     ...(s.offline ? { offline: true } : {}),
-    readout: { step: r.step, files: r.files, tokens: r.tokens, elapsed: r.elapsed },
+    readout: { step: r.step, files: r.files, tokens: tokensOf(s), elapsed: r.elapsed },
     steps: s.steps.slice(offset).map((st, i) => textStep(st, offset + i + 1)),
   }
 }
@@ -83,14 +95,14 @@ export const width = (s: string): number => [...s].reduce((n, ch) => n + charWid
 
 const MARK: Record<FeedStep['status'], string> = { running: '●', ok: '✓', failed: '✕', interrupted: '◌' }
 
-/** `◢ 042 INSTALL · STRIPE ●`, cut to `max` columns with the mark kept; undefined clears it. */
+/** `◢ 042 BUILDING BLOCKS · PNPM ADD STRIPE ●`, cut to `max` columns with the mark kept; undefined clears it. */
 export function statusLine(s: ModState, max = 60): string | undefined {
   const last = s.steps.at(-1)
   if (s.offline || !last) return undefined
   const head = `◢ ${pad3(s.steps.length)} `
   const tail = ` ${MARK[last.status]}`
   const room = Math.max(1, max - width(head) - width(tail))
-  const title = plain(stepTitle(last)).toUpperCase()
+  const title = plain(paneTitle(last)).toUpperCase()
   if (width(title) <= room) return head + title + tail
   let fitted = ''
   for (const ch of title) {

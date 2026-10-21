@@ -13,13 +13,23 @@ describe('stageReducer', () => {
     const s = run([{ type: 'reset', ids: ['a'] }, { type: 'sync', ids: ['a', 'b'] }])
     expect(s).toMatchObject({ current: 'b', queue: [], playing: true })
   })
-  test('steps arriving mid-scene queue up and play in order', () => {
+  test('steps arriving mid-scene wait, and only the newest of them plays next', () => {
     let s = run([{ type: 'reset', ids: [] }, { type: 'sync', ids: ['a'] }, { type: 'sync', ids: ['a', 'b', 'c'] }])
-    expect(s).toMatchObject({ current: 'a', queue: ['b', 'c'] })
+    expect(s).toMatchObject({ current: 'a', queue: ['c'] })
     s = run([{ type: 'done' }], s)
-    expect(s).toMatchObject({ current: 'b', queue: ['c'], playing: true })
-    s = run([{ type: 'done' }, { type: 'done' }], s)
+    expect(s).toMatchObject({ current: 'c', queue: [], playing: true })
+    s = run([{ type: 'done' }], s)
     expect(s).toMatchObject({ current: 'c', queue: [], playing: false })
+  })
+  test('the stage is never more than one scene behind the newest step', () => {
+    let s = run([{ type: 'reset', ids: [] }])
+    for (let i = 0; i < 20; i++) {
+      s = run([{ type: 'sync', ids: ids(i + 1) }], s)
+      if (i % 3 === 2) s = run([{ type: 'done' }], s)
+      expect(s.queue.length).toBeLessThanOrEqual(1)
+    }
+    s = run([{ type: 'done' }], s)
+    expect(s.current).toBe('s19')
   })
   test('a burst never leaves more than MAX_BACKLOG queued; the newest survive (Review Focus 2)', () => {
     const s = run([{ type: 'reset', ids: [] }, { type: 'sync', ids: ['first'] }, { type: 'sync', ids: ['first', ...ids(50)] }])
@@ -33,6 +43,17 @@ describe('stageReducer', () => {
   test('reset after a session switch drops the old backlog (Review Focus 5)', () => {
     const s = run([{ type: 'reset', ids: [] }, { type: 'sync', ids: ids(3) }, { type: 'reset', ids: ['x'] }])
     expect(s).toMatchObject({ current: 'x', queue: [], playing: false })
+  })
+  test('catchUp jumps to the newest step and drops the queue', () => {
+    const s = run([{ type: 'reset', ids: [] }, { type: 'sync', ids: ['a'] }, { type: 'sync', ids: ['a', 'b', 'c'] }, { type: 'catchUp', ids: ['a', 'b', 'c'] }])
+    expect(s).toMatchObject({ current: 'c', queue: [], playing: true })
+  })
+  test('catchUp on the newest step lets its scene finish instead of restarting it', () => {
+    const s = run([{ type: 'reset', ids: [] }, { type: 'sync', ids: ['a'] }])
+    expect(run([{ type: 'catchUp', ids: ['a'] }], s)).toBe(s)
+  })
+  test('catchUp with no steps changes nothing', () => {
+    expect(run([{ type: 'catchUp', ids: [] }])).toBe(initialStage)
   })
   test('done with an empty queue keeps the current scene as a still', () => {
     const s = run([{ type: 'reset', ids: [] }, { type: 'sync', ids: ['a'] }, { type: 'done' }])

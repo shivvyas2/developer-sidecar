@@ -219,7 +219,7 @@ function SceneCard({ name, spec, frame }: { name: string; spec: (typeof SAMPLE_S
   return (
     <figure className="kit__card">
       {frame
-        ? <Scene spec={spec} town={TOWN} loop frame readout={{ step: 12, files: 7, tokens: 4200, now: spec.caption, elapsed: '03:21', live: true, session: 0.6, project: 'storefront' }} />
+        ? <Scene spec={spec} town={TOWN} loop frame readout={{ step: 12, files: 7, checks: 'pass', status: 'ALL GOOD', light: 'ok', now: spec.caption, elapsed: '03:21', live: true, session: 0.6, project: 'storefront' }} />
         : <Scene spec={spec} town={TOWN} loop />}
       <figcaption><strong>{name}</strong> · <code>{spec.scene}</code>{frame ? ' · framed' : ''}<br />{spec.caption}</figcaption>
     </figure>

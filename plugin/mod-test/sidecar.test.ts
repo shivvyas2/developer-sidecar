@@ -82,7 +82,7 @@ test('locates the server and polls the session steps with the token', async ($, 
   await start($, w)
   expect(w.runs[0]?.at(-1)).toMatch(/dist\/locate\.cjs$/)
   expect(w.urls).toContain('http://127.0.0.1:7391/api/sessions/S1/steps')
-  expect(w.statuses.at(-1)).toBe('◢ 001 INSTALL · PNPM ADD STRIPE ●')
+  expect(w.statuses.at(-1)).toBe('◢ 001 BUILDING BLOCKS · PNPM ADD STRIPE ●')
 })
 
 test('no toasts for steps that were there on the first poll, then one per milestone', async ($, on) => {

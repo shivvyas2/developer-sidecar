@@ -1,4 +1,4 @@
-import { formatElapsed, stepSubject, stepTitle } from '../src/index'
+import { formatElapsed, STEP_KIND, stepKind, stepSubject, stepTitle } from '../src/index'
 import { describe, expect, test } from 'vitest'
 import { clamp, easeInOut, easeOutBack, lerp, progress } from '../src/ease'
 import { esc, g, label, MAX_LABEL, n, truncate } from '../src/svg'
@@ -96,5 +96,22 @@ describe('step formatters', () => {
   test('formatElapsed is mm:ss and never negative', () => {
     expect(formatElapsed(252_000)).toBe('04:12')
     expect(formatElapsed(-5)).toBe('00:00')
+  })
+})
+
+describe('stepKind', () => {
+  test('every category has a plain kind that fits a readout note', () => {
+    // Record<Category, string> makes a missing category a type error
+    expect(Object.keys(STEP_KIND)).toHaveLength(14)
+    for (const k of Object.values(STEP_KIND)) {
+      expect(k.length).toBeLessThanOrEqual(18)
+      expect(k).toBe(k.toUpperCase())
+      expect(k).not.toMatch(/\b(BASH|NPM|GIT|MCP|CLI|API|EDIT|WRITE|READ)\b/)
+    }
+  })
+  test('cards say what happened, not the tool', () => {
+    expect(stepKind({ category: 'test' })).toBe('CHECKS')
+    expect(stepKind({ category: 'git' })).toBe('CHECKPOINT')
+    expect(stepKind({ category: 'fallback' })).toBe('STEP')
   })
 })

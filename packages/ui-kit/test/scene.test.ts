@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { SAMPLE_SCENES, scenes } from '../src/catalog'
 import { render } from '../src/render'
 import { ANIMATORS, animatorFor } from '../src/scene/animators'
-import { makeCtx } from '../src/scene/context'
+import { makeCtx, type Readout } from '../src/scene/context'
 import { fmtTokens } from '../src/format'
 import { ARC, STRIP_Y } from '../src/scene/frame'
 import { FRAMED, SLOTS, drawerCards, slotsFor } from '../src/scene/layout'
@@ -11,7 +11,7 @@ import { wellFormed } from './well-formed'
 
 const ids = [...new Set(SAMPLE_SCENES.map((s) => s.spec.scene))]
 const end = (spec: Parameters<typeof compile>[0]) => compile(spec).duration
-const readout = { step: 7, files: 3, tokens: 950, now: 'EDIT · AUTH.TS', elapsed: '00:42', live: false }
+const readout: Readout = { step: 7, files: 3, checks: 'pass', status: 'ALL GOOD', light: 'ok', now: 'EDIT · AUTH.TS', elapsed: '00:42', live: false }
 
 describe('animators', () => {
   test('every catalog scene id has its own animator', () => {
@@ -86,7 +86,7 @@ describe('frame', () => {
   test('frame: true draws the header, the readout panel with the padded step and the status strip', () => {
     const spec = scenes.bolt('Changing auth.ts')
     const svg = render(spec, 400, { frame: true, readout })
-    for (const s of ['DEVELOPER SIDECAR', 'STEP', '007', 'FILES', 'TOKENS', '950', 'NOW', 'ELAPSED', '00:42', 'REPLAY', 'STEP 007 · Changing auth.ts', 'sk-session-arc', 'sk-readout', 'sk-status-strip']) {
+    for (const s of ['DEVELOPER SIDECAR', 'STEP', '007', 'MADE', '03', 'CHECKS', 'PASS', 'STATUS', 'ALL GOOD', 'sk-light--ok', 'NOW', 'ELAPSED', '00:42', 'REPLAY', 'STEP 007 · Changing auth.ts', 'sk-session-arc', 'sk-readout', 'sk-status-strip']) {
       expect(svg, s).toContain(s)
     }
     expect(render(spec, 400, { frame: true, readout: { ...readout, live: true } })).toContain('LIVE')
@@ -111,7 +111,8 @@ describe('frame', () => {
 
   test('with a project the header is the project line only; the page already names the product', () => {
     const svg = render(scenes.bolt('x'), 400, { frame: true, readout: { ...readout, project: 'shop-app' } })
-    expect(svg).toContain('SHOP-APP · SHEET 01')
+    expect(svg).toContain('>SHOP-APP<')
+    expect(svg).not.toContain('SHEET')
     expect(svg).not.toContain('DEVELOPER SIDECAR')
   })
 

@@ -27,10 +27,30 @@ test('basename works on posix and windows paths', () => {
   expect(basename('')).toBe('')
 })
 
-test('readout counts every step, new files and both token kinds', () => {
+test('readout counts every step and new files, and says how things stand', () => {
   const steps = [step(1), step(2, { category: 'create', techLabel: 'Write src/a.ts' }), step(3, { category: 'create', status: 'failed' })]
   const r = readoutOf(state({ steps, explainer: explainer(1000, 234) }))
-  expect(r).toMatchObject({ step: 3, files: 1, tokens: 1234, elapsed: '00:02', live: true, project: 'shop' })
+  expect(r).toMatchObject({ step: 3, files: 1, checks: 'none', status: 'NEEDS A FIX', light: 'alert', elapsed: '00:02', live: true, project: 'shop' })
+})
+
+test('readout says NEEDS YOU while Claude waits for a permission, and WORKING mid-turn', () => {
+  expect(readoutOf(state({ steps: [step(1)], attention: 'permission' }))).toMatchObject({ status: 'NEEDS YOU' })
+  expect(readoutOf(state({ steps: [step(1)], attention: 'working' }))).toMatchObject({ status: 'WORKING', light: 'busy' })
+  expect(readoutOf(state({ steps: [step(1)] })).status).toBe('ALL GOOD')
+})
+
+test('offline, the pane light never reads WORKING or NEEDS YOU from a stale attention', () => {
+  expect(readoutOf(state({ steps: [step(1)], attention: 'working', offline: true }))).toMatchObject({ status: 'ALL GOOD', live: false })
+  expect(readoutOf(state({ steps: [step(1)], attention: 'idle', offline: true })).status).toBe('ALL GOOD')
+})
+
+test('a dev server the person stopped is not a failure on the pane', () => {
+  const stopped = step(3, { category: 'run', status: 'failed', techLabel: 'Bash: npm run dev', output: { stdout: '', stderr: '', interrupted: true } })
+  expect(readoutOf(state({ steps: [step(1, { category: 'prompt' }), step(2, { category: 'edit' }), stopped] }))).toMatchObject({ status: 'ALL GOOD', light: 'ok' })
+})
+
+test('the pane still counts both token kinds', () => {
+  expect(textModel(state({ steps: [step(1)], explainer: explainer(1000, 234) })).readout.tokens).toBe(1234)
 })
 
 test('textModel windows the newest steps but keeps their real numbers', () => {
@@ -44,7 +64,14 @@ test('textModel windows the newest steps but keeps their real numbers', () => {
 
 test('textModel carries the explanation and its glossary term', () => {
   const m = textModel(state({ steps: [step(1, { explanation: { plain: 'Adds Stripe.', why: 'Payments.', concept: { term: 'SDK', definition: 'A kit.' }, decision: null } })] }))
-  expect(m.steps[0]).toMatchObject({ plain: 'Adds Stripe.', why: 'Payments.', chip: 'SDK', title: 'INSTALL · pnpm add stripe' })
+  expect(m.steps[0]).toMatchObject({ plain: 'Adds Stripe.', why: 'Payments.', chip: 'SDK', title: 'BUILDING BLOCKS · pnpm add stripe' })
+})
+
+test('cards and the status line lead with the same plain word as NOW, then the technical detail', () => {
+  const s = state({ steps: [step(1, { category: 'prompt', techLabel: 'UserPromptSubmit' }), step(2, { category: 'test', techLabel: 'Bash: npx vitest run' })] })
+  expect(textModel(s).steps.map((st) => st.title)).toEqual(['YOU ASKED', 'CHECKS · npx vitest run'])
+  expect(statusLine(s)).toBe('◢ 002 CHECKS · NPX VITEST RUN ✓')
+  expect(statusLine(s)).toContain(readoutOf(s).now)
 })
 
 test('textModel marks the offline state', () => {
@@ -53,7 +80,7 @@ test('textModel marks the offline state', () => {
 
 describe('statusLine', () => {
   test('number, title and a status mark', () => {
-    expect(statusLine(state({ steps: [step(42, { status: 'running' })] }))).toBe('◢ 001 INSTALL · PNPM ADD STRIPE ●')
+    expect(statusLine(state({ steps: [step(42, { status: 'running' })] }))).toBe('◢ 001 BUILDING BLOCKS · PNPM ADD STRIPE ●')
   })
   test('cut to fit keeps the mark', () => {
     const s = statusLine(state({ steps: [step(1, { status: 'failed' })] }), 20)!

@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync } from 'node:fs'
 import { createServer, type AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { SESSIONS } from '../../../bench/explainer/sessions'
 
 const ROOT = resolve(import.meta.dirname, '../../..')
 
@@ -21,6 +22,9 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     if (r.status !== 0) throw new Error(`${script} exited ${r.status}: ${r.stderr}`)
   }
   run('start-server.cjs', lines[0]!)
+  // A realistic session from the token bench (37 steps: a feature, a failing then passing test, commits),
+  // sent before the basic one so smoke-1 stays the newest session and the one the page opens on.
+  for (const e of SESSIONS.find((s) => s.name === 'build-stripe-app')!.events) run('emit.cjs', JSON.stringify(e.payload))
   for (const line of lines.slice(1)) run('emit.cjs', line)
   const port = readFileSync(join(home, 'port'), 'utf8').trim()
   if (port !== String(wanted)) throw new Error(`e2e server took port ${port}, not the free port ${wanted}`)

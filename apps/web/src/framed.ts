@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fmtTokens, type Readout } from '@sidecar/ui-kit'
+import type { Readout } from '@sidecar/ui-kit'
 import type { ReadoutField } from './ds/ReadoutPanel'
 
 /** At this width and below the workstation is one column (styles.css) and the SVG frame text is too small to read. */
@@ -27,12 +27,14 @@ export function useFramed(): boolean {
   return framed
 }
 
+const CHECKS = { pass: 'PASS', fail: 'FAIL', none: '-' } as const
 const pad = (v: number, width: number) => String(Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0).padStart(width, '0')
 
 /** The frame's numbers for the DOM ReadoutPanel, formatted as the SVG readout formats them. */
 export const readoutFields = (r: Readout): ReadoutField[] => [
   { label: 'STEP', value: pad(r.step, 3) },
-  { label: 'FILES', value: pad(r.files, 2) },
-  { label: 'TOKENS', value: fmtTokens(r.tokens) },
+  { label: 'MADE', value: pad(r.files, 2) },
+  { label: 'CHECKS', value: CHECKS[r.checks ?? 'none'] },
+  ...(r.status?.trim() ? [{ label: 'STATUS', value: r.status.trim() }] : []),
   { label: 'ELAPSED', value: r.elapsed.trim() || '00:00' },
 ]
