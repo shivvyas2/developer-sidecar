@@ -55,6 +55,9 @@ All notable changes to Developer Sidecar are recorded here. The format follows
   pick the scene. Only a real test runner shows the checking scene, so
   `npx playwright install` and `tsc -p tsconfig.test.json` don't, and quoted
   package names (`pip install "django>=4"`) show up in the install caption.
+  The contents of a heredoc or a `$( )` don't pick the scene either. Test
+  runs from .NET, Gradle, Maven, Elixir, Swift, Flutter, Rails and Laravel
+  count, and `vercel env pull` or `vercel link` is no longer a deploy.
 
 ## [0.1.0] - 2026-10-15
 
