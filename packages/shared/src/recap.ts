@@ -120,7 +120,7 @@ export function buildRecap(steps: readonly RecapStep[], opts: { attention?: Atte
     return s?.category === 'test' && s.status === 'failed' && !isStopped(s)
   })
   const failing = last.outcome === 'failing'
-    ? [...turnSteps].reverse().find((s) => s.status === 'failed' && s.category !== 'read')
+    ? [...turnSteps].reverse().find((s) => s.status === 'failed' && s.category !== 'read' && !isStopped(s))
     : undefined
   const url = serverUrl(steps)
   return {

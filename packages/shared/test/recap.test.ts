@@ -91,6 +91,12 @@ describe('buildRecap', () => {
     expect(buildRecap([prompt('a'), check(), { ...stopped, id: 'stopped2' }])!.checks).toBe('pass')
   })
 
+  test('the step to ask about is never one that was only stopped', () => {
+    const bad = write('app/page.tsx', 'failed')
+    const stopped = step('Bash', 'run', { command: 'npm run dev' }, 'failed', { stdout: '', interrupted: true })
+    expect(buildRecap([prompt('x'), bad, stopped], { cwd: '/p' })).toMatchObject({ outcome: 'failing', failingId: bad.id })
+  })
+
   test('a failed change with no checks also names the step', () => {
     const bad = write('app/page.tsx', 'failed')
     expect(buildRecap([prompt('x'), bad], { cwd: '/p' })).toMatchObject({ checks: 'none', failingId: bad.id, built: [{ name: 'Home page', failed: true }] })
