@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { envFilesIn, packagesIn, segments } from '../src/shell'
+import { envFilesIn, packagesIn, segments, testRunsIn } from '../src/shell'
 
 describe('segments', () => {
   test.each<[string, string[]]>([
@@ -79,6 +79,11 @@ describe('packagesIn', () => {
     ['npm install --registry https://r.example --prefix web zod', ['zod']],
     ['pip install -c constraints.txt flask --requirement dev.txt', ['flask']],
     ['npm install -w web zod', ['zod']],
+    ['npm install --workspace web zod', ['zod']],
+    ['pnpm add -w zod', ['zod']],
+    ['pnpm add -w -D zod typescript', ['zod', 'typescript']],
+    ['pnpm add --workspace zod', ['zod']],
+    ['yarn add -W zod', ['zod']],
     ['pnpm --filter web add zod', ['zod']],
     ['pip install --index-url https://x.example -i https://y.example requests', ['requests']],
     ['npm install stripe # add payments', ['stripe']],
@@ -104,5 +109,22 @@ describe('envFilesIn', () => {
     ['ls', []],
   ])('%s', (cmd, want) => {
     expect(envFilesIn(cmd)).toEqual(want)
+  })
+})
+
+describe('testRunsIn', () => {
+  test.each<[string, string[]]>([
+    ['npx vitest run', ['vitest run']],
+    ['cd app && npx vitest run', ['vitest run']],
+    ['npm test && npm run lint', ['npm test']],
+    ['npm run test', ['npm test']],
+    ['pnpm  exec   vitest run lib/a.test.ts', ['vitest run lib/a.test.ts']],
+    ['pnpm vitest run', ['vitest run']],
+    ['npx vitest run -t "checkout total"', ['vitest run -t checkout total']],
+    ['npm test; pytest -x', ['npm test', 'pytest -x']],
+    ['npm run lint', []],
+    ['echo "npm test"', []],
+  ])('%s', (cmd, want) => {
+    expect(testRunsIn(cmd)).toEqual(want)
   })
 })

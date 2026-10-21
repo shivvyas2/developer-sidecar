@@ -1,4 +1,5 @@
 import { isRecord } from './hook-payload'
+import { basename, fileOf, str } from './input'
 import { envFilesIn, INSTALL, packagesIn, segments } from './shell'
 import type { FeedStep } from './step'
 import { detectVendor } from './vendors'
@@ -47,8 +48,6 @@ const BACKEND = /(^|\/)(app|src\/app)\/(.+\/)?api\/|(^|\/)pages\/api\/|(^|\/)(se
 const PAGE = /(^|\/)(app|src\/app)\/(.+\/)?(page|layout)\.[jt]sx?$|(^|\/)(pages|src\/routes|routes|screens|views|components)\/|\.(html|vue|svelte|astro)$|\.[jt]sx$|\.css$/
 const CODE = /\.(c|m)?[jt]sx?$|\.(py|rb|go|rs|php|java|kt|swift)$/
 
-const str = (v: unknown) => (typeof v === 'string' ? v : '')
-const basename = (p: string) => p.split('/').pop() ?? p
 const stem = (p: string) => basename(p).replace(/\.[^.]+$/, '').replace(/\.(test|spec)$/, '')
 
 /** "BuyButton", "buy-button" and "buy_button" all read "Buy button". */
@@ -138,7 +137,7 @@ export function projectMap(steps: readonly MapStep[], cwd?: string): ProjectMap 
   for (const step of steps) {
     if (step.category === 'prompt') continue
     const input = isRecord(step.input) ? step.input : {}
-    const path = str(input.file_path) || str(input.notebook_path)
+    const path = fileOf(input)
     const command = step.toolName === 'Bash' ? str(input.command) : ''
 
     if (path) {

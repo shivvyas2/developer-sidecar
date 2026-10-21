@@ -240,3 +240,20 @@ body {
 .board__files code { font: 400 11px/1.5 var(--ds-mono); color: var(--sk-ink); word-break: break-all; }
 .board__steps { margin: 0; }
 .board__step { margin-right: 6px; }
+
+/* ---- the step drawer as a story ---- */
+.story__chapter { display: grid; gap: 8px; padding-bottom: 14px; }
+.story__head { display: grid; gap: 4px; text-align: left; padding: 10px 12px; background: var(--sk-ink); color: var(--sk-paper); border: 0; cursor: pointer; }
+.story__head .ds-kicker { color: var(--sk-paper); }
+.story__head:disabled { cursor: default; }
+.story__head[aria-pressed="true"] { box-shadow: inset 4px 0 0 var(--sk-accent); }
+.story__head:focus-visible { outline: 2px solid var(--sk-accent); outline-offset: 2px; }
+.story__asked { font: 600 13px/1.35 var(--ds-sans); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.story__line { font: 700 9px/1.3 var(--ds-mono); letter-spacing: 1px; text-transform: uppercase; opacity: .8; }
+.story__chapter[data-outcome="failing"] .story__line { color: var(--sk-accent); opacity: 1; }
+.story__phase { margin: 6px 0 0; font: 700 9px/1 var(--ds-mono); letter-spacing: 1.4px; text-transform: uppercase; color: var(--sk-ink2); }
+.story__group { border: 1px dashed var(--sk-ink2); }
+.story__fold { width: 100%; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; padding: 9px 10px; background: var(--sk-card); border: 0; color: var(--sk-ink); font: 400 13px/1.3 var(--ds-sans); text-align: left; cursor: pointer; }
+.story__fold:focus-visible { outline: 2px solid var(--sk-ink); outline-offset: -2px; }
+.story__fold-count { flex: none; font: 700 9px/1 var(--ds-mono); letter-spacing: 1px; color: var(--sk-ink2); }
+.story__inner { display: grid; gap: 8px; padding: 8px; }

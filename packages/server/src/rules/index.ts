@@ -1,4 +1,4 @@
-import { detectVendor, ENV_FILE, INSTALL, isRecord, packagesIn, segments, type Category, type SceneSpec, type Step, type Translation } from '@sidecar/shared'
+import { detectVendor, ENV_FILE, INSTALL, isRecord, oneOf, packagesIn, segments, TEST, viaRunner, type Category, type SceneSpec, type Step, type Translation } from '@sidecar/shared'
 import { scenes } from '@sidecar/ui-kit/catalog'
 
 export { detectVendor, segments } from '@sidecar/shared'
@@ -31,19 +31,8 @@ const part = (c: Ctx, re: RegExp) => c.parts.find((p) => re.test(p))
 const rawPart = (c: Ctx, re: RegExp) => c.raw[c.parts.findIndex((p) => re.test(p))]
 
 // Matched against one simple command at a time (see segments), from its start, so words elsewhere never count.
-// INSTALL lives in @sidecar/shared with the project map, which reads installs too.
-/** What can run a package's own command: `npx vitest`, `pnpm exec vercel`, `yarn prisma`, `bunx vite`, or nothing. */
-const RUNNER = /^((npx|bunx|bun\s+x|npm\s+exec|pnpm(\s+(exec|dlx))?|yarn(\s+dlx)?)\s+(-\S+\s+)*)?/.source
-const viaRunner = (re: RegExp) => new RegExp(RUNNER + re.source)
-const oneOf = (...res: RegExp[]) => new RegExp(res.map((r) => r.source).join('|'))
-/** A test runner in the command's runner position, so `npx playwright install` or `tsc -p tsconfig.test.json` is not a test run. */
-const TEST = oneOf(
-  // flags may take a value (`pnpm --filter web test`), and yarn picks a workspace by name
-  /^(npm|pnpm|yarn|bun)\s+(-\S+\s+(\S+\s+)?|workspace\s+\S+\s+)*(run\s+)?test\b/,
-  viaRunner(/(vitest|jest|mocha|playwright\s+test|cypress\s+run)\b/),
-  /^((python3?\s+-m|uv\s+run|poetry\s+run)\s+)?pytest\b/,
-  /^(\.\/)?(bin\/)?(cargo|go|deno|make|dotnet|gradlew|gradle|mvnw|mvn|mix|swift|flutter|rails|php\s+artisan)\s+(-\S+\s+)*test\b/,
-)
+// INSTALL lives in @sidecar/shared with the project map, which reads installs too, and TEST with the story, which
+// matches check runs.
 // vercel deploys with `deploy`, a flag, a folder or nothing after it; `vercel env pull` or `vercel link` does not
 const DEPLOY = viaRunner(/(vercel(?=\s*$|\s+(deploy\b|-|\.|\/|~|\d*>))|netlify\s+deploy|fly\s+deploy|flyctl\s+deploy|railway\s+up|docker\s+push|wrangler\s+deploy)\b/)
 const RUN = oneOf(/^(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start|build|preview)\b/, viaRunner(/(next|vite)\s+(dev|build)\b/), /^python3?\s+\S+\.py\b|^node\s+\S+\.(m?js|ts)\b/)

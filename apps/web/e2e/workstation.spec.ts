@@ -13,6 +13,8 @@ test.beforeEach(async ({ page }) => {
 test.afterEach(() => { expect(errors).toEqual([]) })
 
 const cards = (page: Page) => page.locator('button.ds-step')
+/** The drawer front's "N STEPS": every step, including prompts (chapter headers) and steps inside folded beats. */
+const stepLabel = (page: Page) => page.locator('.ds-drawer .ds-label')
 
 /** Sends one hook payload through the plugin's emit script, as Claude Code would. */
 function emit(payload: object) {
@@ -32,7 +34,7 @@ test('the failed test step says what to do next', async ({ page }) => {
 
 test('a permission prompt raises the NEEDS YOU banner and marks the tab', async ({ page }) => {
   await page.goto(url())
-  await expect(cards(page)).toHaveCount(4)
+  await expect(stepLabel(page)).toHaveText('4 STEPS')
   emit({ session_id: 'smoke-1', cwd: '/tmp/demo', hook_event_name: 'Notification', message: 'Claude needs your permission to use Bash', notification_type: 'permission_prompt' })
   await expect(page.locator('.ds-strip', { hasText: 'NEEDS YOU' })).toContainText('Claude needs your permission to use Bash')
   await expect(page).toHaveTitle(/^\(waiting\)/)
@@ -40,7 +42,7 @@ test('a permission prompt raises the NEEDS YOU banner and marks the tab', async 
 
 test('the stage draws a scene and the drawer holds every step', async ({ page }) => {
   await page.goto(url())
-  await expect(cards(page)).toHaveCount(4)
+  await expect(stepLabel(page)).toHaveText('4 STEPS')
   await expect(page.getByRole('region', { name: 'Stage' }).locator('svg').first()).toBeVisible()
 })
 
@@ -98,12 +100,12 @@ const strip = (page: Page) => page.getByRole('region', { name: 'Stage' }).locato
 async function openStripe(page: Page) {
   await page.goto(url())
   await page.locator('select.hdr__session').selectOption(STRIPE)
-  await expect.poll(() => cards(page).count()).toBeGreaterThanOrEqual(37)
+  await expect.poll(async () => parseInt(await stepLabel(page).innerText(), 10)).toBeGreaterThanOrEqual(37)
 }
 
 test('a finished session ends on its newest step, with checks and status in plain words', async ({ page }) => {
   await openStripe(page)
-  await expect(cards(page)).toHaveCount(37)
+  await expect(stepLabel(page)).toHaveText('37 STEPS')
   await expect(strip(page)).toContainText('STEP 037')
   await expect(strip(page)).toContainText('DONE')
   const frame = page.getByRole('region', { name: 'Stage' }).locator('.sk-readout')
@@ -127,7 +129,7 @@ test('a burst followed by Stop ends on the newest step within a few seconds (it 
     emit({ ...base, hook_event_name: 'PostToolUse', tool_name: 'Write', tool_use_id: id, tool_input: input, tool_response: { type: 'create', filePath: input.file_path, content: 'export {}' } })
   }
   emit({ ...base, hook_event_name: 'Stop' })
-  await expect(cards(page)).toHaveCount(41)
+  await expect(stepLabel(page)).toHaveText('41 STEPS')
   await expect(strip(page)).toContainText('STEP 041', { timeout: 3000 })
   await expect(strip(page)).toContainText('DONE')
 })
@@ -161,4 +163,38 @@ test('the basic session maps too, and its fake secret never shows', async ({ pag
   await page.goto(`${url()}?tab=whiteboard`)
   await expect(page.locator('.board')).toContainText('Stripe')
   await expect(page.locator('.board')).not.toContainText('sk-live')
+})
+
+test('the drawer tells the session as a story: chapters, a fixed problem, folded reading', async ({ page }) => {
+  await openStripe(page)
+  const drawer = page.locator('.ds-drawer')
+  const chapters = drawer.locator('.story__chapter')
+  await expect(chapters.first()).toContainText('YOU ASKED')
+  await expect(drawer.getByRole('region', { name: /You asked: Add Stripe checkout/ })).toContainText('fixed 1 problem')
+  await expect(drawer.locator('.ds-step__badge', { hasText: 'FIXED' })).toHaveCount(1)
+  await expect(drawer.locator('.ds-step__badge', { hasText: 'PROBLEM' })).toHaveCount(1)
+  // a run of reading is one folded beat until opened
+  const fold = drawer.locator('.story__fold').filter({ hasText: /^Read \d+ files?/ }).last()
+  await expect(fold).toHaveAttribute('aria-expanded', 'false')
+  await fold.click()
+  await expect(fold).toHaveAttribute('aria-expanded', 'true')
+  await expect(fold.locator('xpath=..').locator('button.ds-step').first()).toBeVisible()
+  // folds stay folded while following live; scrubbing to a step inside one opens it
+  await page.getByRole('button', { name: 'LIVE' }).click()
+  const edits = drawer.locator('.story__fold').filter({ hasText: /^Changed page\.tsx 3 times/ })
+  await expect(edits).toHaveAttribute('aria-expanded', 'false')
+  const ruler = page.getByRole('slider', { name: 'Replay position' })
+  await ruler.focus()
+  await ruler.press('Home')
+  for (let i = 0; i < 13; i++) await ruler.press('ArrowRight')
+  await expect(edits).toHaveAttribute('aria-expanded', 'true')
+  // folded again by hand, moving to the next step inside it opens it again, so the picked card shows
+  await edits.click()
+  await expect(edits).toHaveAttribute('aria-expanded', 'false')
+  await ruler.press('ArrowRight')
+  await expect(edits).toHaveAttribute('aria-expanded', 'true')
+  await expect(edits.locator('xpath=..').locator('button.ds-step[aria-pressed="true"]')).toHaveCount(1)
+  // the prompt header picks the prompt step
+  await drawer.locator('.story__head').last().click()
+  await expect(drawer.locator('.story__head').last()).toHaveAttribute('aria-pressed', 'true')
 })

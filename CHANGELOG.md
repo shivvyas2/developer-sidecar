@@ -8,6 +8,15 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 
 ### Added
 
+- **The steps read as a story.** The step drawer groups steps under each
+  thing you asked, with how it ended (done, done after a fix, needs a fix,
+  stopped early), and a chapter never says needs a fix while the stage says
+  the last checks passed. Runs of reading fold into one line like "Read 3
+  files, searched once", repeat changes to a file into "Changed page.tsx 3
+  times", and a check run that fixed an earlier failure is marked FIXED, even
+  when Claude spells it another way (after `cd app &&`, chained with lint, or
+  `npm run test` for `npm test`). A run you stopped never counts as a failure
+  or a fix. Moving to a step inside a fold you closed opens it again.
 - **What you're building.** The Whiteboard tab shows a map of the project
   from what Claude has looked at and changed: pages and screens, behind the
   scenes, your data (with table names), outside services, secret settings,
@@ -16,8 +25,9 @@ All notable changes to Developer Sidecar are recorded here. The format follows
   and the steps that touched it, and the part Claude is working on right now
   says so while Claude works. Table names keep their casing (OrderItem reads
   Order item) and skip a schema (public.orders reads Orders). Requirement
-  files, editable folders and local paths are not counted as packages, and
-  a command that names two env files records both. The stage uses the same
+  files, editable folders and local paths are not counted as packages,
+  `pnpm add -w zod` still names zod, and a command that names two env files
+  records both. The stage uses the same
   names: the service reads STRIPE, the database ORDERS, the packages how
   many were added (a failed install is not).
 - **The stage says how things stand, in plain words.** The frame shows a

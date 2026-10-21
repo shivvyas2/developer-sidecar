@@ -1,13 +1,6 @@
-import type { Attention, FeedStep } from '@sidecar/shared'
+import { isStopped, type Attention, type FeedStep } from '@sidecar/shared'
 
 type Seen = Pick<FeedStep, 'category' | 'status'> & Partial<Pick<FeedStep, 'output'>>
-
-/**
- * A command the person cancelled, such as a dev server stopped with Ctrl-C. The hook reports it as a
- * failure with `interrupted: true` in its output, but nothing went wrong.
- */
-const stopped = (s: Seen): boolean =>
-  s.status === 'interrupted' || (typeof s.output === 'object' && s.output !== null && (s.output as { interrupted?: unknown }).interrupted === true)
 
 export type Checks = 'pass' | 'fail' | 'none'
 
@@ -15,7 +8,7 @@ export type Checks = 'pass' | 'fail' | 'none'
 export function checksOf(steps: readonly Seen[]): Checks {
   for (let i = steps.length - 1; i >= 0; i--) {
     const s = steps[i]!
-    if (s.category === 'test' && (s.status === 'ok' || s.status === 'failed') && !stopped(s)) return s.status === 'ok' ? 'pass' : 'fail'
+    if (s.category === 'test' && (s.status === 'ok' || s.status === 'failed') && !isStopped(s)) return s.status === 'ok' ? 'pass' : 'fail'
   }
   return 'none'
 }
@@ -44,7 +37,7 @@ export function healthOf(steps: readonly Seen[], attention?: Attention): Health 
   if (checksOf(steps) === 'fail') return 'fix'
   for (let i = steps.length - 1; i >= 0; i--) {
     const s = steps[i]!
-    if (QUIET.has(s.category) || s.status === 'running' || stopped(s)) continue
+    if (QUIET.has(s.category) || s.status === 'running' || isStopped(s)) continue
     if (s.status === 'failed') return 'fix'
     break
   }
