@@ -574,4 +574,23 @@ export const EDGE_SESSIONS: readonly BenchSession[] = [
     .read('lib/products.ts')
     .stop()
     .done(),
+  longTurn(),
 ]
+
+/**
+ * One long turn over the request's length cap: many changes to deeply nested files, with five failing
+ * test runs among them, the newest last. The recap must still carry the newest failures' output.
+ */
+function longTurn(): BenchSession {
+  const b = builder('long-turn', '/Users/sam/shop', 77).start().prompt('Make every page load faster and fix whatever breaks')
+  for (let i = 0; i < 36; i++) {
+    b.write(`app/${'components/'.repeat(14)}widget${i}.tsx`, `export const Widget${i} = () => null\n`)
+    if (i % 7 === 6) {
+      const n = (i + 1) / 7
+      b.bash(`npx vitest run --reporter=verbose tests/perf/suite${n}.test.ts`, '', {
+        fail: `Exit code 1\n${'    at runTest (node_modules/vitest/dist/runner.js:120:11)\n'.repeat(12)} FAIL tests/perf/suite${n}.test.ts > loads in under 200ms: took ${n}000ms`,
+      })
+    }
+  }
+  return b.stop().done()
+}

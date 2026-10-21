@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, test } from 'vitest'
+import { isStopped, storyOf } from '@sidecar/shared'
 import { RECAP_CAPS, RECAP_SYSTEM_PROMPT } from '../src/explainer/recap-prompt'
 import { RECAP_MAX_TOKENS } from '../src/explainer/recap'
 import { runSession, statsOf, turnsIn, type SessionRun } from '../../../bench/explainer/run'
@@ -39,12 +40,17 @@ describe.each(runs.map(({ s, run }) => [s.name, s, run] as const))('%s', (_name,
       expect(r.user).not.toMatch(/originalFile|structuredPatch|sk_(test|live)_|whsec_/)
     }
   })
-  test('every failure in a recapped turn is sent with the end of its output', () => {
-    for (const st of run.steps.filter((x) => x.status === 'failed' && typeof x.output === 'string')) {
-      // the encoder writes each step on one line, so whitespace is collapsed
-      const end = (st.output as string).replace(/\s+/g, ' ').trim().slice(-40)
-      const sent = run.requests.some((r) => r.user.includes(end))
-      expect(sent, `${st.caption} was sent without its output`).toBe(true)
+  test(`every failure in a recapped turn is sent, the latest ${RECAP_CAPS.failsWithTail} with the end of their output`, () => {
+    for (const chapter of storyOf(run.steps)) {
+      const failed = run.steps.filter((x) => chapter.stepIds.includes(x.id) && x.status === 'failed' && !isStopped(x))
+      for (const [i, st] of failed.entries()) {
+        const command = String((st.input as { command?: unknown }).command ?? '')
+        if (command) expect(run.requests.some((r) => r.user.includes(`${command.slice(0, 60)}`)), `${st.caption} was not sent`).toBe(true)
+        if (i < failed.length - RECAP_CAPS.failsWithTail || typeof st.output !== 'string') continue
+        // the encoder writes each step on one line, so whitespace is collapsed
+        const end = st.output.replace(/\s+/g, ' ').trim().slice(-40)
+        expect(run.requests.some((r) => r.user.includes(end)), `${st.caption} was sent without its output`).toBe(true)
+      }
     }
   })
 })
@@ -65,6 +71,13 @@ test('the recap system prompt stays short (it goes with every request)', () => {
 
 describe('edge cases', () => {
   const edge = runs.find(({ s }) => s.name === 'edge-cases')!.run
+  const long = runs.find(({ s }) => s.name === 'long-turn')!.run
+  test('a long turn with five failures is one request over the length cap, so the guards above are tested on it', () => {
+    expect(long.requests).toHaveLength(1)
+    expect(long.steps.filter((x) => x.status === 'failed')).toHaveLength(5)
+    expect(long.requests[0]!.user).toMatch(/…and \d+ more steps/)
+    expect(long.requests[0]!.user.length).toBeGreaterThan(RECAP_CAPS.userChars - 300)
+  })
   test('the turn is recapped once, and the cancelled dev server says it was stopped', () => {
     expect(edge.requests).toHaveLength(1)
     expect(edge.requests[0]!.user).toMatch(/ran `npm run dev` \(stopped\)/)
