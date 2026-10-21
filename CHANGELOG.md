@@ -12,7 +12,14 @@ All notable changes to Developer Sidecar are recorded here. The format follows
   thing you asked: how it ended, the parts made or changed, building blocks
   added and whether the checks pass. When a dev server is up there is an
   "Open your app" button, and when a failure is still in the way, a request
-  to copy into Claude Code. It reads "So far" while Claude works.
+  to copy into Claude Code, shown once rather than again on the failed
+  step's card. It reads "So far" while Claude works. The button keeps an
+  https dev server's https, stays while the server is up even when another
+  command such as `npm run build` fails, and goes when the server fails or
+  its own background command is stopped (by any of Claude Code's tool
+  names). A turn that only edited files like README.md says "Done.", not
+  that nothing was changed, and a turn that ran no checks reports the last
+  ones, as the status light does.
 - **The steps read as a story.** The step drawer groups steps under each
   thing you asked, with how it ended (done, done after a fix, needs a fix,
   stopped early), and a chapter never says needs a fix while the stage says
