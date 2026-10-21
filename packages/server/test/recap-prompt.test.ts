@@ -100,6 +100,24 @@ describe('encodeTurn', () => {
     expect(user.indexOf('Facts:')).toBeLessThan(user.indexOf('Steps:'))
   })
 
+  test('a long turn over the length cap keeps its newest failure and the end of its output; older lines give way', () => {
+    // 40 writes to long paths fill far more than the room, and four failing checks come last
+    const long = (i: number) => `src/${'deep/'.repeat(36)}file${i}.ts`
+    const steps = [
+      ...Array.from({ length: 40 }, (_, i) => write(long(i))),
+      ...Array.from({ length: 4 }, (_, i) => bash(`npx vitest run part${i}`, 'failed', `${'x'.repeat(500)} ERROR-${i}-END`)),
+    ]
+    const { user, labels } = encodeTurn({ ...ctx, rule: { ...rule, checks: 'fail', outcome: 'failing' } }, steps)
+    expect(user.length).toBeLessThanOrEqual(RECAP_CAPS.userChars)
+    // the newest failure, its tail and the lines after the steps all survive
+    expect(user).toMatch(/s\d+ ran checks `npx vitest run part3` FAILED :: …x+ ERROR-3-END\n/)
+    for (const i of [1, 2]) expect(user).toContain(`ERROR-${i}-END`)
+    expect(user).toMatch(/…and \d+ more steps/)
+    // the oldest writes gave way, and a label the request no longer shows cannot be cited
+    expect(user).not.toContain('file0.ts')
+    for (const label of labels.keys()) expect(user).toMatch(new RegExp(`^${label} `, 'm'))
+  })
+
   test('quoted package names are named, not their quotes', () => {
     expect(encodeTurn(ctx, [bash(`cd api && pip install "django>=4" 'requests'`)]).user).toContain('s1 installed django>=4, requests')
   })

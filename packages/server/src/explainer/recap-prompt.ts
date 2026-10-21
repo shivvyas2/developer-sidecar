@@ -106,16 +106,21 @@ export function encodeTurn(ctx: TurnContext, steps: readonly FeedStep[]): Encode
   const tails = new Set(kept.filter((l) => l.failed).slice(-RECAP_CAPS.failsWithTail))
 
   const labels = new Map<string, string>()
-  const body = kept.map((l) => {
+  let rows = kept.map((l) => {
     const label = `s${labels.size + 1}`
     if (l.step) labels.set(label, l.step.id)
     const text = tails.has(l) && l.step?.output !== undefined ? failTail(l.step.output) : ''
     const tail = text ? ` :: ${text}` : ''
-    return clipLine(`${label} ${l.text}`, RECAP_CAPS.lineChars) + tail
+    return { label, failed: l.failed, tailed: !!tail, text: clipLine(`${label} ${l.text}`, RECAP_CAPS.lineChars) + tail }
   })
-  if (kept.length < lines.length) body.push(`…and ${lines.length - kept.length} more steps`)
   const also = [reads ? `looked at ${reads} file${reads === 1 ? '' : 's'}` : '', searches ? `searched ${searches} time${searches === 1 ? '' : 's'}` : ''].filter(Boolean)
-  if (also.length) body.push(`Also: ${also.join(', ')}`)
+  const stepsText = () => {
+    const body = rows.map((r) => r.text)
+    if (rows.length < lines.length) body.push(`…and ${lines.length - rows.length} more steps`)
+    if (also.length) body.push(`Also: ${also.join(', ')}`)
+    // every piece was scrubbed before it was clipped; this pass catches anything that only matches whole
+    return scrubText(body.join('\n') || '(none)')
+  }
 
   const r = ctx.rule
   const facts = [
@@ -130,10 +135,21 @@ export function encodeTurn(ctx: TurnContext, steps: readonly FeedStep[]): Encode
   const asked = ctx.asked ? clipLine(safe(ctx.asked), RECAP_CAPS.promptChars) : '(not seen)'
   // the facts go first and are never cut; only the step lines give way to the cap
   const head = scrubText(`Project: ${ctx.project}\nAsked: "${asked}"\nFacts: ${facts}\nSteps:\n`)
-  // every piece was scrubbed before it was clipped; this pass catches anything that only matches whole
-  const stepText = scrubText(body.join('\n') || '(none)')
   const room = RECAP_CAPS.userChars - head.length
-  return { user: head + (stepText.length > room ? `${stepText.slice(0, Math.max(0, room - 1))}…` : stepText), labels }
+  // Over the room, the oldest lines give way first, so the newest failure and the end of its output
+  // (what the next ask needs) stay: plain lines, then failures without output, then the rest.
+  let stepText = stepsText()
+  while (stepText.length > room && rows.length) {
+    const plain = rows.findIndex((x) => !x.failed)
+    const bare = rows.findIndex((x) => !x.tailed)
+    const drop = plain >= 0 ? plain : bare >= 0 ? bare : 0
+    labels.delete(rows[drop]!.label)
+    rows = rows.filter((_, i) => i !== drop)
+    stepText = stepsText()
+  }
+  // only if one line alone is over the room (it can't be, at these caps): keep its end
+  if (stepText.length > room) stepText = `…${stepText.slice(stepText.length - room + 1)}`
+  return { user: head + stepText, labels }
 }
 
 export const RECAP_SYSTEM_PROMPT = `You sum up one turn of an AI coding assistant (Claude Code) for someone building an app who is not a professional developer.
