@@ -94,7 +94,7 @@ If neither is available, everything else still works, including the map, the sto
  Sidecar server  127.0.0.1:7377   (Node, Hono, node:sqlite)
    ├─ pair tool start/end events into steps
    ├─ rules engine → category, caption and scene   (instant, free)
-   ├─ explainer → plain / why / concept / decision          (batched, async, optional)
+   ├─ recapper → one AI recap per finished turn            (async, optional)
    ├─ store: ~/.developer-sidecar/sidecar.db
    └─ WebSocket + REST, token and Origin checked
         │
@@ -146,7 +146,7 @@ developer-sidecar/
 ├── packages/
 │   ├── shared/                       Event, step, scene, story, project map and recap types, zod schemas, secret scrubbing
 │   ├── ui-kit/                       Scene renderer: tokens, primitives, animators, timeline, render(), text renderer, React <Scene>
-│   └── server/                       Hono server: store, step pairing, rules, explainer, REST and WebSocket
+│   └── server/                       Hono server: store, step pairing, rules, AI recaps, REST and WebSocket
 ├── apps/web/                         The React workstation (stage, feed, tabs, settings, #/kit gallery)
 └── scripts/                          Build and end-to-end smoke scripts
 ```
