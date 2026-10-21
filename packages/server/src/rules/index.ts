@@ -151,6 +151,15 @@ export function segments(cmd: string, o: { raw?: boolean } = {}): string[] {
       put(ch)
       continue
     }
+    // a comment runs to the end of the line; a # inside a word (a#b, $#) is not one
+    if (ch === '#' && (i === 0 || /[\s;&|(]/.test(cmd[i - 1]!))) {
+      const nl = cmd.indexOf('\n', i)
+      const end = nl < 0 ? cmd.length : nl
+      cur += ' '.repeat(end - i)
+      raw += ' '.repeat(end - i)
+      i = end - 1
+      continue
+    }
     // subshell and group brackets go, both ends, so `(cd app && npm i x)` names x, not x)
     const opensGroup = ch === '(' || (ch === '{' && !cur.trim() && /\s/.test(cmd[i + 1] ?? ''))
     const closesGroup = groups.at(-1) === ch && (ch === ')' || !cur.trim())
@@ -175,9 +184,19 @@ export function segments(cmd: string, o: { raw?: boolean } = {}): string[] {
   })
 }
 
+/** Flags whose value is a file, a folder, a url or a workspace, never a package: `pip install -r requirements.txt`. */
+const VALUE_FLAGS = new Set(['-r', '--requirement', '-c', '--constraint', '--prefix', '--registry', '-i', '--index-url', '--extra-index-url', '-w', '--workspace', '--filter'])
+
 function packagesFrom(command: string): string {
   const m = command.match(/\b(?:i|install|add|get)\b(.*)$/)
-  const pkgs = (m?.[1] ?? '').split(/\s+/).filter((t) => t && !t.startsWith('-') && !/^\w+=(?!=)/.test(t))
+  const pkgs: string[] = []
+  const tokens = (m?.[1] ?? '').split(/\s+/)
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i]!
+    if (t.startsWith('#')) break
+    if (VALUE_FLAGS.has(t)) i++
+    else if (t && !t.startsWith('-') && !/^\w+=(?!=)/.test(t)) pkgs.push(t)
+  }
   return pkgs.length ? pkgs.slice(0, 4).join(', ') + (pkgs.length > 4 ? '…' : '') : ''
 }
 

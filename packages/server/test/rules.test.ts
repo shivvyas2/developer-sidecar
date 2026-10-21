@@ -123,6 +123,11 @@ describe('translate', () => {
     ['sudo as a user then install', bash('sudo -u deploy npm install x'), 'install', /: x$/],
     ['env then test', bash('env CI=1 npm test'), 'test', /checking/i],
     ['env with flags then test', bash('env -u DEBUG CI=1 npm test'), 'test', /checking/i],
+    ['a requirements file is not a package', bash('pip install -r requirements.txt'), 'install', /^Installing the project’s building blocks$/],
+    ['flag values are not packages', bash('npm install --registry https://r.example --prefix web zod'), 'install', /: zod$/],
+    ['pip constraints and requirements around a package', bash('pip install -c constraints.txt flask --requirement dev.txt'), 'install', /: flask$/],
+    ['a trailing comment is not packages', bash('npm install stripe # add payments'), 'install', /: stripe$/],
+    ['a comment never splits into a command', bash('echo hi # then && vercel deploy'), 'fallback', /running a command/i],
     ['a heredoc body is file contents, not a command', bash(`cat > README.md <<'EOF'\n## Install\nnpm install foo\nEOF`), 'fallback', /running a command/i],
     ['a command after a heredoc still counts', bash(`cat > notes.txt <<EOF\nnpm test\nEOF\nnpm install zod`), 'install', /: zod$/],
     ['a command substitution is not the command', bash('FOO=$(cd x && npm test)'), 'fallback', /running a command/i],
@@ -222,6 +227,12 @@ describe('segments', () => {
     expect(segments(`cat <<EOF\nnever closed && npm test`)).toEqual(['cat <<EOF'])
     expect(segments('cat <<EOF\n')).toEqual(['cat <<EOF'])
     expect(segments('cat <<A <<B\nnpm test\nA\nvercel\nB\nls')).toEqual(['cat <<A <<B', 'ls'])
+  })
+
+  test('a comment is blanked, but a # inside a word is not a comment', () => {
+    expect(segments('npm install stripe # add; payments')).toEqual(['npm install stripe'])
+    expect(segments('# set up\nnpm test')).toEqual(['npm test'])
+    expect(segments('echo a#b $# && ls', { raw: true })).toEqual(['echo a#b $#', 'ls'])
   })
 
   test('raw keeps the quoted text and drops the quotes, part for part', () => {
