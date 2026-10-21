@@ -84,19 +84,39 @@ describe('buildRecap', () => {
   })
 
   describe('the open-your-app address', () => {
-    const run = (status: RecapStep['status'], output?: unknown) => step('Bash', 'run', { command: 'npm run dev' }, status, output)
+    const run = (status: RecapStep['status'], output?: unknown, command = 'npm run dev') => step('Bash', 'run', { command }, status, output)
+    const background = (id: string) => [run('ok', `Command running in background with ID: ${id}`), step('BashOutput', 'fallback', { bash_id: id }, 'ok', VITE)]
     test('a dev server that started, or one polled in the background', () => {
       expect(buildRecap([prompt('x'), run('ok', NEXT_DEV)])!.url).toBe('http://localhost:3000')
-      const bg = [prompt('x'), run('ok', 'Command running in background with ID: b1'), step('BashOutput', 'fallback', { bash_id: 'b1' }, 'ok', VITE)]
-      expect(buildRecap(bg)!.url).toBe('http://localhost:5173')
+      expect(buildRecap([prompt('x'), ...background('b1')])!.url).toBe('http://localhost:5173')
     })
     test('carried across turns while the server keeps running', () => {
       expect(buildRecap([prompt('a'), run('ok', NEXT_DEV), prompt('b'), write('a.ts')])!.url).toBe('http://localhost:3000')
     })
     test('gone once the server was stopped, cut short or failed', () => {
-      expect(buildRecap([prompt('x'), run('ok', NEXT_DEV), step('KillShell', 'fallback', { shell_id: 'b1' })])!.url).toBeUndefined()
+      expect(buildRecap([prompt('x'), ...background('b1'), step('KillShell', 'fallback', { shell_id: 'b1' })])!.url).toBeUndefined()
       expect(buildRecap([prompt('x'), run('ok', NEXT_DEV), run('interrupted')])!.url).toBeUndefined()
       expect(buildRecap([prompt('x'), run('failed', NEXT_DEV)])!.url).toBeUndefined()
+      expect(buildRecap([prompt('x'), run('ok', NEXT_DEV), run('failed', undefined, 'npx next dev')])!.url).toBeUndefined()
+    })
+    test('a server started by some other command is gone once that same command fails', () => {
+      const node = (status: RecapStep['status'], output?: unknown) => run(status, output, 'node server.js')
+      expect(buildRecap([prompt('x'), node('ok', 'listening on http://localhost:8080'), node('failed')])!.url).toBeUndefined()
+    })
+    test('another command failing leaves the server up', () => {
+      // turn 2's build fails on a type error while the dev server from turn 1 still serves
+      expect(buildRecap([prompt('a'), run('ok', NEXT_DEV), prompt('b'), run('failed', 'Type error', 'npm run build')])!.url).toBe('http://localhost:3000')
+      expect(buildRecap([prompt('a'), run('ok', NEXT_DEV), run('interrupted', undefined, 'node scripts/seed.js')])!.url).toBe('http://localhost:3000')
+    })
+    test('stopping an unrelated background command leaves the server up', () => {
+      expect(buildRecap([prompt('x'), ...background('b1'), step('KillShell', 'fallback', { shell_id: 'b2' })])!.url).toBe('http://localhost:5173')
+      expect(buildRecap([prompt('x'), ...background('b1'), step('KillBash', 'fallback', { shell_id: 'b1' })])!.url).toBeUndefined()
+    })
+    test('the shell id also comes from the background task id Claude Code returns', () => {
+      const started = run('ok', { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'bash_7' })
+      const polled = step('BashOutput', 'fallback', { bash_id: 'bash_7' }, 'ok', { stdout: NEXT_DEV.stdout })
+      expect(buildRecap([prompt('x'), started, polled])!.url).toBe('http://localhost:3000')
+      expect(buildRecap([prompt('x'), started, polled, step('KillShell', 'fallback', { shell_id: 'bash_7' })])!.url).toBeUndefined()
     })
     test('an address in some other step never becomes a button', () => {
       expect(buildRecap([prompt('x'), step('Bash', 'fallback', { command: 'curl -s localhost' }, 'ok', 'http://localhost:9999')])!.url).toBeUndefined()

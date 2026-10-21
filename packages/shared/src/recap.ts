@@ -1,5 +1,8 @@
+import { isRecord } from './hook-payload'
+import { str } from './input'
 import { makesChange, projectMap, type MapKind } from './project-map'
-import type { Attention, FeedStep } from './step'
+import { startsDevServer } from './shell'
+import { isStopped, type Attention, type FeedStep } from './step'
 import { storyOf, type ChapterOutcome, type StoryStep } from './story'
 
 /**
@@ -52,23 +55,41 @@ export function localUrl(output: unknown): string | undefined {
 const READS_BACKGROUND = new Set(['BashOutput'])
 const STOPS_BACKGROUND = new Set(['KillShell', 'KillBash'])
 
+/** The background command a step names (`bash_id`, `shell_id`, `task_id`), or the one a run started. */
+function shellOf(s: RecapStep): string | undefined {
+  const named = isRecord(s.input) ? str(s.input.bash_id) || str(s.input.shell_id) || str(s.input.task_id) : ''
+  if (named) return named
+  if (isRecord(s.output) && str(s.output.backgroundTaskId)) return str(s.output.backgroundTaskId)
+  const text = typeof s.output === 'string' ? s.output : isRecord(s.output) ? str(s.output.stdout) : ''
+  return text.match(/running in background with ID: (\S+)/)?.[1]
+}
+
 /**
  * A dev server that is still up: the newest local address printed by a run step that finished well,
- * or by polling a background command, unless a later run was cut short or failed, or a background
- * command was stopped.
+ * or by polling a background command. It is gone once a dev server command (or the command that
+ * printed it) was cut short or failed, or its own background command was stopped. Another command
+ * failing, such as `npm run build`, leaves it up.
  */
 function serverUrl(steps: readonly RecapStep[]): string | undefined {
-  for (let i = steps.length - 1; i >= 0; i--) {
-    const s = steps[i]!
-    if (STOPS_BACKGROUND.has(s.toolName)) return undefined
+  let up: { url: string; command: string; shell?: string } | undefined
+  for (const s of steps) {
+    if (STOPS_BACKGROUND.has(s.toolName)) {
+      if (up?.shell && shellOf(s) === up.shell) up = undefined
+      continue
+    }
     const run = s.category === 'run'
-    if (run && (s.status === 'interrupted' || s.status === 'failed')) return undefined
+    const command = isRecord(s.input) ? str(s.input.command) : ''
+    if (run && (s.status === 'failed' || isStopped(s))) {
+      if (startsDevServer(command) || (command && command === up?.command)) up = undefined
+      continue
+    }
     if ((run || READS_BACKGROUND.has(s.toolName)) && s.status === 'ok') {
       const url = localUrl(s.output)
-      if (url) return url
+      const shell = shellOf(s)
+      if (url) up = { url, command, ...(shell ? { shell } : {}) }
     }
   }
-  return undefined
+  return up?.url
 }
 
 /**
