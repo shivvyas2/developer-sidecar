@@ -157,7 +157,9 @@ export function segments(cmd: string, o: { raw?: boolean } = {}): string[] {
 }
 
 /** Flags whose value is a file, a folder, a url or a workspace, never a package: `pip install -r requirements.txt`. */
-const VALUE_FLAGS = new Set(['-r', '--requirement', '-c', '--constraint', '-e', '--editable', '--prefix', '--registry', '-i', '--index-url', '--extra-index-url', '-w', '--workspace', '--filter'])
+const VALUE_FLAGS = new Set(['-r', '--requirement', '-c', '--constraint', '-e', '--editable', '--prefix', '--registry', '-i', '--index-url', '--extra-index-url', '--filter'])
+/** npm names a workspace after `-w`; for pnpm `-w` is the workspace root and `--workspace` a switch, so the package follows. */
+const NPM_VALUE_FLAGS = new Set(['-w', '--workspace'])
 /** A local folder or file, not a package: `.`, `./...`, `../local-pkg`, `/tmp/x`, `~/x`, `file:../x`. */
 const LOCAL_PATH = /^(\.{1,2}(\/|$)|[/~]|(file|link):)/
 
@@ -166,10 +168,11 @@ export function packagesIn(command: string): string[] {
   const m = command.match(/\b(?:i|install|add|get)\b(.*)$/)
   const pkgs: string[] = []
   const tokens = (m?.[1] ?? '').split(/\s+/)
+  const npm = /^\s*npm\b/.test(command)
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i]!
     if (t.startsWith('#')) break
-    if (VALUE_FLAGS.has(t)) i++
+    if (VALUE_FLAGS.has(t) || (npm && NPM_VALUE_FLAGS.has(t))) i++
     else if (t && !t.startsWith('-') && !/^\w+=(?!=)/.test(t) && !LOCAL_PATH.test(t)) pkgs.push(t)
   }
   return pkgs
