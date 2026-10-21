@@ -8,6 +8,15 @@ export const DEMO = sample as { project: string; cwd: string; steps: FeedStep[] 
 export const DEMO_STEP_MS = 2600
 export const DEMO_REST_MS = 9000
 
+// when the demo first played in this page; module scope, so leaving the Stage tab and coming back resumes it
+let started: number | null = null
+
+/** How long the demo has been playing, counted from the first time it played in this page. */
+export function demoElapsed(now = Date.now()): number {
+  started ??= now
+  return now - started
+}
+
 /**
  * Where the demo is `t` ms after it started: which loop, how many steps are showing, and whether
  * Claude is "working" or the session has ended. Loops forever.

@@ -47,6 +47,16 @@ test('with no sessions, the Stage plays the sample, marked SAMPLE, and it costs 
   expect(existsSync(calls())).toBe(false)
 })
 
+test('leaving the Stage and coming back picks the sample up where it was', async ({ page }) => {
+  await page.goto(`${base}/`)
+  await expect.poll(async () => parseInt(await stepLabel(page).innerText(), 10), { timeout: 10000 }).toBeGreaterThanOrEqual(3)
+  const before = parseInt(await stepLabel(page).innerText(), 10)
+  await page.getByRole('tab', { name: 'Settings' }).click()
+  await page.getByRole('tab', { name: 'Stage' }).click()
+  await expect(page.locator('.ds-strip', { hasText: 'SAMPLE' })).toBeVisible()
+  expect(parseInt(await stepLabel(page).innerText(), 10)).toBeGreaterThanOrEqual(before)
+})
+
 test('tapping a place says what it is, and the key lists everything', async ({ page }) => {
   await page.goto(`${base}/`)
   // A real press and release on Your app while the scene redraws it: the shape under the pointer is

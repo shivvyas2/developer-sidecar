@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { DEMO, demoAt } from '../src/demo/demo'
+import { DEMO, demoAt, demoElapsed } from '../src/demo/demo'
 
 describe('demoAt', () => {
   test('one more step every stepMs, then a rest, then it starts over', () => {
@@ -13,6 +13,12 @@ describe('demoAt', () => {
     expect(demoAt(-5, 3, 100, 50)).toEqual({ loop: 0, count: 1, done: false })
     expect(demoAt(10, 0)).toEqual({ loop: 0, count: 0, done: true })
   })
+})
+
+test('the demo clock starts once, so leaving the Stage and coming back resumes it', () => {
+  expect(demoElapsed(1000)).toBe(0)
+  expect(demoElapsed(6200)).toBe(5200)
+  expect(demoElapsed(9000)).toBe(8000)
 })
 
 test('the sample is the Stripe checkout session, prompt first', () => {
