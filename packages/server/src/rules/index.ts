@@ -66,42 +66,96 @@ const NOT_ONLY_LOOKING = new RegExp([
 /** A shell command that names a .env file: handled like the Read tool on one, as secrets, never as a quick look. */
 const ENV_FILE = /(^|[\s/'"=])\.env(\.[\w.-]+)?(?=$|[\s'";|&>)])/
 
+/** Where the heredoc bodies starting at `from` end: at the newline after the last delimiter line, or the end of the command. */
+function heredocEnd(cmd: string, from: number, words: string[]): number {
+  let next = from
+  let end = from
+  for (const word of words) {
+    for (;;) {
+      const nl = cmd.indexOf('\n', next)
+      end = nl < 0 ? cmd.length : nl
+      const line = cmd.slice(next, end)
+      next = end + 1
+      if (line.trim() === word || nl < 0) break
+    }
+  }
+  return end
+}
+
 /**
- * The simple commands in a shell line, split on `&&`, `||`, `;`, `|`, `&` and newlines. Quoted text is blanked, so a
- * commit message or an echo can't look like a command, and leading env assignments, `sudo` and subshell brackets go.
+ * The simple commands in a shell line, split on `&&`, `||`, `;`, `|`, `&` and newlines. Quoted text, `$( )` and
+ * backtick substitutions and heredoc bodies are blanked, so a commit message, an echo or a file's contents can't look
+ * like a command, and leading env assignments, `sudo` and subshell brackets go.
  * With `raw`, the same parts keep their quoted text and lose the quotes (`pip install "django>=4"` gives `django>=4`).
  */
 export function segments(cmd: string, o: { raw?: boolean } = {}): string[] {
-  // blank and raw stay the same length, char for char; raw marks each quote with \0 so it can be dropped at the end
+  // blank and raw stay the same length, char for char; raw marks each top-level quote with \0 so it can be dropped at the end
   const out: { blank: string; raw: string }[] = []
   let cur = ''
   let raw = ''
-  let quote = ''
+  // what we are inside: a quote, a backtick or a $( ) substitution, with the brackets open inside it
+  const stack: { kind: string; open: number }[] = []
+  // heredoc delimiters whose bodies start at the next newline
+  let heredocs: string[] = []
   const cut = () => { out.push({ blank: cur, raw }); cur = ''; raw = '' }
+  // top-level text is kept as is; anything inside a quote or substitution is blanked
+  const put = (text: string, mark = text) => { cur += stack.length ? ' '.repeat(text.length) : text; raw += mark }
+  const quoteMark = (ch: string) => (stack.length ? ch : '\0')
   for (let i = 0; i < cmd.length; i++) {
     const ch = cmd[i]!
-    if (quote) {
-      if (ch === quote) { quote = ''; cur += ch; raw += '\0'; continue }
-      if (ch === '\\' && quote === '"') i++
-      cur += ' '
-      raw += cmd[i] ?? ' '
+    const two = cmd.slice(i, i + 2)
+    const inside = stack.at(-1)
+    if (inside?.kind === "'") {
+      if (ch === "'") { stack.pop(); put(ch, quoteMark(ch)) } else put(ch)
       continue
     }
-    if (ch === '"' || ch === "'") { quote = ch; cur += ch; raw += '\0'; continue }
+    if (inside?.kind === '`') {
+      if (ch === '\\') { put(two); i++ } else if (ch === '`') { stack.pop(); put(ch) } else put(ch)
+      continue
+    }
+    if (inside?.kind === '"') {
+      if (ch === '"') { stack.pop(); put(ch, quoteMark(ch)) }
+      // an escaped character keeps only itself in raw: say \"hi\" gives say "hi"
+      else if (ch === '\\') { i++; put(' ', cmd[i] ?? ' ') }
+      else if (two === '$(') { put(two); stack.push({ kind: '$(', open: 0 }); i++ }
+      else if (ch === '`') { put(ch); stack.push({ kind: '`', open: 0 }) }
+      else put(ch)
+      continue
+    }
+    // top level, or inside a $( ) substitution
+    if (ch === '\n' && heredocs.length) {
+      const end = heredocEnd(cmd, i + 1, heredocs)
+      heredocs = []
+      if (stack.length) put(ch); else cut()
+      cur += ' '.repeat(end - i - 1)
+      raw += cmd.slice(i + 1, end)
+      i = end - 1
+      continue
+    }
+    if (cmd.startsWith('<<<', i)) { put('<<<'); i += 2; continue }
+    const heredoc = two === '<<' && cmd.slice(i).match(/^<<-?\s*(['"]?)([^\s'"<>;&|()]+)\1/)
+    if (heredoc) { put(heredoc[0]); heredocs.push(heredoc[2]!); i += heredoc[0].length - 1; continue }
+    if (ch === '"' || ch === "'") { put(ch, quoteMark(ch)); stack.push({ kind: ch, open: 0 }); continue }
+    if (ch === '`') { put(ch); stack.push({ kind: ch, open: 0 }); continue }
+    if (two === '$(') { put(two); stack.push({ kind: '$(', open: 0 }); i++; continue }
     // an escaped character, or a line continuation, stays inside the command
-    if (ch === '\\') { const two = ch + (cmd[i + 1] ?? ''); cur += two; raw += two; i++; continue }
-    const two = cmd.slice(i, i + 2)
+    if (ch === '\\') { put(two); i++; continue }
+    if (inside) {
+      if (ch === '(') inside.open++
+      else if (ch === ')') { if (inside.open) inside.open--; else stack.pop() }
+      put(ch)
+      continue
+    }
     if (two === '&&' || two === '||') { cut(); i++; continue }
     // a lone & runs in the background, but 2>&1 and &> are redirections
     const background = ch === '&' && !/[<>]/.test(cmd[i - 1] ?? '') && cmd[i + 1] !== '>'
     if (ch === ';' || ch === '|' || ch === '\n' || ch === '\r' || background) { cut(); continue }
-    cur += ch
-    raw += ch
+    put(ch)
   }
   cut()
   return out.flatMap((s) => {
     const end = s.blank.trimEnd().length
-    const start = s.blank.slice(0, end).match(/^\s*(?:[({]\s*)?(?:\w+=(?:"[^"]*"|'[^']*'|\S*)\s+)*(?:(?:sudo|time|exec)\s+)?\s*/)![0].length
+    const start = s.blank.slice(0, end).match(/^\s*(?:[({]\s*)?(?:\w+=(?:"[^"]*"|'[^']*'|\$\([^)]*\)|`[^`]*`|[^\s"'`])*\s+)*(?:(?:sudo|time|exec)\s+)?\s*/)![0].length
     if (start >= end) return []
     return [o.raw ? s.raw.slice(start, end).replaceAll('\0', '').trim() : s.blank.slice(start, end)]
   })

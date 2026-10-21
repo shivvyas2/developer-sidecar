@@ -118,6 +118,11 @@ describe('translate', () => {
     ['vercel env pull is not a deploy', bash('vercel env pull .env.local'), 'external', /secret settings/i],
     ['vercel link is not a deploy', bash('vercel link'), 'fallback', /running a command/i],
     ['vercel login is not a deploy', bash('npx vercel login'), 'fallback', /running a command/i],
+    ['a heredoc body is file contents, not a command', bash(`cat > README.md <<'EOF'\n## Install\nnpm install foo\nEOF`), 'fallback', /running a command/i],
+    ['a command after a heredoc still counts', bash(`cat > notes.txt <<EOF\nnpm test\nEOF\nnpm install zod`), 'install', /: zod$/],
+    ['a command substitution is not the command', bash('FOO=$(cd x && npm test)'), 'fallback', /running a command/i],
+    ['backticks are not the command', bash('echo `npm test`'), 'fallback', /running a command/i],
+    ['a quoted heredoc with a stray quote inside', bash(`echo "$(cat <<'EOF'\nDon't break the 12" layout && npm test\nEOF\n)"`), 'fallback', /running a command/i],
     ['unknown tool', step('SomethingNew', {}), 'fallback', /working/i],
   ])('%s', (_n, s, category, caption) => {
     const t = translate(s)
@@ -198,6 +203,17 @@ describe('segments', () => {
     const out = segments(cmd)
     expect(out).toHaveLength(1)
     expect(out[0]).toMatch(/^git commit -m "\s+"$/)
+  })
+
+  test('a heredoc body and a command substitution are never split into commands', () => {
+    expect(segments(`cat > README.md <<'EOF'\nnpm install foo\nEOF\nnpm test`)).toEqual([`cat > README.md <<'EOF'`, 'npm test'])
+    expect(segments(`cat <<-EOF > a.txt && ls\n\tnpm test; vercel\n\tEOF`)).toEqual(['cat <<-EOF > a.txt', 'ls'])
+    expect(segments('FOO=$(cd x && npm test) BAR=`date` npm run build')).toEqual(['npm run build'])
+    expect(segments('echo $(echo "a)" && (b)) && npm test')).toEqual([`echo $(${' '.repeat('echo "a)" && (b)'.length)})`, 'npm test'])
+    expect(segments('cat <<< "npm test" && ls')).toEqual(['cat <<< "        "', 'ls'])
+    expect(segments(`cat <<EOF\nnever closed && npm test`)).toEqual(['cat <<EOF'])
+    expect(segments('cat <<EOF\n')).toEqual(['cat <<EOF'])
+    expect(segments('cat <<A <<B\nnpm test\nA\nvercel\nB\nls')).toEqual(['cat <<A <<B', 'ls'])
   })
 
   test('raw keeps the quoted text and drops the quotes, part for part', () => {
