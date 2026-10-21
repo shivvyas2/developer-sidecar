@@ -1,8 +1,10 @@
 import type { SessionSummary } from '@sidecar/shared'
+import { needsYou as attentionNeedsYou } from '@sidecar/ui-kit'
 
 export const TITLE = 'Developer Sidecar'
 
-const needsYou = (s: SessionSummary | null | undefined) => s?.attention === 'permission' || s?.attention === 'idle'
+/** The same test the status light uses, so the strip, the tag and the light agree. */
+const needsYou = (s: SessionSummary | null | undefined) => attentionNeedsYou(s?.attention)
 
 /** The banner for a session that is waiting on its person, in plain words, or null. */
 export function attentionNotice(s: SessionSummary | null): { tag: string; text: string } | null {

@@ -10,10 +10,11 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 
 - **The stage says how things stand, in plain words.** The frame shows a
   status light (all good, needs a fix, needs you, working), how many files
-  Claude has made, and whether the last checks passed. A command you stop
-  yourself, like a dev server closed with Ctrl-C, is not counted as a
-  failure. Step cards say what a
-  step is (looking, new file, checks, checkpoint) instead of the tool and its
+  Claude has made, and whether the last checks passed. The light reads needs
+  you whenever the banner does: while Claude waits for permission or for
+  your next message. A command you stop yourself, like a dev server closed
+  with Ctrl-C, is not counted as a failure. Step cards say what a step is
+  (looking, new file, checks, checkpoint) instead of the tool and its
   command, which stays under "Show technical".
 - **Claude is waiting for you.** When Claude Code asks for permission, the
   workstation shows a banner with Claude's own words and says to answer in the

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { FeedStep } from '@sidecar/shared'
-import { checksOf, HEALTH_WORD, healthOf } from '../src/health'
+import { checksOf, HEALTH_WORD, healthOf, needsYou } from '../src/health'
 
 type S = Pick<FeedStep, 'category' | 'status' | 'output'>
 const s = (category: S['category'], status: S['status'] = 'ok'): S => ({ category, status })
@@ -20,8 +20,15 @@ describe('checksOf', () => {
   })
 })
 
+test('needsYou: a permission prompt or an idle turn waits on the person', () => {
+  expect((['permission', 'idle', 'working', 'done', undefined] as const).map(needsYou)).toEqual([true, true, false, false, false])
+})
+
 describe('healthOf', () => {
-  test('waiting for permission beats everything', () => expect(healthOf([s('test', 'failed')], 'permission')).toBe('you'))
+  test('waiting for permission or for your next message beats everything', () => {
+    expect(healthOf([s('test', 'failed')], 'permission')).toBe('you')
+    expect(healthOf([s('create')], 'idle')).toBe('you')
+  })
   test('failed checks need a fix until a later run passes', () => {
     expect(healthOf([s('test', 'failed'), s('edit')])).toBe('fix')
     expect(healthOf([s('test', 'failed'), s('edit'), s('test')])).toBe('ok')
@@ -42,7 +49,6 @@ describe('healthOf', () => {
   test('working while Claude works, all good once it stops', () => {
     expect(healthOf([s('create')], 'working')).toBe('working')
     expect(healthOf([s('create')], 'done')).toBe('ok')
-    expect(healthOf([], 'idle')).toBe('ok')
     expect(healthOf([])).toBe('ok')
   })
   test('every state has a word that fits the frame', () => {

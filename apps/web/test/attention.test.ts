@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { SessionSummary } from '@sidecar/shared'
+import { healthOf, needsYou } from '@sidecar/ui-kit'
 import { attentionNotice, liveTag, sessionMark, TITLE, titleFor } from '../src/attention'
 
 const session = (over: Partial<SessionSummary> = {}): SessionSummary => ({ id: 's1', cwd: '/shop', startedAt: 0, lastAt: 1, ...over })
@@ -22,6 +23,14 @@ describe('attention', () => {
     expect(liveTag(session({ attention: 'idle' }), false)).toBe('NEEDS YOU')
     expect(liveTag(session({ attention: 'done' }), false)).toBe('DONE')
     expect(liveTag(session({ attention: 'working' }), false)).toBeUndefined()
+  })
+  test('the strip, the tag and the status light agree on who is waiting', () => {
+    for (const attention of ['permission', 'idle', 'working', 'done'] as const) {
+      const s = session({ attention })
+      expect(liveTag(s, false) === 'NEEDS YOU', attention).toBe(needsYou(attention))
+      expect(healthOf([], attention) === 'you', attention).toBe(needsYou(attention))
+      expect(sessionMark(s) !== '', attention).toBe(needsYou(attention))
+    }
   })
   test('the tab title and picker mark flag any waiting session', () => {
     expect(titleFor([session(), session({ id: 's2', attention: 'permission' })])).toBe(`(waiting) ${TITLE}`)
