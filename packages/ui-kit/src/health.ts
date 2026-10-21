@@ -1,6 +1,13 @@
 import type { Attention, FeedStep } from '@sidecar/shared'
 
-type Seen = Pick<FeedStep, 'category' | 'status'>
+type Seen = Pick<FeedStep, 'category' | 'status'> & Partial<Pick<FeedStep, 'output'>>
+
+/**
+ * A command the person cancelled, such as a dev server stopped with Ctrl-C. The hook reports it as a
+ * failure with `interrupted: true` in its output, but nothing went wrong.
+ */
+const stopped = (s: Seen): boolean =>
+  s.status === 'interrupted' || (typeof s.output === 'object' && s.output !== null && (s.output as { interrupted?: unknown }).interrupted === true)
 
 export type Checks = 'pass' | 'fail' | 'none'
 
@@ -8,7 +15,7 @@ export type Checks = 'pass' | 'fail' | 'none'
 export function checksOf(steps: readonly Seen[]): Checks {
   for (let i = steps.length - 1; i >= 0; i--) {
     const s = steps[i]!
-    if (s.category === 'test' && (s.status === 'ok' || s.status === 'failed')) return s.status === 'ok' ? 'pass' : 'fail'
+    if (s.category === 'test' && (s.status === 'ok' || s.status === 'failed') && !stopped(s)) return s.status === 'ok' ? 'pass' : 'fail'
   }
   return 'none'
 }
@@ -26,14 +33,14 @@ const QUIET = new Set<FeedStep['category']>(['prompt', 'read'])
 /**
  * One word for how things stand: Claude needs you, something is broken (the last checks failed, or
  * the last step that changes something failed and nothing has worked since), Claude is still at it,
- * or all good. `attention` is left out for an older moment, such as a replay.
+ * or all good. A step that was cut short or stopped says nothing. `attention` is left out for an older moment, such as a replay.
  */
 export function healthOf(steps: readonly Seen[], attention?: Attention): Health {
   if (attention === 'permission') return 'you'
   if (checksOf(steps) === 'fail') return 'fix'
   for (let i = steps.length - 1; i >= 0; i--) {
     const s = steps[i]!
-    if (QUIET.has(s.category) || s.status === 'running' || s.status === 'interrupted') continue
+    if (QUIET.has(s.category) || s.status === 'running' || stopped(s)) continue
     if (s.status === 'failed') return 'fix'
     break
   }

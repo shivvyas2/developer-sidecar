@@ -39,6 +39,11 @@ test('readout says NEEDS YOU while Claude waits for a permission, and WORKING mi
   expect(readoutOf(state({ steps: [step(1)] })).status).toBe('ALL GOOD')
 })
 
+test('a dev server the person stopped is not a failure on the pane', () => {
+  const stopped = step(3, { category: 'run', status: 'failed', techLabel: 'Bash: npm run dev', output: { stdout: '', stderr: '', interrupted: true } })
+  expect(readoutOf(state({ steps: [step(1, { category: 'prompt' }), step(2, { category: 'edit' }), stopped] }))).toMatchObject({ status: 'ALL GOOD', light: 'ok' })
+})
+
 test('the pane still counts both token kinds', () => {
   expect(textModel(state({ steps: [step(1)], explainer: explainer(1000, 234) })).readout.tokens).toBe(1234)
 })
