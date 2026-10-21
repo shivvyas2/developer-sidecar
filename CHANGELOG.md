@@ -13,8 +13,13 @@ All notable changes to Developer Sidecar are recorded here. The format follows
   scenes, your data (with table names), outside services, secret settings,
   checks, helpers and building blocks. Each part says whether Claude looked
   at it, made or changed it, or it needs a fix, and a tap lists its files
-  and the steps that touched it. The stage uses the same names: the service
-  reads STRIPE, the database ORDERS, the packages how many were added.
+  and the steps that touched it, and the part Claude is working on right now
+  says so while Claude works. Table names keep their casing (OrderItem reads
+  Order item) and skip a schema (public.orders reads Orders). Requirement
+  files, editable folders and local paths are not counted as packages, and
+  a command that names two env files records both. The stage uses the same
+  names: the service reads STRIPE, the database ORDERS, the packages how
+  many were added (a failed install is not).
 - **The stage says how things stand, in plain words.** The frame shows a
   status light (all good, needs a fix, needs you, working), how many files
   Claude has made, and whether the last checks passed. The light reads needs
