@@ -10,6 +10,7 @@ import { formatElapsed, stepKind } from './format'
 import { nextAsk } from './next'
 import { NextStep } from './NextStep'
 import { RecapCard } from './RecapCard'
+import { cardAsks } from './recapView'
 import { isPendingExplanation } from './pending'
 import { initialSelection, selectedId, selectionReducer, stepNumber } from './selection'
 import { initialStage, replayAdvance, stageReducer, type Replay } from './stage'
@@ -81,6 +82,7 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
   const elapsed = shown ? formatElapsed(shown.startedAt - firstAt) : '00:00'
   // LIVE only while following the newest step; a replay or an older pick reads REPLAY.
   const live = !replay && selection.follow
+  const shownRecap = live ? recap : null
   const failing = recap?.failingId ? steps.find((s) => s.id === recap.failingId) : undefined
   const recapAsk = failing ? nextAsk(failing, explanations[failing.id]) : null
   const framed = useFramed()
@@ -132,7 +134,7 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
       </div>
       <div className="stagetab__main">
         {/* how the last thing you asked stands, first on screen while following live */}
-        {live && recap ? <RecapCard recap={recap} ask={recapAsk} /> : null}
+        {shownRecap ? <RecapCard recap={shownRecap} ask={recapAsk} /> : null}
         {!framed && shown ? (
           <ReadoutPanel label="Stage readout" fields={readoutFields(readout)} note={`${tag ?? (live ? 'LIVE' : 'REPLAY')} · ${now}`} />
         ) : null}
@@ -171,6 +173,7 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
             num={cardIndex + 1}
             explanation={explanations[card.id]}
             pending={isPendingExplanation(card, explanations[card.id], explainer, readySince, routine.has(card.id))}
+            asks={cardAsks(card.id, shownRecap)}
           />
         ) : null}
       </div>
@@ -178,9 +181,10 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
   )
 }
 
-function StepDetail({ step, num, explanation, pending }: { step: FeedStep; num: number; explanation?: StepExplanation; pending: boolean }) {
+/** `asks` is false when the recap above already shows this step's ask, so it is not on screen twice. */
+function StepDetail({ step, num, explanation, pending, asks }: { step: FeedStep; num: number; explanation?: StepExplanation; pending: boolean; asks: boolean }) {
   const [open, setOpen] = useState(false)
-  const ask = nextAsk(step, explanation)
+  const ask = asks ? nextAsk(step, explanation) : null
   return (
     <PulledCard num={num} title={stepKind(step)}>
       <p className="detail__caption">{step.caption}</p>

@@ -38,3 +38,9 @@ export function recapText(r: RuleRecap): RecapText {
     address: r.url ? r.url.replace(/^https?:\/\//, '') : null,
   }
 }
+
+/**
+ * Whether the pulled card for `cardId` shows its own "what to do next". The recap on screen (null when it is not,
+ * as in a replay) already asks about its failed step, with the same words, so the card for that step leaves it out.
+ */
+export const cardAsks = (cardId: string, shownRecap: RuleRecap | null): boolean => shownRecap?.failingId !== cardId

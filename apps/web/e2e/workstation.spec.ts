@@ -27,7 +27,9 @@ function emit(payload: object) {
 test('the failed test step says what to do next', async ({ page }) => {
   await page.goto(url())
   await page.locator('select.hdr__session').selectOption('smoke-1')
-  const next = page.locator('.ds-pulled .detail__next')
+  // while following live the recap above the stage holds the failed step's ask, so it shows once, not on its card too
+  const next = page.locator('.detail__next')
+  await expect(next).toHaveCount(1)
   await expect(next).toContainText('WHAT TO DO NEXT')
   await expect(next).toContainText('npm test')
   await expect(next).toContainText('/rewind')
@@ -211,7 +213,11 @@ test('the basic session opens on where things stand: a failure still in the way,
   await expect(recap).toContainText('Something still needs a fix.')
   await expect(recap).toContainText('Checks fail')
   await expect(recap.getByRole('list', { name: 'Made or changed' })).toContainText('Checkout')
-  await expect(recap.locator('.detail__next')).toContainText('npm test')
+  // the ask is on screen once, on the recap, though the failed step's own card is pulled out below it
+  const next = page.locator('.detail__next')
+  await expect(next).toHaveCount(1)
+  await expect(next).toContainText('npm test')
+  await expect(recap.locator('.detail__next')).toHaveCount(1)
 })
 
 test('a dev server that is up gets an Open your app button', async ({ page }) => {

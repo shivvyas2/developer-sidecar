@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { RuleRecap } from '@sidecar/shared'
-import { MAX_PARTS, recapText } from '../src/recapView'
+import { cardAsks, MAX_PARTS, recapText } from '../src/recapView'
 
 const base: RuleRecap = { turnId: 'p', asked: 'Add checkout', state: 'done', outcome: 'good', built: [], packages: 0, changed: false, checks: 'none', fixes: 0 }
 let n = 0
@@ -40,5 +40,12 @@ describe('recapText', () => {
     const t = recapText({ ...base, built: [part('Shop page'), part('Shop page')] })
     expect(t.parts.map((p) => p.name)).toEqual(['Shop page', 'Shop page'])
     expect(new Set(t.parts.map((p) => p.id)).size).toBe(2)
+  })
+  test('the pulled card leaves the ask to the recap when it shows the same failed step', () => {
+    const failing = { ...base, outcome: 'failing' as const, failingId: 's9' }
+    expect(cardAsks('s9', failing)).toBe(false)
+    expect(cardAsks('s3', failing)).toBe(true)
+    // no recap on screen (a replay or an older pick): the card keeps its own ask
+    expect(cardAsks('s9', null)).toBe(true)
   })
 })
