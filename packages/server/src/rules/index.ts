@@ -1,4 +1,4 @@
-import { detectVendor, INSTALL, isRecord, packagesIn, segments, type Category, type SceneSpec, type Step, type Translation } from '@sidecar/shared'
+import { detectVendor, ENV_FILE, INSTALL, isRecord, packagesIn, segments, type Category, type SceneSpec, type Step, type Translation } from '@sidecar/shared'
 import { scenes } from '@sidecar/ui-kit/catalog'
 
 export { detectVendor, segments } from '@sidecar/shared'
@@ -62,8 +62,8 @@ const NOT_ONLY_LOOKING = new RegExp([
   /^\s*tail\b.*\s(-[a-zA-Z0-9]*[fF]|--follow)\b/.source,
 ].join('|'))
 
-/** A shell command that names a .env file: handled like the Read tool on one, as secrets, never as a quick look. */
-const ENV_FILE = /(^|[\s/'"=])\.env(\.[\w.-]+)?(?=$|[\s'";|&>)])/
+// A shell command that names a .env file (ENV_FILE, shared with the map) is handled like the Read tool on one, as
+// secrets, never as a quick look.
 
 const RULES: Rule[] = [
   {
