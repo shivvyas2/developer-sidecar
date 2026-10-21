@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest'
 import type { RuleRecap } from '@sidecar/shared'
 import { MAX_PARTS, recapText } from '../src/recapView'
 
-const base: RuleRecap = { turnId: 'p', asked: 'Add checkout', state: 'done', outcome: 'good', built: [], packages: 0, checks: 'none', fixes: 0 }
+const base: RuleRecap = { turnId: 'p', asked: 'Add checkout', state: 'done', outcome: 'good', built: [], packages: 0, changed: false, checks: 'none', fixes: 0 }
 let n = 0
 const part = (name: string, failed = false) => ({ id: `page:${++n}`, kind: 'page' as const, name, failed })
 
@@ -15,6 +15,8 @@ describe('recapText', () => {
   test('the headline says how it ended', () => {
     expect(recapText({ ...base, built: [part('Home page')] }).headline).toBe('Done.')
     expect(recapText(base).headline).toBe('Done. Nothing was changed.')
+    // README.md and package.json are not parts of the map, but editing them is still a change
+    expect(recapText({ ...base, changed: true }).headline).toBe('Done.')
     expect(recapText({ ...base, outcome: 'fixed', fixes: 2 }).headline).toBe('Done, after fixing 2 problems.')
     expect(recapText({ ...base, outcome: 'failing' }).headline).toBe('Something still needs a fix.')
     expect(recapText({ ...base, outcome: 'stopped' }).headline).toBe('Stopped before finishing.')

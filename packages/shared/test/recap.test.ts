@@ -50,6 +50,16 @@ describe('buildRecap', () => {
     ])
   })
 
+  test('a turn changed something when a create, edit or install finished, even on files the map leaves out', () => {
+    const edit = (path: string, status: RecapStep['status'] = 'ok') => step('Edit', 'edit', { file_path: `/p/${path}`, old_string: 'a', new_string: 'b' }, status)
+    const r = buildRecap([prompt('Tidy the readme'), edit('README.md'), edit('package.json')], { cwd: '/p' })!
+    expect(r).toMatchObject({ built: [], packages: 0, changed: true })
+    expect(buildRecap([prompt('x'), step('Bash', 'install', { command: 'npm install' })])!.changed).toBe(true)
+    expect(buildRecap([prompt('x'), step('NotebookEdit', 'edit', { notebook_path: '/p/a.ipynb' })])!.changed).toBe(true)
+    // reads, checks and a change that failed or was cut short changed nothing
+    expect(buildRecap([prompt('x'), step('Read', 'read', { file_path: '/p/README.md' }), check(), edit('README.md', 'failed'), edit('a.md', 'interrupted')])!.changed).toBe(false)
+  })
+
   test('a turn with no prompt is keyed by its first step, the same id the story and the server use', () => {
     const first = write('a.ts')
     expect(buildRecap([first, check()])!.turnId).toBe(first.id)

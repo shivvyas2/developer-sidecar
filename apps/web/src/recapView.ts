@@ -23,7 +23,7 @@ export function recapText(r: RuleRecap): RecapText {
     ? 'Claude is waiting for your answer in Claude Code.'
     : {
         working: 'Claude is working on it.',
-        good: r.built.length || r.packages ? 'Done.' : 'Done. Nothing was changed.',
+        good: r.changed || r.built.length || r.packages ? 'Done.' : 'Done. Nothing was changed.',
         fixed: `Done, after fixing ${plural(r.fixes, 'problem')}.`,
         failing: 'Something still needs a fix.',
         stopped: 'Stopped before finishing.',

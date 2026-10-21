@@ -1,4 +1,4 @@
-import { projectMap, type MapKind } from './project-map'
+import { makesChange, projectMap, type MapKind } from './project-map'
 import type { Attention, FeedStep } from './step'
 import { storyOf, type ChapterOutcome, type StoryStep } from './story'
 
@@ -20,6 +20,8 @@ export interface RuleRecap {
   /** Parts made or changed in this turn, in map order. Packages are counted, not listed. */
   built: RecapPart[]
   packages: number
+  /** A create, edit or install finished in this turn, including on files the map does not name (README.md). */
+  changed: boolean
   checks: 'pass' | 'fail' | 'none'
   fixes: number
   /** The local address a dev server printed, if one is running. */
@@ -99,6 +101,7 @@ export function buildRecap(steps: readonly RecapStep[], opts: { attention?: Atte
     outcome: last.outcome,
     built,
     packages,
+    changed: turnSteps.some((s) => s.status === 'ok' && makesChange(s)),
     checks: ran ? (broken ? 'fail' : 'pass') : 'none',
     fixes: last.fixes,
     ...(url ? { url } : {}),
