@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { basename } from 'node:path'
 import { buildRecap, storyOf, type ExplainerState, type RecapEntry, type ServerMessage } from '@sidecar/shared'
 import type { Hub } from '../hub'
@@ -42,6 +43,10 @@ export interface RecapperOptions {
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
+/** A decision's id from the step it cites and what was chosen, however the model words or orders it otherwise. */
+export const decisionId = (stepId: string, choice: string) =>
+  `${stepId}:decision:${createHash('sha256').update(choice.trim().toLowerCase().replace(/\s+/g, ' ')).digest('hex').slice(0, 12)}`
 
 /**
  * One AI recap per Claude turn, when the turn ends (the Stop hook), instead of an explanation per
@@ -154,11 +159,11 @@ export function createRecapper(o: RecapperOptions): Explainer {
         failures = 0
         end({ ...entry, at: now(), status: 'done', ai: recap.ai })
         const t = now()
-        for (const [i, d] of recap.decisions.entries()) {
-          // a recap may cite one step for two decisions
-          const decision = { ...d, id: `${d.stepId}:decision:${i}`, sessionId, at: t }
-          o.store.addDecision(decision)
-          o.hub.publish({ type: 'decision', decision })
+        for (const d of recap.decisions) {
+          // keyed by the step and the choice, not the place in the answer: a second recap of the turn that
+          // names it again adds nothing, and one recap may cite one step for two decisions
+          const decision = { ...d, id: decisionId(d.stepId, d.choice), sessionId, at: t }
+          if (o.store.addDecision(decision)) o.hub.publish({ type: 'decision', decision })
         }
         for (const c of recap.concepts) {
           const concept = { ...c, sessionId, at: t }

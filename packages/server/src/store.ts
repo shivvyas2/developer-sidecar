@@ -15,7 +15,8 @@ export interface Store {
   revision(sessionId: string): string
   saveExplanation(sessionId: string, stepId: string, e: StepExplanation, at: number): void
   hasExplanation(stepId: string): boolean
-  addDecision(d: DecisionEntry): void
+  /** False when a decision with its id is already stored, so it was not added. */
+  addDecision(d: DecisionEntry): boolean
   listDecisions(sessionId: string): DecisionEntry[]
   addConcept(c: GlossaryEntry): boolean
   listGlossary(sessionId: string): GlossaryEntry[]
@@ -138,7 +139,8 @@ export function openStore(path: string): Store {
     ON CONFLICT(step_id) DO UPDATE SET at = excluded.at, json = excluded.json`)
   const getExp = db.prepare('SELECT 1 AS x FROM explanations WHERE step_id = ?')
   const insDecision = db.prepare('INSERT OR IGNORE INTO decisions (id, session_id, step_id, at, json) VALUES (?, ?, ?, ?, ?)')
-  const decisionsFor = db.prepare('SELECT json FROM decisions WHERE session_id = ? ORDER BY at ASC, id ASC')
+  // at the same time, in the order they were added (a recap's decisions share its time)
+  const decisionsFor = db.prepare('SELECT json FROM decisions WHERE session_id = ? ORDER BY at ASC, rowid ASC')
   const insConcept = db.prepare('INSERT OR IGNORE INTO concepts (session_id, term_key, at, json) VALUES (?, ?, ?, ?)')
   const conceptsFor = db.prepare('SELECT json FROM concepts WHERE session_id = ? ORDER BY term_key ASC')
   // count goes up only when a call was made (pending), so pending, then done, counts once
@@ -207,7 +209,7 @@ export function openStore(path: string): Store {
       return getExp.get(stepId) !== undefined
     },
     addDecision(d) {
-      insDecision.run(d.id, d.sessionId, d.stepId, d.at, JSON.stringify(d))
+      return insDecision.run(d.id, d.sessionId, d.stepId, d.at, JSON.stringify(d)).changes > 0
     },
     listDecisions(sessionId) {
       return parseJson<DecisionEntry>(decisionsFor.all(sessionId))

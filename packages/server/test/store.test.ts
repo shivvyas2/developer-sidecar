@@ -65,7 +65,7 @@ describe('explainer data', () => {
   test('decisions list oldest first and ignore duplicate ids', () => {
     const s = openStore(':memory:')
     const d = (id: string, at: number): DecisionEntry => ({ id, sessionId: 's1', stepId: 'a', at, title: id, choice: 'c', alternatives: [], reason: 'r' })
-    s.addDecision(d('d2', 2)); s.addDecision(d('d1', 1)); s.addDecision(d('d1', 9))
+    expect([s.addDecision(d('d2', 2)), s.addDecision(d('d1', 1)), s.addDecision(d('d1', 9))]).toEqual([true, true, false])
     expect(s.listDecisions('s1').map((x) => [x.id, x.at])).toEqual([['d1', 1], ['d2', 2]])
     expect(s.listDecisions('other')).toEqual([])
   })

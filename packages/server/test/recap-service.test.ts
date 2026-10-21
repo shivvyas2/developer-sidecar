@@ -76,7 +76,7 @@ describe('one recap per turn', () => {
     expect(done).toMatchObject({ status: 'done', lastStepId: last.id, ai: { summary: 'Claude added a checkout page.', meaning: 'People can pay you now.' } })
     // nothing is failing, so the next ask is dropped
     expect(done.ai!.next).toBeUndefined()
-    expect(t.store.listDecisions('s1')).toEqual([expect.objectContaining({ stepId: last.id, choice: 'Stripe', id: `${last.id}:decision:0` })])
+    expect(t.store.listDecisions('s1')).toEqual([expect.objectContaining({ stepId: last.id, choice: 'Stripe', id: expect.stringMatching(new RegExp(`^${last.id}:decision:`)) })])
     expect(t.store.listGlossary('s1').map((g) => g.term)).toEqual(['Checkout session'])
     expect(t.store.usage()).toEqual({ input: 100, output: 40 })
   })
@@ -86,6 +86,25 @@ describe('one recap per turn', () => {
     const t = setup(fake(() => ({ ...ANSWER, decisions: [...ANSWER.decisions, second] })).provider)
     t.turn(); t.stop(); await t.settle()
     expect(t.store.listDecisions('s1').map((d) => d.choice)).toEqual(['Stripe', 'Zod'])
+  })
+
+  describe('decisions across a second recap of the turn', () => {
+    const zod = { step: 's1', title: 'Validation', choice: 'Zod', alternatives: ['Yup'], reason: 'Types for free' }
+    const prisma = { step: 's1', title: 'Database access', choice: 'Prisma', alternatives: [], reason: 'Typed queries' }
+    const twice = async (first: unknown[], second: unknown[]) => {
+      let n = 0
+      const t = setup(fake(() => ({ ...ANSWER, decisions: n++ === 0 ? first : second })).provider)
+      t.turn(); t.stop(); await t.settle()
+      t.add('s1', 'Edit', { file_path: '/work/shop/lib/a.ts', old_string: 'a', new_string: 'b' }); t.stop(); await t.settle()
+      const published = t.got.flatMap((m) => (m.type === 'decision' ? [m.decision.choice] : []))
+      return { stored: t.store.listDecisions('s1').map((d) => d.choice), published }
+    }
+    test('the same decisions in another order are neither stored nor published again', async () => {
+      expect(await twice([...ANSWER.decisions, zod], [zod, ...ANSWER.decisions])).toEqual({ stored: ['Stripe', 'Zod'], published: ['Stripe', 'Zod'] })
+    })
+    test('a new decision is kept, even where an index would have matched an old one', async () => {
+      expect(await twice([...ANSWER.decisions, zod], [prisma, ...ANSWER.decisions])).toEqual({ stored: ['Stripe', 'Zod', 'Prisma'], published: ['Stripe', 'Zod', 'Prisma'] })
+    })
   })
 
   test('the next ask is kept while a check still fails', async () => {
