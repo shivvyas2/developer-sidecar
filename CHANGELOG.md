@@ -17,7 +17,13 @@ All notable changes to Developer Sidecar are recorded here. The format follows
   a short one. Explanations already stored still show on older steps.
   Secrets are scrubbed before anything is shortened, a recap that can't
   finish says so instead of waiting forever, and a turn that ended while
-  recaps were paused gets its recap when they resume.
+  recaps were paused, or before Sidecar found the claude command, gets its
+  recap when they can run. When Claude goes on with a turn, its recap stays
+  until a new one replaces it and reads "So far", without its old request;
+  a recap that fails or can't run never takes the place of a good one. A
+  long turn's request keeps its newest failures and their output, a message
+  you queued never makes Sidecar recap the wrong turn, decisions are not
+  listed twice, and errors name recaps, not explanations.
 - **Where things stand.** The Stage opens with a card that sums up the last
   thing you asked: how it ended, the parts made or changed, building blocks
   added and whether the checks pass. When a dev server is up there is an
