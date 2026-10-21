@@ -4,6 +4,7 @@ import { checksOf, HEALTH_LIGHT, HEALTH_WORD, healthOf, nameTown, townFrom, type
 import { forStatus } from '@sidecar/ui-kit/catalog'
 import { Scene } from '@sidecar/ui-kit/react'
 import { Chip, PulledCard, ReadoutPanel, RoundButton, StepCard, StepDrawer, TickRuler } from './ds'
+import { catchesUp } from './attention'
 import { readoutFields, useFramed } from './framed'
 import { formatElapsed, stepKind } from './format'
 import { nextAsk, UNDO_HINT } from './next'
@@ -44,8 +45,9 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
   useEffect(() => { dispatch({ type: 'reset', ids }); setReplay(null); select({ type: 'reset' }) }, [sessionId, loaded])
   useEffect(() => { dispatch({ type: 'sync', ids }) }, [ids])
   // When Claude stops or needs you, the stage shows where things ended, not a scene still in line.
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new tag should catch up
-  useEffect(() => { if (liveTag === 'DONE' || liveTag === 'NEEDS YOU') dispatch({ type: 'catchUp', ids }) }, [liveTag])
+  // Keyed on attention, not the tag's words, so rewording a label can't switch it off.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new attention should catch up
+  useEffect(() => { if (catchesUp(attention)) dispatch({ type: 'catchUp', ids }) }, [attention])
   // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new request should pick
   useEffect(() => { if (pickRequest && ids.includes(pickRequest)) select({ type: 'pick', id: pickRequest, latestId }) }, [pickRequest])
 
