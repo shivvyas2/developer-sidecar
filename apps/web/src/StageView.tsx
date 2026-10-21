@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { isExplained, projectMap, routineIds, SceneSpecSchema, storyOf, type Attention, type ProjectMap, type ExplainerState, type FeedStep, type StepExplanation } from '@sidecar/shared'
+import { useEffect, useMemo, useReducer, useState } from 'react'
+import { buildRecap, isExplained, projectMap, routineIds, SceneSpecSchema, storyOf, type Attention, type ProjectMap, type ExplainerState, type FeedStep, type StepExplanation } from '@sidecar/shared'
 import { checksOf, HEALTH_LIGHT, HEALTH_WORD, healthOf, nameTown, townFrom, type Readout } from '@sidecar/ui-kit'
 import { forStatus } from '@sidecar/ui-kit/catalog'
 import { Scene } from '@sidecar/ui-kit/react'
@@ -7,7 +7,10 @@ import { Chip, PulledCard, ReadoutPanel, RoundButton, TickRuler } from './ds'
 import { catchesUp } from './attention'
 import { readoutFields, useFramed } from './framed'
 import { formatElapsed, stepKind } from './format'
-import { nextAsk, UNDO_HINT } from './next'
+import { nextAsk } from './next'
+import { NextStep } from './NextStep'
+import { RecapCard } from './RecapCard'
+import { cardAsks } from './recapView'
 import { isPendingExplanation } from './pending'
 import { initialSelection, selectedId, selectionReducer, stepNumber } from './selection'
 import { initialStage, replayAdvance, stageReducer, type Replay } from './stage'
@@ -67,6 +70,7 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
 
   const routine = useMemo(() => routineIds(steps), [steps])
   const chapters = useMemo(() => storyOf(steps, attention === 'working'), [steps, attention])
+  const recap = useMemo(() => buildRecap(steps, { ...(attention ? { attention } : {}), ...(cwd ? { cwd } : {}) }), [steps, attention, cwd])
 
   const upTo = useMemo(() => steps.slice(0, index + 1), [steps, index])
   // the whole session's map serves the newest step; only an older step or a replay builds its own
@@ -78,6 +82,9 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
   const elapsed = shown ? formatElapsed(shown.startedAt - firstAt) : '00:00'
   // LIVE only while following the newest step; a replay or an older pick reads REPLAY.
   const live = !replay && selection.follow
+  const shownRecap = live ? recap : null
+  const failing = recap?.failingId ? steps.find((s) => s.id === recap.failingId) : undefined
+  const recapAsk = failing ? nextAsk(failing, explanations[failing.id]) : null
   const framed = useFramed()
   const count = steps.length
   // Built from primitives so the SVG only re-renders when a number on the frame changes.
@@ -126,6 +133,8 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
         <StoryDrawer steps={steps} chapters={chapters} selectedId={cardIndex >= 0 ? steps[cardIndex]!.id : null} following={live} onPick={pick} />
       </div>
       <div className="stagetab__main">
+        {/* how the last thing you asked stands, first on screen while following live */}
+        {shownRecap ? <RecapCard recap={shownRecap} ask={recapAsk} /> : null}
         {!framed && shown ? (
           <ReadoutPanel label="Stage readout" fields={readoutFields(readout)} note={`${tag ?? (live ? 'LIVE' : 'REPLAY')} · ${now}`} />
         ) : null}
@@ -164,6 +173,7 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
             num={cardIndex + 1}
             explanation={explanations[card.id]}
             pending={isPendingExplanation(card, explanations[card.id], explainer, readySince, routine.has(card.id))}
+            asks={cardAsks(card.id, shownRecap)}
           />
         ) : null}
       </div>
@@ -171,9 +181,10 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
   )
 }
 
-function StepDetail({ step, num, explanation, pending }: { step: FeedStep; num: number; explanation?: StepExplanation; pending: boolean }) {
+/** `asks` is false when the recap above already shows this step's ask, so it is not on screen twice. */
+function StepDetail({ step, num, explanation, pending, asks }: { step: FeedStep; num: number; explanation?: StepExplanation; pending: boolean; asks: boolean }) {
   const [open, setOpen] = useState(false)
-  const ask = nextAsk(step, explanation)
+  const ask = asks ? nextAsk(step, explanation) : null
   return (
     <PulledCard num={num} title={stepKind(step)}>
       <p className="detail__caption">{step.caption}</p>
@@ -204,34 +215,5 @@ function StepDetail({ step, num, explanation, pending }: { step: FeedStep; num: 
         </pre>
       ) : null}
     </PulledCard>
-  )
-}
-
-/** A failed step's way forward: a request to copy into Claude Code, and Claude Code's own undo. */
-function NextStep({ ask }: { ask: string }) {
-  const [copied, setCopied] = useState<'idle' | 'copied' | 'select'>('idle')
-  const text = useRef<HTMLElement>(null)
-  const copy = () => {
-    const selectIt = () => {
-      const range = document.createRange()
-      if (text.current) range.selectNodeContents(text.current)
-      getSelection()?.removeAllRanges()
-      getSelection()?.addRange(range)
-      setCopied('select')
-    }
-    if (!navigator.clipboard) return selectIt()
-    navigator.clipboard.writeText(ask).then(() => setCopied('copied'), selectIt)
-  }
-  return (
-    <div className="detail__next">
-      <span className="ds-kicker">WHAT TO DO NEXT</span>
-      <div className="detail__ask">
-        <code ref={text}>{ask}</code>
-        <button type="button" className="detail__copy" onClick={copy}>
-          {copied === 'copied' ? 'COPIED' : copied === 'select' ? 'SELECTED, PRESS COPY' : 'COPY FOR CLAUDE'}
-        </button>
-      </div>
-      <p className="detail__undo">{UNDO_HINT}</p>
-    </div>
   )
 }

@@ -26,7 +26,10 @@ function emit(payload: object) {
 
 test('the failed test step says what to do next', async ({ page }) => {
   await page.goto(url())
+  await page.locator('select.hdr__session').selectOption('smoke-1')
+  // while following live the recap above the stage holds the failed step's ask, so it shows once, not on its card too
   const next = page.locator('.detail__next')
+  await expect(next).toHaveCount(1)
   await expect(next).toContainText('WHAT TO DO NEXT')
   await expect(next).toContainText('npm test')
   await expect(next).toContainText('/rewind')
@@ -197,4 +200,38 @@ test('the drawer tells the session as a story: chapters, a fixed problem, folded
   // the prompt header picks the prompt step
   await drawer.locator('.story__head').last().click()
   await expect(drawer.locator('.story__head').last()).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('the basic session opens on where things stand: a failure still in the way, with the ask', async ({ page }) => {
+  await page.goto(url())
+  await page.locator('select.hdr__session').selectOption('smoke-1')
+  const recap = page.getByRole('region', { name: 'Where things stand' })
+  // the permission test above left smoke-1 waiting on you, which the card says first
+  await expect(recap).toContainText('CLAUDE NEEDS YOU')
+  emit({ session_id: 'smoke-1', cwd: '/tmp/demo', hook_event_name: 'Stop' })
+  await expect(recap).toContainText('WHERE THINGS STAND')
+  await expect(recap).toContainText('Something still needs a fix.')
+  await expect(recap).toContainText('Checks fail')
+  await expect(recap.getByRole('list', { name: 'Made or changed' })).toContainText('Checkout')
+  // the ask is on screen once, on the recap, though the failed step's own card is pulled out below it
+  const next = page.locator('.detail__next')
+  await expect(next).toHaveCount(1)
+  await expect(next).toContainText('npm test')
+  await expect(recap.locator('.detail__next')).toHaveCount(1)
+})
+
+test('a dev server that is up gets an Open your app button', async ({ page }) => {
+  const base = { session_id: 'e2e-dev', cwd: '/Users/sam/site' }
+  const input = { command: 'npm run dev' }
+  const stdout = '> site@0.1.0 dev\n> next dev\n\n   - Local:        http://localhost:3000\n   - Network:      http://192.168.1.20:3000\n ✓ Ready'
+  emit({ ...base, hook_event_name: 'UserPromptSubmit', prompt: 'Start the site so I can try it' })
+  emit({ ...base, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'toolu_e2e_dev', tool_input: input })
+  emit({ ...base, hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_use_id: 'toolu_e2e_dev', tool_input: input, tool_response: { stdout, stderr: '', interrupted: false } })
+  emit({ ...base, hook_event_name: 'Stop' })
+  await page.goto(url())
+  await page.locator('select.hdr__session').selectOption('e2e-dev')
+  const open = page.getByRole('link', { name: /OPEN YOUR APP/ })
+  await expect(open).toHaveAttribute('href', 'http://localhost:3000')
+  await expect(open).toHaveAttribute('target', '_blank')
+  await expect(open).toHaveAttribute('rel', 'noopener noreferrer')
 })

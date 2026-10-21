@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { envFilesIn, packagesIn, segments, testRunsIn } from '../src/shell'
+import { envFilesIn, packagesIn, segments, startsDevServer, testRunsIn } from '../src/shell'
 
 describe('segments', () => {
   test.each<[string, string[]]>([
@@ -126,5 +126,26 @@ describe('testRunsIn', () => {
     ['echo "npm test"', []],
   ])('%s', (cmd, want) => {
     expect(testRunsIn(cmd)).toEqual(want)
+  })
+})
+
+describe('startsDevServer', () => {
+  test.each<[string, boolean]>([
+    ['npm run dev', true],
+    ['pnpm dev', true],
+    ['yarn start', true],
+    ['cd web && bun run preview', true],
+    ['npx next dev -p 4000', true],
+    ['pnpm exec vite dev', true],
+    ['python manage.py runserver', true],
+    ['flask run', true],
+    ['uvicorn app.main:app --reload', true],
+    ['npm run build', false],
+    ['npx next build', false],
+    ['node scripts/seed.js', false],
+    ['npm test', false],
+    ['echo "npm run dev"', false],
+  ])('%s', (cmd, want) => {
+    expect(startsDevServer(cmd)).toBe(want)
   })
 })
