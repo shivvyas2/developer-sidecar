@@ -14,6 +14,7 @@ import { StageTab } from './StageView'
 import { applyTheme, initialTheme, safeStorage, writeTheme, type ThemePref } from './theme'
 import { useFeed } from './useFeed'
 import { WhiteboardView } from './WhiteboardView'
+import { liveStepId } from './whiteboard'
 
 type Tab = 'stage' | 'decisions' | 'glossary' | 'whiteboard' | 'settings'
 const TABS: FolderTab[] = [
@@ -172,7 +173,7 @@ export function App() {
         {tab === 'glossary' && <div className="panel__narrow"><GlossaryView entries={sid ? state.glossary[sid] ?? [] : []} status={status} {...(project ? { project } : {})} /></div>}
         {tab === 'settings' && <div className="panel__narrow"><SettingsView explainer={explainer} selected={selectedSession} onChanged={(s) => dispatch({ type: 'explainer', state: s })} /></div>}
         {tab === 'whiteboard' && (
-          <WhiteboardView map={projectMap(steps, selectedSession?.cwd)} stepIds={steps.map((x) => x.id)} liveId={steps.at(-1)?.id ?? null} onPick={pickStep} />
+          <WhiteboardView map={projectMap(steps, selectedSession?.cwd)} stepIds={steps.map((x) => x.id)} liveId={liveStepId(steps, attention)} onPick={pickStep} />
         )}
       </main>
     </div>
