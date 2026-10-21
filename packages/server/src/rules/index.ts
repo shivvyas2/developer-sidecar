@@ -45,7 +45,8 @@ const TEST = oneOf(
   /^((python3?\s+-m|uv\s+run|poetry\s+run)\s+)?pytest\b/,
   /^(\.\/)?(bin\/)?(cargo|go|deno|make|dotnet|gradlew|gradle|mvnw|mvn|mix|swift|flutter|rails|php\s+artisan)\s+(-\S+\s+)*test\b/,
 )
-const DEPLOY = viaRunner(/(vercel|netlify\s+deploy|fly\s+deploy|flyctl\s+deploy|railway\s+up|docker\s+push|wrangler\s+deploy)\b/)
+// vercel deploys with `deploy`, a flag, a folder or nothing after it; `vercel env pull` or `vercel link` does not
+const DEPLOY = viaRunner(/(vercel(?=\s*$|\s+(deploy\b|-|\.|\/|~|\d*>))|netlify\s+deploy|fly\s+deploy|flyctl\s+deploy|railway\s+up|docker\s+push|wrangler\s+deploy)\b/)
 const RUN = oneOf(/^(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start|build|preview)\b/, viaRunner(/(next|vite)\s+(dev|build)\b/), /^python3?\s+\S+\.py\b|^node\s+\S+\.(m?js|ts)\b/)
 const BUILD = oneOf(/^(npm|pnpm|yarn|bun)\s+(run\s+)?build\b/, viaRunner(/(next|vite)\s+build\b/))
 const DATA_FILE = /(schema\.prisma|\/migrations?\/|\.sql$|drizzle|schema\.(ts|js)$|models?\.py$)/i

@@ -113,6 +113,11 @@ describe('translate', () => {
     ['bunx vite dev', bash('bunx vite dev'), 'run', /starting/i],
     ['pnpm exec vercel deploy', bash('pnpm exec vercel deploy'), 'deploy', /live/i],
     ['yarn prisma migrate', bash('yarn prisma migrate dev'), 'data', /data is stored/i],
+    ['bare vercel deploys', bash('vercel'), 'deploy', /live/i],
+    ['vercel with flags deploys', bash('vercel --yes 2>&1 | tail -5'), 'deploy', /live/i],
+    ['vercel env pull is not a deploy', bash('vercel env pull .env.local'), 'external', /secret settings/i],
+    ['vercel link is not a deploy', bash('vercel link'), 'fallback', /running a command/i],
+    ['vercel login is not a deploy', bash('npx vercel login'), 'fallback', /running a command/i],
     ['unknown tool', step('SomethingNew', {}), 'fallback', /working/i],
   ])('%s', (_n, s, category, caption) => {
     const t = translate(s)
