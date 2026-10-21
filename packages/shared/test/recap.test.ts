@@ -118,6 +118,12 @@ describe('buildRecap', () => {
       expect(buildRecap([prompt('x'), started, polled])!.url).toBe('http://localhost:3000')
       expect(buildRecap([prompt('x'), started, polled, step('KillShell', 'fallback', { shell_id: 'bash_7' })])!.url).toBeUndefined()
     })
+    test('the newer TaskOutput and TaskStop tools read and stop a background server too', () => {
+      const polled = [run('ok', 'Command running in background with ID: t1'), step('TaskOutput', 'fallback', { task_id: 't1' }, 'ok', VITE)]
+      expect(buildRecap([prompt('x'), ...polled])!.url).toBe('http://localhost:5173')
+      expect(buildRecap([prompt('x'), ...polled, step('TaskStop', 'fallback', { task_id: 't2' })])!.url).toBe('http://localhost:5173')
+      expect(buildRecap([prompt('x'), ...polled, step('TaskStop', 'fallback', { task_id: 't1' })])!.url).toBeUndefined()
+    })
     test('an address in some other step never becomes a button', () => {
       expect(buildRecap([prompt('x'), step('Bash', 'fallback', { command: 'curl -s localhost' }, 'ok', 'http://localhost:9999')])!.url).toBeUndefined()
     })

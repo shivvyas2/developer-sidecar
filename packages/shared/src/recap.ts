@@ -51,9 +51,14 @@ export function localUrl(output: unknown): string | undefined {
   return `${m[1]}://localhost:${port}${path === '/' ? '' : path}`
 }
 
-/** Tools that read or stop a background command (Claude Code runs a dev server in the background and polls it). */
-const READS_BACKGROUND = new Set(['BashOutput'])
-const STOPS_BACKGROUND = new Set(['KillShell', 'KillBash'])
+/**
+ * Claude Code's tools for a command running in the background (it runs a dev server that way and polls it),
+ * by their old and new names: reading its output, and stopping it.
+ */
+const BACKGROUND_TOOLS: { reads: ReadonlySet<string>; stops: ReadonlySet<string> } = {
+  reads: new Set(['BashOutput', 'TaskOutput']),
+  stops: new Set(['KillShell', 'KillBash', 'TaskStop']),
+}
 
 /** The background command a step names (`bash_id`, `shell_id`, `task_id`), or the one a run started. */
 function shellOf(s: RecapStep): string | undefined {
@@ -73,7 +78,7 @@ function shellOf(s: RecapStep): string | undefined {
 function serverUrl(steps: readonly RecapStep[]): string | undefined {
   let up: { url: string; command: string; shell?: string } | undefined
   for (const s of steps) {
-    if (STOPS_BACKGROUND.has(s.toolName)) {
+    if (BACKGROUND_TOOLS.stops.has(s.toolName)) {
       if (up?.shell && shellOf(s) === up.shell) up = undefined
       continue
     }
@@ -83,7 +88,7 @@ function serverUrl(steps: readonly RecapStep[]): string | undefined {
       if (startsDevServer(command) || (command && command === up?.command)) up = undefined
       continue
     }
-    if ((run || READS_BACKGROUND.has(s.toolName)) && s.status === 'ok') {
+    if ((run || BACKGROUND_TOOLS.reads.has(s.toolName)) && s.status === 'ok') {
       const url = localUrl(s.output)
       const shell = shellOf(s)
       if (url) up = { url, command, ...(shell ? { shell } : {}) }
