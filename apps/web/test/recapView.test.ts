@@ -28,4 +28,9 @@ describe('recapText', () => {
     expect(t.checks).toBe('Checks fail')
     expect(recapText({ ...base, packages: 4, checks: 'pass' })).toMatchObject({ packages: 'Added 4 building blocks', checks: 'Checks pass' })
   })
+  test('the address is shown without its scheme, http or https', () => {
+    expect(recapText(base).address).toBeNull()
+    expect(recapText({ ...base, url: 'http://localhost:3000' }).address).toBe('localhost:3000')
+    expect(recapText({ ...base, url: 'https://localhost:3000/app' }).address).toBe('localhost:3000/app')
+  })
 })

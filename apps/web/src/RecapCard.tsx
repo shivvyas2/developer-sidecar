@@ -21,7 +21,7 @@ export function RecapCard({ recap, ask }: { recap: RuleRecap; ask: string | null
       ) : null}
       {t.packages ? <p className="recap__note">{t.packages}</p> : null}
       {recap.url ? (
-        <a className="recap__open" href={recap.url} target="_blank" rel="noopener noreferrer">OPEN YOUR APP <span className="recap__url">{recap.url.replace(/^http:\/\//, '')}</span></a>
+        <a className="recap__open" href={recap.url} target="_blank" rel="noopener noreferrer">OPEN YOUR APP <span className="recap__url">{t.address}</span></a>
       ) : null}
       {ask ? <NextStep ask={ask} /> : null}
     </section>

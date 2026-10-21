@@ -8,6 +8,8 @@ export interface RecapText {
   more: number
   packages: string | null
   checks: string
+  /** Where the app is, without its scheme, for the OPEN YOUR APP button. */
+  address: string | null
 }
 
 export const MAX_PARTS = 8
@@ -33,5 +35,6 @@ export function recapText(r: RuleRecap): RecapText {
     more: Math.max(0, r.built.length - MAX_PARTS),
     packages: r.packages ? `Added ${plural(r.packages, 'building block')}` : null,
     checks: { pass: 'Checks pass', fail: 'Checks fail', none: 'No checks run yet' }[r.checks],
+    address: r.url ? r.url.replace(/^https?:\/\//, '') : null,
   }
 }

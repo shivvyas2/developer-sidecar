@@ -29,17 +29,20 @@ export interface RuleRecap {
 
 export type RecapStep = StoryStep & Pick<FeedStep, 'output'>
 
-const LOCAL_URL = /\bhttps?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):(\d{2,5})(\/[\w\-./~%]*)?/
+const LOCAL_URL = /\b(https?):\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):(\d{2,5})(\/[\w\-./~%]*)?/
 
-/** The first local address in a step's output, with 0.0.0.0 and [::1] read as localhost. Other hosts never count. */
+/**
+ * The first local address in a step's output, with 0.0.0.0 and [::1] read as localhost. Other hosts never count.
+ * The scheme is kept, since an https dev server does not answer http.
+ */
 export function localUrl(output: unknown): string | undefined {
   const text = typeof output === 'string' ? output : output === undefined ? '' : JSON.stringify(output)
   const m = text.match(LOCAL_URL)
   if (!m) return undefined
-  const port = Number(m[1])
+  const port = Number(m[2])
   if (port < 1 || port > 65535) return undefined
-  const path = (m[2] ?? '').replace(/\.+$/, '')
-  return `http://localhost:${port}${path === '/' ? '' : path}`
+  const path = (m[3] ?? '').replace(/\.+$/, '')
+  return `${m[1]}://localhost:${port}${path === '/' ? '' : path}`
 }
 
 /** Tools that read or stop a background command (Claude Code runs a dev server in the background and polls it). */

@@ -21,6 +21,9 @@ describe('localUrl', () => {
     ['http://localhost.evil.com:3000', undefined],
     [undefined, undefined],
     [{ deep: { stdout: 'http://localhost:8080' } }, 'http://localhost:8080'],
+    // an https dev server (next dev --experimental-https, Vite with server.https) only answers https
+    ['  - Local:        https://localhost:3000', 'https://localhost:3000'],
+    ['  ➜  Local:   https://127.0.0.1:5173/', 'https://localhost:5173'],
   ])('%j', (output, want) => expect(localUrl(output)).toBe(want))
 })
 
