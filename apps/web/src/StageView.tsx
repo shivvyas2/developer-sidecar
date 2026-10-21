@@ -144,8 +144,10 @@ export function StageTab({ sessionId, loaded, steps, explanations, recaps, proje
         {!framed && shown ? (
           <ReadoutPanel label="Stage readout" fields={readoutFields(readout)} note={`${tag ?? (live ? 'LIVE' : 'REPLAY')} · ${now}`} />
         ) : null}
-        {/* a tap on a place says what it is; the Legend below lists every place for keyboard and screen reader users */}
-        <section className="stagetab__stage" aria-label="Stage" onClick={(e) => { const p = placeAt(e.target as Element); if (p) setTapped(p) }}>
+        {/* a tap on a place says what it is; the Legend below lists every place for keyboard and screen reader users.
+            Read on press, not click: a playing scene redraws its SVG every frame, so by the release the shape
+            that was pressed is gone and the click lands on the stage itself. */}
+        <section className="stagetab__stage" aria-label="Stage" onPointerDown={(e) => { const p = placeAt(e.target as Element); if (p) setTapped(p) }}>
           {shown && parsed?.success ? (
             <Scene
               key={`${mode}:${shown.id}`}

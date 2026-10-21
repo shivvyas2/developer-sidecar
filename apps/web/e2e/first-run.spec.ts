@@ -49,7 +49,15 @@ test('with no sessions, the Stage plays the sample, marked SAMPLE, and it costs 
 
 test('tapping a place says what it is, and the key lists everything', async ({ page }) => {
   await page.goto(`${base}/`)
-  await page.getByRole('region', { name: 'Stage' }).locator('.sk-place--app').first().click({ force: true })
+  // A real press and release on Your app while the scene redraws it: the shape under the pointer is
+  // replaced between the two, which is when a tap used to land on nothing.
+  const app = page.getByRole('region', { name: 'Stage' }).locator('.sk-place--app').first()
+  const box = (await app.boundingBox())!
+  const pressed = await app.elementHandle()
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.waitForFunction((el) => !el?.isConnected, pressed)
+  await page.mouse.up()
   await expect(page.locator('.legend__hit')).toContainText('Your app.')
   await page.getByRole('button', { name: 'WHAT AM I LOOKING AT?' }).click()
   await expect(page.locator('.legend__row')).toHaveCount(11)
