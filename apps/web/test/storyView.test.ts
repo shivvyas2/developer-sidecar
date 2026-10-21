@@ -23,7 +23,13 @@ describe('beatTitle', () => {
     expect(beatTitle({ type: 'looked', ids: ['r1', 'g1'], phase: 'looking' }, byId)).toBe('Read 1 file, searched once')
     expect(beatTitle({ type: 'looked', ids: ['g1', 'g2'], phase: 'looking' }, byId)).toBe('Searched twice')
     expect(beatTitle({ type: 'looked', ids: ['g1', 'g2', 'g3'], phase: 'looking' }, byId)).toBe('Searched 3 times')
-    expect(beatTitle({ type: 'looked', ids: ['missing', 'gone'], phase: 'looking' }, new Map())).toBe('Searched twice')
+    expect(beatTitle({ type: 'looked', ids: ['missing', 'gone'], phase: 'looking' }, new Map())).toBe('Looked around twice')
+  })
+  test('only Grep and Glob are searches; a look from the shell (git status, cat, ls) is looking around', () => {
+    const bash = (id: string, command: string): Seen => ({ id, toolName: 'Bash', input: { command } })
+    const shell = new Map([...byId, ...[bash('b1', 'git status'), bash('b2', 'git diff'), bash('b3', 'cat README.md'), bash('b4', 'ls')].map((x) => [x.id, x] as const)])
+    expect(beatTitle({ type: 'looked', ids: ['b1', 'b2', 'b3'], phase: 'looking' }, shell)).toBe('Looked around 3 times')
+    expect(beatTitle({ type: 'looked', ids: ['b4', 'r1', 'r2', 'g1', 'g2'], phase: 'looking' }, shell)).toBe('Read 2 files, searched twice, looked around once')
   })
   test('repeat changes name the file', () => {
     expect(beatTitle({ type: 'edits', ids: ['e1', 'e2', 'e3'], file: '/p/app/api/route.ts', phase: 'building' }, byId)).toBe('Changed route.ts 3 times')

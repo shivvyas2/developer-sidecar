@@ -15,13 +15,21 @@ export function chapterLine(c: Pick<Chapter, 'stepIds' | 'fixes' | 'outcome'>): 
 }
 
 
-/** A folded beat's title in plain words: "Read 3 files, searched twice", "Changed route.ts 3 times". */
+const SEARCHES = new Set(['Grep', 'Glob'])
+const times = (n: number) => (n === 1 ? 'once' : n === 2 ? 'twice' : `${n} times`)
+
+/**
+ * A folded beat's title in plain words: "Read 3 files, searched twice", "Changed route.ts 3 times". Read counts
+ * files, Grep and Glob are searches, and any other look (`git status`, `cat`, `ls`) is looking around.
+ */
 export function beatTitle(b: Exclude<StoryBeat, { type: 'step' }>, byId: ReadonlyMap<string, Seen>): string {
   if (b.type === 'edits') return `Changed ${basename(b.file)} ${b.ids.length} times`
-  const reads = b.ids.filter((id) => byId.get(id)?.toolName === 'Read')
+  const tools = b.ids.map((id) => byId.get(id)?.toolName)
+  const reads = b.ids.filter((_, i) => tools[i] === 'Read')
   const files = new Set(reads.map((id) => fileOf(byId.get(id)?.input))).size
-  const searches = b.ids.length - reads.length
-  const parts = [files ? `read ${plural(files, 'file')}` : '', searches ? `searched ${searches === 1 ? 'once' : searches === 2 ? 'twice' : `${searches} times`}` : '']
+  const searches = tools.filter((t) => t && SEARCHES.has(t)).length
+  const looks = b.ids.length - reads.length - searches
+  const parts = [files ? `read ${plural(files, 'file')}` : '', searches ? `searched ${times(searches)}` : '', looks ? `looked around ${times(looks)}` : '']
   const text = parts.filter(Boolean).join(', ')
   return text ? text[0]!.toUpperCase() + text.slice(1) : 'Looked around'
 }
