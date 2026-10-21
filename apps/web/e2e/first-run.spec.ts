@@ -1,32 +1,20 @@
-import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
-import { createServer, type AddressInfo } from 'node:net'
+import { spawn, type ChildProcess } from 'node:child_process'
+import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
+import { callsLog, emit, freePort, ROOT, serverOf, sidecarEnv, untilRecapsReady } from './server'
 
 // Its own server on an empty home, so the workstation has never seen a session. Recaps are on, through
 // the fake claude command, to prove the demo never costs a call.
-const ROOT = resolve(import.meta.dirname, '../../..')
 let home = ''
 let base = ''
 let token = ''
 let server: ChildProcess | null = null
-const calls = () => join(home, 'claude-calls.log')
+const calls = () => callsLog(home)
 let errors: string[] = []
 
-const freePort = () => new Promise<number>((done) => {
-  const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => done(port)) })
-})
-const env = () => {
-  const { SIDECAR_EXPLAINER: _off, ...rest } = process.env
-  return { ...rest, SIDECAR_HOME: home, ANTHROPIC_API_KEY: '', SIDECAR_E2E_CALLS: calls(), PATH: `${join(ROOT, 'apps/web/e2e/fake-claude')}:${process.env.PATH ?? ''}` }
-}
 const api = async <T,>(path: string) => (await (await fetch(`${base}${path}`, { headers: { 'x-sidecar-token': token } })).json()) as T
-function emit(payload: object) {
-  const r = spawnSync(process.execPath, [join(ROOT, 'plugin/dist/emit.cjs')], { input: JSON.stringify(payload), env: env(), encoding: 'utf8', timeout: 15000 })
-  if (r.status !== 0) throw new Error(`emit exited ${r.status}: ${r.stderr}`)
-}
 const stepLabel = (page: Page) => page.locator('.ds-drawer .ds-label')
 
 test.describe.configure({ mode: 'serial' })
@@ -34,11 +22,11 @@ test.describe.configure({ mode: 'serial' })
 test.beforeAll(async () => {
   home = mkdtempSync(join(tmpdir(), 'sidecar-first-run-'))
   const port = await freePort()
-  server = spawn(process.execPath, [join(ROOT, 'plugin/dist/server.cjs')], { env: { ...env(), SIDECAR_PORT: String(port) }, stdio: 'ignore' })
-  for (let i = 0; i < 100 && !(existsSync(join(home, 'port')) && existsSync(join(home, 'token'))); i++) await new Promise((r) => setTimeout(r, 100))
-  base = `http://127.0.0.1:${readFileSync(join(home, 'port'), 'utf8').trim()}`
-  token = readFileSync(join(home, 'token'), 'utf8').trim()
-  for (let i = 0; i < 100 && (await api<{ status: string }>('/api/explainer')).status !== 'ready'; i++) await new Promise((r) => setTimeout(r, 100))
+  server = spawn(process.execPath, [join(ROOT, 'plugin/dist/server.cjs')], { env: { ...sidecarEnv(home), SIDECAR_PORT: String(port) }, stdio: 'ignore' })
+  await untilRecapsReady(home)
+  const up = serverOf(home)
+  base = up.url
+  token = up.token
 })
 test.afterAll(() => { server?.kill('SIGTERM') })
 test.beforeEach(async ({ page }) => {
@@ -78,7 +66,7 @@ test('the demo also runs with reduced motion', async ({ page }) => {
 test('the first real session replaces the demo', async ({ page }) => {
   await page.goto(`${base}/`)
   await expect(page.locator('.ds-strip', { hasText: 'SAMPLE' })).toBeVisible()
-  emit({ session_id: 'real-1', cwd: '/Users/sam/blog', hook_event_name: 'UserPromptSubmit', prompt: 'Add an about page' })
+  emit(home, { session_id: 'real-1', cwd: '/Users/sam/blog', hook_event_name: 'UserPromptSubmit', prompt: 'Add an about page' })
   await expect(page.locator('.ds-strip', { hasText: 'SAMPLE' })).toHaveCount(0)
   await expect(page.locator('.ds-drawer')).toContainText('Add an about page')
   await expect(page.getByRole('region', { name: 'Stage' }).locator('.sk-status-strip')).not.toContainText('SAMPLE')
