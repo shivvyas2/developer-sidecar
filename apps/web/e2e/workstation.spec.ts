@@ -28,11 +28,12 @@ function emit(payload: object) {
 test('the failed test step says what to do next', async ({ page }) => {
   await page.goto(url())
   await page.locator('select.hdr__session').selectOption('smoke-1')
-  // while following live the recap above the stage holds the failed step's ask, so it shows once, not on its card too
+  // while following live the recap above the stage holds the failed step's ask, so it shows once, not on its card too;
+  // the turn has ended, so it is the AI recap's ask
   const next = page.locator('.detail__next')
   await expect(next).toHaveCount(1)
   await expect(next).toContainText('WHAT TO DO NEXT')
-  await expect(next).toContainText('npm test')
+  await expect(next).toContainText('Fix the failing checks, fake edition')
   await expect(next).toContainText('/rewind')
 })
 
