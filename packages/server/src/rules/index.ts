@@ -1,4 +1,4 @@
-import { detectVendor, INSTALL, isRecord, packagesIn, segments, type Category, type SceneSpec, type Step, type Translation } from '@sidecar/shared'
+import { detectVendor, ENV_FILE, INSTALL, isRecord, packagesIn, segments, type Category, type SceneSpec, type Step, type Translation } from '@sidecar/shared'
 import { scenes } from '@sidecar/ui-kit/catalog'
 
 export { detectVendor, segments } from '@sidecar/shared'
@@ -32,18 +32,24 @@ const rawPart = (c: Ctx, re: RegExp) => c.raw[c.parts.findIndex((p) => re.test(p
 
 // Matched against one simple command at a time (see segments), from its start, so words elsewhere never count.
 // INSTALL lives in @sidecar/shared with the project map, which reads installs too.
+/** What can run a package's own command: `npx vitest`, `pnpm exec vercel`, `yarn prisma`, `bunx vite`, or nothing. */
+const RUNNER = /^((npx|bunx|bun\s+x|npm\s+exec|pnpm(\s+(exec|dlx))?|yarn(\s+dlx)?)\s+(-\S+\s+)*)?/.source
+const viaRunner = (re: RegExp) => new RegExp(RUNNER + re.source)
+const oneOf = (...res: RegExp[]) => new RegExp(res.map((r) => r.source).join('|'))
 /** A test runner in the command's runner position, so `npx playwright install` or `tsc -p tsconfig.test.json` is not a test run. */
-const TEST = new RegExp([
-  /^(npm|pnpm|yarn|bun)\s+(run\s+)?test\b/.source,
-  /^((npx|bunx|npm\s+exec|pnpm(\s+(exec|dlx))?|yarn(\s+dlx)?)\s+(-\S+\s+)*)?(vitest|jest|mocha|playwright\s+test|cypress\s+run)\b/.source,
-  /^((python3?\s+-m|uv\s+run|poetry\s+run)\s+)?pytest\b/.source,
-  /^(cargo|go|deno|make)\s+test\b/.source,
-].join('|'))
-const DEPLOY = /^(npx\s+|bunx\s+)?(vercel|netlify\s+deploy|fly\s+deploy|flyctl\s+deploy|railway\s+up|docker\s+push|wrangler\s+deploy)\b/
-const RUN = /^(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start|build|preview)\b|^(npx\s+)?(next|vite)\s+(dev|build)\b|^python3?\s+\S+\.py\b|^node\s+\S+\.(m?js|ts)\b/
-const BUILD = /^(npm|pnpm|yarn|bun)\s+(run\s+)?build\b|^(npx\s+)?(next|vite)\s+build\b/
+const TEST = oneOf(
+  // flags may take a value (`pnpm --filter web test`), and yarn picks a workspace by name
+  /^(npm|pnpm|yarn|bun)\s+(-\S+\s+(\S+\s+)?|workspace\s+\S+\s+)*(run\s+)?test\b/,
+  viaRunner(/(vitest|jest|mocha|playwright\s+test|cypress\s+run)\b/),
+  /^((python3?\s+-m|uv\s+run|poetry\s+run)\s+)?pytest\b/,
+  /^(\.\/)?(bin\/)?(cargo|go|deno|make|dotnet|gradlew|gradle|mvnw|mvn|mix|swift|flutter|rails|php\s+artisan)\s+(-\S+\s+)*test\b/,
+)
+// vercel deploys with `deploy`, a flag, a folder or nothing after it; `vercel env pull` or `vercel link` does not
+const DEPLOY = viaRunner(/(vercel(?=\s*$|\s+(deploy\b|-|\.|\/|~|\d*>))|netlify\s+deploy|fly\s+deploy|flyctl\s+deploy|railway\s+up|docker\s+push|wrangler\s+deploy)\b/)
+const RUN = oneOf(/^(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start|build|preview)\b/, viaRunner(/(next|vite)\s+(dev|build)\b/), /^python3?\s+\S+\.py\b|^node\s+\S+\.(m?js|ts)\b/)
+const BUILD = oneOf(/^(npm|pnpm|yarn|bun)\s+(run\s+)?build\b/, viaRunner(/(next|vite)\s+build\b/))
 const DATA_FILE = /(schema\.prisma|\/migrations?\/|\.sql$|drizzle|schema\.(ts|js)$|models?\.py$)/i
-const DATA_CMD = /^(npx\s+|bunx\s+|pnpm\s+(exec\s+)?)?(prisma\s+(migrate|db)|drizzle-kit|alembic|knex\s+migrate|supabase\s+db)\b/
+const DATA_CMD = viaRunner(/(prisma\s+(migrate|db)|drizzle-kit|alembic|knex\s+migrate|supabase\s+db)\b/)
 const GIT = /^(git\s+(commit|push|merge|tag|checkout\s+-b|switch\s+-c|branch)|gh\s+pr\s+(create|merge))\b/
 /** One command that only looks. Anything chained (a newline too), piped, redirected or substituted is not read-only. */
 const LOOK = /^\s*(ls|pwd|cat|head|tail|wc|tree|file|stat|which|find|grep|rg|git\s+(status|diff|log|show))\b/
@@ -56,8 +62,8 @@ const NOT_ONLY_LOOKING = new RegExp([
   /^\s*tail\b.*\s(-[a-zA-Z0-9]*[fF]|--follow)\b/.source,
 ].join('|'))
 
-/** A shell command that names a .env file: handled like the Read tool on one, as secrets, never as a quick look. */
-const ENV_FILE = /(^|[\s/'"=])\.env(\.[\w.-]+)?(?=$|[\s'";|&>)])/
+// A shell command that names a .env file (ENV_FILE, shared with the map) is handled like the Read tool on one, as
+// secrets, never as a quick look.
 
 const RULES: Rule[] = [
   {

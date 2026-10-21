@@ -18,13 +18,23 @@ All notable changes to Developer Sidecar are recorded here. The format follows
   scenes, your data (with table names), outside services, secret settings,
   checks, helpers and building blocks. Each part says whether Claude looked
   at it, made or changed it, or it needs a fix, and a tap lists its files
-  and the steps that touched it. The stage uses the same names: the service
-  reads STRIPE, the database ORDERS, the packages how many were added.
+  and the steps that touched it, and the part Claude is working on right now
+  says so while Claude works. Table names keep their casing (OrderItem reads
+  Order item) and skip a schema (public.orders reads Orders). Requirement
+  files, editable folders and local paths are not counted as packages, and
+  a command that names two env files records both. The stage uses the same
+  names: the service reads STRIPE, the database ORDERS, the packages how
+  many were added (a failed install is not).
 - **The stage says how things stand, in plain words.** The frame shows a
   status light (all good, needs a fix, needs you, working), how many files
-  Claude has made, and whether the last checks passed. Step cards say what a
-  step is (looking, new file, checks, checkpoint) instead of the tool and its
-  command, which stays under "Show technical".
+  Claude has made, and whether the last checks passed. The light reads needs
+  you whenever the banner does: while Claude waits for permission or for
+  your next message. A command you stop yourself, like a dev server closed
+  with Ctrl-C, is not counted as a failure. Step cards say what a step is
+  (looking, new file, checks, checkpoint) instead of the tool and its
+  command, which stays under "Show technical". The pane and status line
+  inside Claude Code lead with the same words, followed by the command or
+  file.
 - **Claude is waiting for you.** When Claude Code asks for permission, the
   workstation shows a banner with Claude's own words and says to answer in the
   Claude Code window. The tab title starts with "(waiting)", the session picker
@@ -76,6 +86,9 @@ All notable changes to Developer Sidecar are recorded here. The format follows
   pick the scene. Only a real test runner shows the checking scene, so
   `npx playwright install` and `tsc -p tsconfig.test.json` don't, and quoted
   package names (`pip install "django>=4"`) show up in the install caption.
+  The contents of a heredoc or a `$( )` don't pick the scene either. Test
+  runs from .NET, Gradle, Maven, Elixir, Swift, Flutter, Rails and Laravel
+  count, and `vercel env pull` or `vercel link` is no longer a deploy.
 
 ## [0.1.0] - 2026-10-15
 

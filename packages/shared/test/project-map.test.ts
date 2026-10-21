@@ -68,6 +68,10 @@ describe('what a session touched', () => {
   test('quoted package names count by name, without their quotes or version', () => {
     expect(flat([bash(`pip install "django>=4" 'requests==2.31'`, 'install')])).toEqual([['blocks', 'django'], ['blocks', 'requests']])
   })
+  test('requirement files, editable folders and local paths are not building blocks', () => {
+    const installs = ['pip install -r requirements.txt', 'pip install -e .', 'go get -u ./...', 'npm i ../local-pkg']
+    expect(flat(installs.map((c) => bash(c, 'install')))).toEqual([])
+  })
   test('only the install part of a chained command counts, and quoted words never do', () => {
     expect(flat([bash('cd app && npm i -D vitest && git commit -m "add stripe"', 'install')])).toEqual([['blocks', 'vitest']])
   })
@@ -75,9 +79,17 @@ describe('what a session touched', () => {
     const schema = write('lib/schema.ts', "export const orders = pgTable('orders', {})\nexport const lineItems = pgTable(\"line_items\", {})")
     expect(flat([schema])).toEqual([['data', 'Database tables'], ['data', 'Orders table'], ['data', 'Line items table']])
   })
+  test('camelCase table names read as words', () => {
+    const prisma = write('prisma/schema.prisma', 'model OrderItem {\n  id Int @id\n}')
+    const mongoose = write('models/schema.js', "mongoose.model('BlogPost', schema)")
+    expect(flat([prisma, mongoose]).filter(([k]) => k === 'data').map(([, n]) => n)).toEqual(['Database tables', 'Order item table', 'Blog post table'])
+  })
   test('reading an env file through the shell is seen, never changed, and its contents are not used', () => {
     const map = projectMap([bash('cat .env.example', 'external')], '/p')
     expect(map.sections).toEqual([{ kind: 'secrets', title: 'Secret settings', items: [expect.objectContaining({ name: '.env.example', state: 'seen' })] }])
+  })
+  test('every env file a command names is on the map', () => {
+    expect(flat([bash('cp .env.example .env.local', 'external')])).toEqual([['secrets', '.env.example'], ['secrets', '.env.local']])
   })
   test('web fetches name the service', () => {
     expect(flat([step('WebFetch', 'external', { url: 'https://docs.stripe.com/api' })])).toEqual([['service', 'Stripe']])
@@ -120,9 +132,18 @@ describe('helpers', () => {
   })
   test('tablesIn reads Drizzle, Prisma, SQL and Mongoose, and caps the list', () => {
     expect(tablesIn("sqliteTable('users', {})\nmodel Post {\n}\nCREATE TABLE IF NOT EXISTS \"tags\" (id int)\nmongoose.model('Comment', s)"))
-      .toEqual(['users', 'post', 'tags', 'comment'])
+      .toEqual(['users', 'Post', 'tags', 'Comment'])
     expect(tablesIn(Array.from({ length: 30 }, (_, i) => `pgTable('t${i}')`).join('\n'))).toHaveLength(12)
     expect(tablesIn('no tables here')).toEqual([])
+  })
+  test('names keep their casing and are listed once whatever the case', () => {
+    expect(tablesIn("model OrderItem {\n}\nCREATE TABLE orderitem (id int)\nmongoose.model('BlogPost', s)")).toEqual(['OrderItem', 'BlogPost'])
+  })
+  test('a schema-qualified SQL table is named by its table, not its schema', () => {
+    expect(tablesIn('CREATE TABLE public.orders (id int)')).toEqual(['orders'])
+    expect(tablesIn('create table if not exists "public"."orders" (id int)')).toEqual(['orders'])
+    expect(tablesIn('CREATE TABLE `shop`.`line_items` (id int)')).toEqual(['line_items'])
+    expect(tablesIn('CREATE TABLE [dbo].[users] (id int)')).toEqual(['users'])
   })
   test('odd input never throws', () => {
     expect(projectMap([step('Write', 'create', { file_path: 42 }), step('Bash', 'install', { command: null }), step('X', 'fallback', 'nope' as never)]).sections).toEqual([])
