@@ -12,7 +12,11 @@ const freePort = () => new Promise<number>((resolve) => {
   const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => resolve(port)) })
 })
 
-/** The server finds the claude command in the background; wait for it so no turn ends before recaps can run. */
+/**
+ * The server finds the claude command in the background. A turn that ends before then is caught up once it is
+ * found, but only each session's newest one (one call per session), and the tests count one call for every
+ * turn of the three-turn sample session, so wait for it before sending any.
+ */
 async function untilRecapsReady(home: string) {
   for (let i = 0; i < 100; i++) {
     try {

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { FeedStep, RecapEntry, ServerMessage, Step } from '@sidecar/shared'
 import { Hub } from '../src/hub'
 import { ExplainError, type ModelTask, type Provider } from '../src/explainer/providers'
-import { MAX_RECAPS_PER_TURN, RECAP_MAX_TOKENS, createRecapper } from '../src/explainer/recap'
+import { MAX_RECAPS_PER_TURN, RECAP_MAX_TOKENS, UNAVAILABLE_REASON, createRecapper } from '../src/explainer/recap'
 import { translate } from '../src/rules'
 import { memorySettings } from '../src/settings'
 import { openStore } from '../src/store'
@@ -114,9 +114,22 @@ describe('one recap per turn', () => {
   test('no call when recaps are off, switched off from outside, or there is no provider', async () => {
     for (const s of [setup(fake().provider, { level: 'off' }), setup(fake().provider, { disabledReason: 'SIDECAR_EXPLAINER=off' }), setup(null)]) {
       s.turn(); s.stop(); await s.settle()
-      expect(s.recaps()).toEqual([])
       expect(s.store.usage()).toEqual({ input: 0, output: 0 })
     }
+    // off is no recap at all; with no provider the card says why (below)
+    const off = setup(fake().provider, { level: 'off' })
+    off.turn(); off.stop(); await off.settle()
+    expect(off.recaps()).toEqual([])
+  })
+
+  test('a turn that ends before a provider is found says why, and is recapped once one arrives', async () => {
+    const t = setup(null)
+    const last = t.turn(); t.stop(); await t.settle()
+    expect(t.recaps()).toEqual([expect.objectContaining({ status: 'unavailable', reason: UNAVAILABLE_REASON, lastStepId: last.id })])
+    const f = fake()
+    t.rx.setProvider(f.provider); await t.settle()
+    expect(f.tasks).toHaveLength(1)
+    expect(t.store.listRecaps('s1')).toEqual([expect.objectContaining({ status: 'done', lastStepId: last.id })])
   })
 
   test('a repeated Stop with nothing new is not recapped again; new steps are, at most twice a turn', async () => {
@@ -225,6 +238,18 @@ describe('a continued turn keeps its recap', () => {
     expect(t.store.listRecaps('s1')).toEqual([expect.objectContaining({ status: 'done', lastStepId: newer.id })])
     // the other session's turn, which failed with a call made, is not called again
     expect(n).toBe(3)
+  })
+
+  test('without a provider, a continuation keeps the done recap, and is recapped once one is back', async () => {
+    const f = fake()
+    const t = setup(f.provider)
+    const last = t.turn(); t.stop(); await t.settle()
+    t.rx.setProvider(null)
+    const newer = more(t); t.stop(); await t.settle()
+    expect(t.store.listRecaps('s1')).toEqual([expect.objectContaining({ status: 'done', lastStepId: last.id })])
+    t.rx.setProvider(f.provider); await t.settle()
+    expect(f.tasks).toHaveLength(2)
+    expect(t.store.listRecaps('s1')).toEqual([expect.objectContaining({ status: 'done', lastStepId: newer.id })])
   })
 })
 

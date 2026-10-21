@@ -88,7 +88,7 @@ export function createRecapper(o: RecapperOptions): Explainer {
     const stale = () => at.epoch !== epoch || at.session !== (sessionEpochs.get(sessionId) ?? 0)
     const lvl = level()
     const provider = current
-    if (stopped || stale() || lvl === 'off' || !provider) return
+    if (stopped || stale() || lvl === 'off') return
 
     const all = o.store.stepsForSession(sessionId)
     const turn = storyOf(all).find((c) => c.id === turnId)
@@ -109,10 +109,10 @@ export function createRecapper(o: RecapperOptions): Explainer {
     // A done recap stays on the card until a new done one replaces it: a continuation's call that
     // fails, or can't be made, never turns a good summary into "pending" or "unavailable".
     const done = existing?.status === 'done'
-    if (paused) {
-      // saved, so catchUp recaps it once the pause is cleared
+    if (!provider || paused) {
+      // saved, so catchUp recaps it once recaps are back (a provider found late, or the pause cleared)
       if (done) missed.set(sessionId, turn.id)
-      else { missed.delete(sessionId); save({ ...entry, at: now(), status: 'unavailable', reason: paused }) }
+      else { missed.delete(sessionId); save({ ...entry, at: now(), status: 'unavailable', reason: paused ?? UNAVAILABLE_REASON }) }
       return
     }
     if (missed.get(sessionId) === turn.id) missed.delete(sessionId)
