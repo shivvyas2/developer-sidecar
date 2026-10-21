@@ -1,4 +1,4 @@
-import type { SessionSummary } from '@sidecar/shared'
+import type { Attention, SessionSummary } from '@sidecar/shared'
 import { needsYou as attentionNeedsYou } from '@sidecar/ui-kit'
 
 export const TITLE = 'Developer Sidecar'
@@ -23,6 +23,9 @@ export function liveTag(s: SessionSummary | null, offline: boolean): string | un
   if (s?.attention === 'done') return 'DONE'
   return undefined
 }
+
+/** Whether the live stage should jump to the newest step: Claude's turn ended, or it waits on you. */
+export const catchesUp = (attention: Attention | undefined): boolean => attention === 'done' || attentionNeedsYou(attention)
 
 /** The tab title, marked while any session is waiting, so a background tab still says so. */
 export const titleFor = (sessions: readonly SessionSummary[]): string =>
