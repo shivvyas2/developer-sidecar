@@ -38,7 +38,8 @@ const filesOf = (steps: readonly FeedStep[]) => steps.filter((st) => st.category
 export function readoutOf(s: ModState): Readout {
   const first = s.steps[0]
   const last = s.steps.at(-1)
-  const health = healthOf(s.steps, s.attention)
+  // Offline, the server can't say what Claude is doing, so the light shows only what the steps do.
+  const health = healthOf(s.steps, s.offline ? undefined : s.attention)
   return {
     step: s.steps.length,
     files: filesOf(s.steps),

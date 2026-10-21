@@ -39,6 +39,11 @@ test('readout says NEEDS YOU while Claude waits for a permission, and WORKING mi
   expect(readoutOf(state({ steps: [step(1)] })).status).toBe('ALL GOOD')
 })
 
+test('offline, the pane light never reads WORKING or NEEDS YOU from a stale attention', () => {
+  expect(readoutOf(state({ steps: [step(1)], attention: 'working', offline: true }))).toMatchObject({ status: 'ALL GOOD', live: false })
+  expect(readoutOf(state({ steps: [step(1)], attention: 'idle', offline: true })).status).toBe('ALL GOOD')
+})
+
 test('a dev server the person stopped is not a failure on the pane', () => {
   const stopped = step(3, { category: 'run', status: 'failed', techLabel: 'Bash: npm run dev', output: { stdout: '', stderr: '', interrupted: true } })
   expect(readoutOf(state({ steps: [step(1, { category: 'prompt' }), step(2, { category: 'edit' }), stopped] }))).toMatchObject({ status: 'ALL GOOD', light: 'ok' })
