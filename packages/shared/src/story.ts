@@ -1,4 +1,5 @@
 import { isRecord } from './hook-payload'
+import { testRunsIn } from './shell'
 import type { Category, FeedStep } from './step'
 
 /**
@@ -56,8 +57,17 @@ const commandOf = (s: StoryStep) => str(inputOf(s).command).trim().replace(/\s+/
 const finished = (s: StoryStep) => s.status === 'ok' || s.status === 'failed'
 const EDITS = new Set(['Edit', 'MultiEdit', 'NotebookEdit'])
 
-/** A passing run covers a failed one when it runs the same checks or more of them (`vitest run` covers `vitest run a.test.ts`). */
-const covers = (pass: string, failed: string) => failed === pass || failed.startsWith(`${pass} `)
+/**
+ * A passing run covers a failed one when it runs the same checks or more of them: each test run in the failed command
+ * matches a run in the passing one, or a narrower version of it (`vitest run` covers `vitest run a.test.ts`). Only the
+ * test runs count, so `cd app && npx vitest run` covers `npx vitest run`, and `npm test && npm run lint` covers `npm test`.
+ */
+function covers(pass: string, failed: string): boolean {
+  const passes = testRunsIn(pass)
+  const fails = testRunsIn(failed)
+  if (!fails.length) return failed === pass
+  return fails.every((f) => passes.some((p) => f === p || f.startsWith(`${p} `)))
+}
 
 const isLook = (s: StoryStep) => s.category === 'read' && s.status === 'ok'
 const isEdit = (s: StoryStep) => EDITS.has(s.toolName) && s.status === 'ok' && fileOf(s) !== ''

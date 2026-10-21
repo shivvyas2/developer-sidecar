@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { envFilesIn, packagesIn, segments } from '../src/shell'
+import { envFilesIn, packagesIn, segments, testRunsIn } from '../src/shell'
 
 describe('segments', () => {
   test.each<[string, string[]]>([
@@ -104,5 +104,22 @@ describe('envFilesIn', () => {
     ['ls', []],
   ])('%s', (cmd, want) => {
     expect(envFilesIn(cmd)).toEqual(want)
+  })
+})
+
+describe('testRunsIn', () => {
+  test.each<[string, string[]]>([
+    ['npx vitest run', ['vitest run']],
+    ['cd app && npx vitest run', ['vitest run']],
+    ['npm test && npm run lint', ['npm test']],
+    ['npm run test', ['npm test']],
+    ['pnpm  exec   vitest run lib/a.test.ts', ['vitest run lib/a.test.ts']],
+    ['pnpm vitest run', ['vitest run']],
+    ['npx vitest run -t "checkout total"', ['vitest run -t checkout total']],
+    ['npm test; pytest -x', ['npm test', 'pytest -x']],
+    ['npm run lint', []],
+    ['echo "npm test"', []],
+  ])('%s', (cmd, want) => {
+    expect(testRunsIn(cmd)).toEqual(want)
   })
 })

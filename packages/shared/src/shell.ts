@@ -11,6 +11,33 @@ export function envFilesIn(command: string): string[] {
 /** Install commands, matched against one simple command from its start (see segments). */
 export const INSTALL = /^(npm|pnpm|yarn|bun)\s+(i|install|add)\b|^(pip3?|uv\s+pip|poetry)\s+(install|add)\b|^python3?\s+-m\s+pip\s+install\b|^uv\s+add\b|^cargo\s+add\b|^go\s+get\b/
 
+/** What can run a package's own command: `npx vitest`, `pnpm exec vercel`, `yarn prisma`, `bunx vite`, or nothing. */
+const RUNNER = /^((npx|bunx|bun\s+x|npm\s+exec|pnpm(\s+(exec|dlx))?|yarn(\s+dlx)?)\s+(-\S+\s+)*)?/.source
+/** The command after RUNNER, from a simple command's start. */
+export const viaRunner = (re: RegExp) => new RegExp(RUNNER + re.source)
+export const oneOf = (...res: RegExp[]) => new RegExp(res.map((r) => r.source).join('|'))
+/** A test runner in the command's runner position, so `npx playwright install` or `tsc -p tsconfig.test.json` is not a test run. */
+export const TEST = oneOf(
+  // flags may take a value (`pnpm --filter web test`), and yarn picks a workspace by name
+  /^(npm|pnpm|yarn|bun)\s+(-\S+\s+(\S+\s+)?|workspace\s+\S+\s+)*(run\s+)?test\b/,
+  viaRunner(/(vitest|jest|mocha|playwright\s+test|cypress\s+run)\b/),
+  /^((python3?\s+-m|uv\s+run|poetry\s+run)\s+)?pytest\b/,
+  /^(\.\/)?(bin\/)?(cargo|go|deno|make|dotnet|gradlew|gradle|mvnw|mvn|mix|swift|flutter|rails|php\s+artisan)\s+(-\S+\s+)*test\b/,
+)
+
+/**
+ * The test runs in a shell line, one per simple command that runs tests, spelled one way: `cd app && npx vitest run`
+ * gives `vitest run`, and `npm run test` gives `npm test`. Quoted text is kept, so `-t "login"` still tells runs apart.
+ */
+export function testRunsIn(command: string): string[] {
+  const raw = segments(command, { raw: true })
+  return segments(command).flatMap((p, i) => (TEST.test(p) ? [raw[i]!] : []))
+    .map((t) => t.replace(/\s+/g, ' ')
+      .replace(/^(npx|bunx|bun x|npm exec|pnpm (exec|dlx)|yarn (exec|dlx)) /, '')
+      .replace(/^(pnpm|yarn) (?=(vitest|jest|mocha|playwright|cypress)\b)/, '')
+      .replace(/^(npm|pnpm|yarn|bun) run (?=test\b)/, '$1 '))
+}
+
 /** What runs before the command itself: env assignments, and `sudo`, `env`, `time` or `exec` with their flags. */
 const PREFIX = /^\s*(?:(?:\w+=(?:"[^"]*"|'[^']*'|\$\([^)]*\)|`[^`]*`|[^\s"'`])*|(?:sudo|env)(?:\s+-[uCgS]\s+\S+|\s+-\S+)*|time|exec)\s+)*/
 

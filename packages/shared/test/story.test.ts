@@ -66,6 +66,19 @@ describe('problem, then fixed', () => {
     expect(c.fixes).toBe(1)
     expect(c.beats.filter((b) => b.type === 'step' && b.fixedBy === pass.id)).toHaveLength(2)
   })
+  test('the same checks run another way still fix it: after cd, chained, or through npm run', () => {
+    const fixes = (failed: string, passed: string) => storyOf([prompt('x'), check(failed, 'failed'), check(passed)])[0]!.fixes
+    expect(fixes('npx vitest run', 'cd app && npx vitest run')).toBe(1)
+    expect(fixes('npm test', 'npm test && npm run lint')).toBe(1)
+    expect(fixes('npm test', 'npm run test')).toBe(1)
+    expect(fixes('pnpm run test', 'pnpm test')).toBe(1)
+    expect(fixes('npx vitest run lib/a.test.ts', 'pnpm exec vitest run')).toBe(1)
+    expect(fixes('cd app && npm test -- lib/a.test.ts', 'cd app && npm test')).toBe(1)
+  })
+  test('quoted text still tells two runs apart', () => {
+    const c = storyOf([prompt('x'), check('npx vitest run -t "checkout total"', 'failed'), check('npx vitest run -t "login"')])[0]!
+    expect(c.fixes).toBe(0)
+  })
   test('a narrower or different run does not fix a broader failure', () => {
     const c = storyOf([prompt('x'), check('npx vitest run', 'failed'), check('npx vitest run lib/a.test.ts'), check('npm run lint')])[0]!
     expect(c.fixes).toBe(0)
