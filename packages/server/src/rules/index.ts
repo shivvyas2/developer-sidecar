@@ -97,6 +97,8 @@ export function segments(cmd: string, o: { raw?: boolean } = {}): string[] {
   const stack: { kind: string; open: number }[] = []
   // heredoc delimiters whose bodies start at the next newline
   let heredocs: string[] = []
+  // the closing brackets of the subshells and { } groups open at the top level
+  const groups: string[] = []
   const cut = () => { out.push({ blank: cur, raw }); cur = ''; raw = '' }
   // top-level text is kept as is; anything inside a quote or substitution is blanked
   const put = (text: string, mark = text) => { cur += stack.length ? ' '.repeat(text.length) : text; raw += mark }
@@ -146,6 +148,15 @@ export function segments(cmd: string, o: { raw?: boolean } = {}): string[] {
       put(ch)
       continue
     }
+    // subshell and group brackets go, both ends, so `(cd app && npm i x)` names x, not x)
+    const opensGroup = ch === '(' || (ch === '{' && !cur.trim() && /\s/.test(cmd[i + 1] ?? ''))
+    const closesGroup = groups.at(-1) === ch && (ch === ')' || !cur.trim())
+    if (opensGroup || closesGroup) {
+      if (opensGroup) groups.push(ch === '(' ? ')' : '}'); else groups.pop()
+      cur += ' '
+      raw += ' '
+      continue
+    }
     if (two === '&&' || two === '||') { cut(); i++; continue }
     // a lone & runs in the background, but 2>&1 and &> are redirections
     const background = ch === '&' && !/[<>]/.test(cmd[i - 1] ?? '') && cmd[i + 1] !== '>'
@@ -155,7 +166,7 @@ export function segments(cmd: string, o: { raw?: boolean } = {}): string[] {
   cut()
   return out.flatMap((s) => {
     const end = s.blank.trimEnd().length
-    const start = s.blank.slice(0, end).match(/^\s*(?:[({]\s*)?(?:\w+=(?:"[^"]*"|'[^']*'|\$\([^)]*\)|`[^`]*`|[^\s"'`])*\s+)*(?:(?:sudo|time|exec)\s+)?\s*/)![0].length
+    const start = s.blank.slice(0, end).match(/^\s*(?:\w+=(?:"[^"]*"|'[^']*'|\$\([^)]*\)|`[^`]*`|[^\s"'`])*\s+)*(?:(?:sudo|time|exec)\s+)?\s*/)![0].length
     if (start >= end) return []
     return [o.raw ? s.raw.slice(start, end).replaceAll('\0', '').trim() : s.blank.slice(start, end)]
   })

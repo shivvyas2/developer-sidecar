@@ -118,6 +118,7 @@ describe('translate', () => {
     ['vercel env pull is not a deploy', bash('vercel env pull .env.local'), 'external', /secret settings/i],
     ['vercel link is not a deploy', bash('vercel link'), 'fallback', /running a command/i],
     ['vercel login is not a deploy', bash('npx vercel login'), 'fallback', /running a command/i],
+    ['a subshell install names only its packages', bash('(cd app && npm install stripe)'), 'install', /: stripe$/],
     ['a heredoc body is file contents, not a command', bash(`cat > README.md <<'EOF'\n## Install\nnpm install foo\nEOF`), 'fallback', /running a command/i],
     ['a command after a heredoc still counts', bash(`cat > notes.txt <<EOF\nnpm test\nEOF\nnpm install zod`), 'install', /: zod$/],
     ['a command substitution is not the command', bash('FOO=$(cd x && npm test)'), 'fallback', /running a command/i],
@@ -185,7 +186,9 @@ describe('segments', () => {
     ['cd app && NODE_ENV=test FOO=1 npm test', ['cd app', 'npm test']],
     ['sudo npm install -g pnpm', ['npm install -g pnpm']],
     [`MSG="a b" X='' npm test`, ['npm test']],
-    ['(cd web && npm run build)', ['cd web', 'npm run build)']],
+    ['(cd web && npm run build)', ['cd web', 'npm run build']],
+    ['{ cd web; npm test; } && (ls)', ['cd web', 'npm test', 'ls']],
+    ['echo {a,b} $((1 + 2))', ['echo {a,b} $(       )']],
     ['npm install \\\n  stripe', ['npm install \\\n  stripe']],
   ])('%j', (cmd, want) => {
     expect(segments(cmd)).toEqual(want)
