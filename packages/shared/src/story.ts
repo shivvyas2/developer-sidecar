@@ -1,4 +1,5 @@
 import { isRecord } from './hook-payload'
+import { fileOf, str } from './input'
 import { testRunsIn } from './shell'
 import { isStopped, type Category, type FeedStep } from './step'
 
@@ -50,9 +51,7 @@ export const PHASE_TITLE: Record<StoryPhase, string> = {
   looking: 'Looking around', building: 'Building', checking: 'Checking', saving: 'Saving', other: 'Working',
 }
 
-const str = (v: unknown) => (typeof v === 'string' ? v : '')
 const inputOf = (s: StoryStep) => (isRecord(s.input) ? s.input : {})
-const fileOf = (s: StoryStep) => str(inputOf(s).file_path) || str(inputOf(s).notebook_path)
 const commandOf = (s: StoryStep) => str(inputOf(s).command).trim().replace(/\s+/g, ' ')
 /** Ran to the end; a step the person stopped did not, whatever its status says. */
 const finished = (s: StoryStep) => (s.status === 'ok' || s.status === 'failed') && !isStopped(s)
@@ -71,7 +70,7 @@ function covers(pass: string, failed: string): boolean {
 }
 
 const isLook = (s: StoryStep) => s.category === 'read' && s.status === 'ok'
-const isEdit = (s: StoryStep) => EDITS.has(s.toolName) && s.status === 'ok' && fileOf(s) !== ''
+const isEdit = (s: StoryStep) => EDITS.has(s.toolName) && s.status === 'ok' && fileOf(s.input) !== ''
 
 function beatsOf(steps: readonly StoryStep[]): { beats: StoryBeat[]; fixes: number; broken: number } {
   const beats: StoryBeat[] = []
@@ -89,9 +88,9 @@ function beatsOf(steps: readonly StoryStep[]): { beats: StoryBeat[]; fixes: numb
       if (single && isLook(single)) { beats[beats.length - 1] = { type: 'looked', ids: [single.id, s.id], phase: 'looking' }; continue }
     }
     if (isEdit(s)) {
-      if (last?.type === 'edits' && last.file === fileOf(s)) { last.ids.push(s.id); continue }
-      if (single && isEdit(single) && fileOf(single) === fileOf(s)) {
-        beats[beats.length - 1] = { type: 'edits', ids: [single.id, s.id], file: fileOf(s), phase: 'building' }
+      if (last?.type === 'edits' && last.file === fileOf(s.input)) { last.ids.push(s.id); continue }
+      if (single && isEdit(single) && fileOf(single.input) === fileOf(s.input)) {
+        beats[beats.length - 1] = { type: 'edits', ids: [single.id, s.id], file: fileOf(s.input), phase: 'building' }
         continue
       }
     }

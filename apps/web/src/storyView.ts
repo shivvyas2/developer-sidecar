@@ -1,4 +1,4 @@
-import { beatIds, PHASE_TITLE, type Chapter, type ChapterOutcome, type FeedStep, type StoryBeat } from '@sidecar/shared'
+import { basename, beatIds, fileOf, PHASE_TITLE, type Chapter, type ChapterOutcome, type FeedStep, type StoryBeat } from '@sidecar/shared'
 
 type Seen = Pick<FeedStep, 'id' | 'toolName' | 'input'>
 
@@ -14,17 +14,12 @@ export function chapterLine(c: Pick<Chapter, 'stepIds' | 'fixes' | 'outcome'>): 
   return `${plural(c.stepIds.length, 'step')}${fixes} · ${OUTCOME_TEXT[c.outcome]}`
 }
 
-const basename = (p: string) => p.split(/[\\/]/).pop() ?? p
-const fileOf = (s: Seen | undefined) => {
-  const i = s?.input
-  return i && typeof i === 'object' && 'file_path' in i && typeof i.file_path === 'string' ? i.file_path : ''
-}
 
 /** A folded beat's title in plain words: "Read 3 files, searched twice", "Changed route.ts 3 times". */
 export function beatTitle(b: Exclude<StoryBeat, { type: 'step' }>, byId: ReadonlyMap<string, Seen>): string {
   if (b.type === 'edits') return `Changed ${basename(b.file)} ${b.ids.length} times`
   const reads = b.ids.filter((id) => byId.get(id)?.toolName === 'Read')
-  const files = new Set(reads.map((id) => fileOf(byId.get(id)))).size
+  const files = new Set(reads.map((id) => fileOf(byId.get(id)?.input))).size
   const searches = b.ids.length - reads.length
   const parts = [files ? `read ${plural(files, 'file')}` : '', searches ? `searched ${searches === 1 ? 'once' : searches === 2 ? 'twice' : `${searches} times`}` : '']
   const text = parts.filter(Boolean).join(', ')
