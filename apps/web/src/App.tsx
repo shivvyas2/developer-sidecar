@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
-import { projectMap } from '@sidecar/shared'
+import { useEffect, useMemo, useState } from 'react'
+import { projectMap, type FeedStep } from '@sidecar/shared'
 import { saveSettings } from './api'
-import { attentionNotice, liveTag, sessionMark, titleFor } from './attention'
+import { attentionNotice, liveAttention, liveTag, sessionMark, titleFor } from './attention'
 import { SidecarMark } from './brand/Brand'
 import { DecisionsView } from './DecisionsView'
 import { FolderTabs, StatusStrip, ThemeToggle, type FolderTab } from './ds'
@@ -14,6 +14,7 @@ import { StageTab } from './StageView'
 import { applyTheme, initialTheme, safeStorage, writeTheme, type ThemePref } from './theme'
 import { useFeed } from './useFeed'
 import { WhiteboardView } from './WhiteboardView'
+import { liveStepId } from './whiteboard'
 
 type Tab = 'stage' | 'decisions' | 'glossary' | 'whiteboard' | 'settings'
 const TABS: FolderTab[] = [
@@ -60,6 +61,8 @@ function useTheme(): [ThemePref, (p: ThemePref) => void] {
   return [pref, change]
 }
 
+const NO_STEPS: FeedStep[] = []
+
 const projectName = (cwd: string, id: string) => cwd.split('/').filter(Boolean).pop() || id
 
 export function App() {
@@ -73,15 +76,19 @@ export function App() {
   const [theme, setTheme] = useTheme()
   const title = titleFor(state.sessions)
   useEffect(() => { document.title = title }, [title])
-  if (hash === '#/kit') return <Kit />
   const sid = state.selected
-  const steps = sid ? state.steps[sid] ?? [] : []
+  const steps = sid ? state.steps[sid] ?? NO_STEPS : NO_STEPS
+  const selectedSession = state.sessions.find((x) => x.id === sid) ?? null
+  const cwd = selectedSession?.cwd
+  // Built once per new step, not on every render: the map reads every schema Claude wrote.
+  const map = useMemo(() => projectMap(steps, cwd), [steps, cwd])
+  if (hash === '#/kit') return <Kit />
   const explainer = state.explainer
   const status = explainer?.status ?? null
-  const selectedSession = state.sessions.find((x) => x.id === sid) ?? null
   const project = selectedSession ? projectName(selectedSession.cwd, selectedSession.id) : undefined
   const notice = attentionNotice(selectedSession)
   const tag = liveTag(selectedSession, offline)
+  const attention = liveAttention(selectedSession, offline)
   const fresh = state.sessions.find((x) => x.id === state.newSession) ?? null
   const resume = () => {
     if (!explainer) return
@@ -162,8 +169,9 @@ export function App() {
             readySince={state.readySince}
             pickRequest={pickRequest}
             {...(tag ? { liveTag: tag } : {})}
-            {...(selectedSession?.attention ? { attention: selectedSession.attention } : {})}
-            {...(selectedSession?.cwd ? { cwd: selectedSession.cwd } : {})}
+            {...(attention ? { attention } : {})}
+            {...(cwd ? { cwd } : {})}
+            map={map}
             {...(project ? { project } : {})}
           />
         )}
@@ -171,7 +179,7 @@ export function App() {
         {tab === 'glossary' && <div className="panel__narrow"><GlossaryView entries={sid ? state.glossary[sid] ?? [] : []} status={status} {...(project ? { project } : {})} /></div>}
         {tab === 'settings' && <div className="panel__narrow"><SettingsView explainer={explainer} selected={selectedSession} onChanged={(s) => dispatch({ type: 'explainer', state: s })} /></div>}
         {tab === 'whiteboard' && (
-          <WhiteboardView map={projectMap(steps, selectedSession?.cwd)} stepIds={steps.map((x) => x.id)} liveId={steps.at(-1)?.id ?? null} onPick={pickStep} />
+          <WhiteboardView map={map} stepIds={steps.map((x) => x.id)} liveId={liveStepId(steps, attention)} onPick={pickStep} />
         )}
       </main>
     </div>

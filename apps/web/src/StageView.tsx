@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useReducer, useState } from 'react'
-import { buildRecap, isExplained, projectMap, routineIds, SceneSpecSchema, storyOf, type Attention, type ExplainerState, type FeedStep, type StepExplanation } from '@sidecar/shared'
+import { buildRecap, isExplained, projectMap, routineIds, SceneSpecSchema, storyOf, type Attention, type ProjectMap, type ExplainerState, type FeedStep, type StepExplanation } from '@sidecar/shared'
 import { checksOf, HEALTH_LIGHT, HEALTH_WORD, healthOf, nameTown, townFrom, type Readout } from '@sidecar/ui-kit'
 import { forStatus } from '@sidecar/ui-kit/catalog'
 import { Scene } from '@sidecar/ui-kit/react'
 import { Chip, PulledCard, ReadoutPanel, RoundButton, TickRuler } from './ds'
+import { catchesUp } from './attention'
 import { readoutFields, useFramed } from './framed'
 import { formatElapsed, stepKind } from './format'
 import { nextAsk } from './next'
@@ -32,10 +33,12 @@ export interface StageTabProps {
   attention?: Attention
   /** The session's folder, so the town can name parts from paths relative to it. */
   cwd?: string
+  /** The project map for all of `steps`, so the stage need not rebuild it while it shows the newest step. */
+  map?: ProjectMap
 }
 
 /** Layout B: the step drawer on the left; the framed stage, replay ruler and pulled-out card on the right. */
-export function StageTab({ sessionId, loaded, steps, explanations, explainer, readySince, project, pickRequest, liveTag, attention, cwd }: StageTabProps) {
+export function StageTab({ sessionId, loaded, steps, explanations, explainer, readySince, project, pickRequest, liveTag, attention, cwd, map }: StageTabProps) {
   const [stage, dispatch] = useReducer(stageReducer, initialStage)
   const [selection, select] = useReducer(selectionReducer, initialSelection)
   const [replay, setReplay] = useState<Replay | null>(null)
@@ -47,8 +50,9 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
   useEffect(() => { dispatch({ type: 'reset', ids }); setReplay(null); select({ type: 'reset' }) }, [sessionId, loaded])
   useEffect(() => { dispatch({ type: 'sync', ids }) }, [ids])
   // When Claude stops or needs you, the stage shows where things ended, not a scene still in line.
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new tag should catch up
-  useEffect(() => { if (liveTag === 'DONE' || liveTag === 'NEEDS YOU') dispatch({ type: 'catchUp', ids }) }, [liveTag])
+  // Keyed on attention, not the tag's words, so rewording a label can't switch it off.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new attention should catch up
+  useEffect(() => { if (catchesUp(attention)) dispatch({ type: 'catchUp', ids }) }, [attention])
   // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new request should pick
   useEffect(() => { if (pickRequest && ids.includes(pickRequest)) select({ type: 'pick', id: pickRequest, latestId }) }, [pickRequest])
 
@@ -68,7 +72,8 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
   const recap = useMemo(() => buildRecap(steps, { ...(attention ? { attention } : {}), ...(cwd ? { cwd } : {}) }), [steps, attention, cwd])
 
   const upTo = useMemo(() => steps.slice(0, index + 1), [steps, index])
-  const town = useMemo(() => nameTown(townFrom(upTo), projectMap(upTo, cwd)), [upTo, cwd])
+  // the whole session's map serves the newest step; only an older step or a replay builds its own
+  const town = useMemo(() => nameTown(townFrom(upTo), map && upTo.length === steps.length ? map : projectMap(upTo, cwd)), [upTo, steps.length, map, cwd])
   const files = useMemo(() => upTo.filter((s) => s.category === 'create' && s.status === 'ok').length, [upTo])
   const checks = useMemo(() => checksOf(upTo), [upTo])
   const now = shown ? stepKind(shown) : ''

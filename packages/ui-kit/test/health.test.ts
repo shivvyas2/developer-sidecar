@@ -1,9 +1,11 @@
 import { describe, expect, test } from 'vitest'
-import type { FeedStep } from '@sidecar/shared'
-import { checksOf, HEALTH_WORD, healthOf } from '../src/health'
+import { storyOf, type FeedStep } from '@sidecar/shared'
+import { checksOf, HEALTH_WORD, healthOf, needsYou } from '../src/health'
 
-type S = Pick<FeedStep, 'category' | 'status'>
+type S = Pick<FeedStep, 'category' | 'status' | 'output'>
 const s = (category: S['category'], status: S['status'] = 'ok'): S => ({ category, status })
+/** A command the person cancelled: the hook reports it as a failure with `interrupted: true`. */
+const stopped = (category: S['category']): S => ({ category, status: 'failed', output: { stdout: '', stderr: '', interrupted: true } })
 
 describe('checksOf', () => {
   test('none before any check run', () => expect(checksOf([s('prompt'), s('create')])).toBe('none'))
@@ -14,11 +16,19 @@ describe('checksOf', () => {
   test('a run still going, or cut short, does not count', () => {
     expect(checksOf([s('test', 'failed'), s('test', 'running')])).toBe('fail')
     expect(checksOf([s('test'), s('test', 'interrupted')])).toBe('pass')
+    expect(checksOf([s('test'), stopped('test')])).toBe('pass')
   })
 })
 
+test('needsYou: a permission prompt or an idle turn waits on the person', () => {
+  expect((['permission', 'idle', 'working', 'done', undefined] as const).map(needsYou)).toEqual([true, true, false, false, false])
+})
+
 describe('healthOf', () => {
-  test('waiting for permission beats everything', () => expect(healthOf([s('test', 'failed')], 'permission')).toBe('you'))
+  test('waiting for permission or for your next message beats everything', () => {
+    expect(healthOf([s('test', 'failed')], 'permission')).toBe('you')
+    expect(healthOf([s('create')], 'idle')).toBe('you')
+  })
   test('failed checks need a fix until a later run passes', () => {
     expect(healthOf([s('test', 'failed'), s('edit')])).toBe('fix')
     expect(healthOf([s('test', 'failed'), s('edit'), s('test')])).toBe('ok')
@@ -30,13 +40,33 @@ describe('healthOf', () => {
   test('reads, prompts, running and interrupted steps say nothing', () => {
     expect(healthOf([s('edit', 'failed'), s('read', 'failed'), s('prompt'), s('run', 'interrupted'), s('test', 'running')])).toBe('fix')
   })
+  test('a command the person stopped is not a failure', () => {
+    expect(healthOf([s('prompt'), s('edit'), stopped('run')])).toBe('ok')
+    expect(healthOf([s('test'), stopped('test')])).toBe('ok')
+    expect(healthOf([s('edit', 'failed'), stopped('run')])).toBe('fix')
+    expect(healthOf([s('run', 'failed'), s('read')])).toBe('fix')
+  })
   test('working while Claude works, all good once it stops', () => {
     expect(healthOf([s('create')], 'working')).toBe('working')
     expect(healthOf([s('create')], 'done')).toBe('ok')
-    expect(healthOf([], 'idle')).toBe('ok')
     expect(healthOf([])).toBe('ok')
   })
   test('every state has a word that fits the frame', () => {
     for (const w of Object.values(HEALTH_WORD)) expect(w.length).toBeLessThanOrEqual(12)
   })
+})
+
+test('a chapter never reads failing while the readout says the checks pass and all is good', () => {
+  let n = 0
+  const at = (toolName: string, category: FeedStep['category'], input: Record<string, unknown>, status: FeedStep['status'] = 'ok') =>
+    ({ id: `h${++n}`, toolName, category, status, input })
+  const steps = [
+    at('UserPrompt', 'prompt', { prompt: 'fix the tests' }),
+    at('Bash', 'test', { command: 'npm test' }, 'failed'),
+    at('Edit', 'edit', { file_path: '/p/a.ts' }),
+    at('Bash', 'test', { command: 'npx vitest run' }),
+  ]
+  expect(checksOf(steps)).toBe('pass')
+  expect(healthOf(steps)).toBe('ok')
+  expect(storyOf(steps)[0]!.outcome).not.toBe('failing')
 })

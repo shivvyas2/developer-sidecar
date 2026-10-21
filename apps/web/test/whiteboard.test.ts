@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { ProjectMap } from '@sidecar/shared'
-import { boardFrom, STATE_TEXT } from '../src/whiteboard'
+import { boardFrom, liveStepId, STATE_TEXT } from '../src/whiteboard'
 
 const map: ProjectMap = {
   sections: [
@@ -33,5 +33,28 @@ describe('boardFrom', () => {
   })
   test('state words are plain', () => {
     for (const t of Object.values(STATE_TEXT)) expect(t).toMatch(/^[a-z ]+$/)
+  })
+})
+
+describe('liveStepId', () => {
+  const steps = [{ id: 'a', status: 'ok' as const }, { id: 'b', status: 'ok' as const }]
+  const running = [{ id: 'a', status: 'ok' as const }, { id: 'b', status: 'running' as const }]
+  test('the newest step is live while Claude is working', () => {
+    expect(liveStepId(steps, 'working')).toBe('b')
+  })
+  test('a finished or idle session has no live part, even with a step left running', () => {
+    for (const attention of ['done', 'idle'] as const) {
+      expect(liveStepId(steps, attention)).toBeNull()
+      expect(liveStepId(running, attention)).toBeNull()
+    }
+  })
+  test('without a working attention, only a running newest step is live', () => {
+    expect(liveStepId(steps, undefined)).toBeNull()
+    expect(liveStepId(running, undefined)).toBe('b')
+    expect(liveStepId(running, 'permission')).toBe('b')
+    expect(liveStepId(steps, 'permission')).toBeNull()
+  })
+  test('no steps, no live part', () => {
+    expect(liveStepId([], 'working')).toBeNull()
   })
 })

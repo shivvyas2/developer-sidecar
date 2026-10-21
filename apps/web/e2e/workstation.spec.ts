@@ -189,6 +189,12 @@ test('the drawer tells the session as a story: chapters, a fixed problem, folded
   await ruler.press('Home')
   for (let i = 0; i < 13; i++) await ruler.press('ArrowRight')
   await expect(edits).toHaveAttribute('aria-expanded', 'true')
+  // folded again by hand, moving to the next step inside it opens it again, so the picked card shows
+  await edits.click()
+  await expect(edits).toHaveAttribute('aria-expanded', 'false')
+  await ruler.press('ArrowRight')
+  await expect(edits).toHaveAttribute('aria-expanded', 'true')
+  await expect(edits.locator('xpath=..').locator('button.ds-step[aria-pressed="true"]')).toHaveCount(1)
   // the prompt header picks the prompt step
   await drawer.locator('.story__head').last().click()
   await expect(drawer.locator('.story__head').last()).toHaveAttribute('aria-pressed', 'true')

@@ -9,6 +9,8 @@ const read = (status: StoryStep['status'] = 'ok') => step('Read', 'read', { file
 const edit = (file: string, status: StoryStep['status'] = 'ok') => step('Edit', 'edit', { file_path: file }, status)
 const write = (file: string) => step('Write', 'create', { file_path: file })
 const check = (command: string, status: StoryStep['status'] = 'ok') => step('Bash', 'test', { command }, status)
+/** A run the person cancelled: the hook reports it as failed, with `interrupted: true` in its output. */
+const stoppedCheck = (command: string): StoryStep => ({ ...check(command, 'failed'), output: { stdout: '', stderr: '', interrupted: true } })
 const types = (steps: StoryStep[]) => storyOf(steps)[0]!.beats.map((b) => (b.type === 'step' ? 'step' : `${b.type}:${b.ids.length}`))
 
 describe('chapters', () => {
@@ -66,14 +68,28 @@ describe('problem, then fixed', () => {
     expect(c.fixes).toBe(1)
     expect(c.beats.filter((b) => b.type === 'step' && b.fixedBy === pass.id)).toHaveLength(2)
   })
+  test('the same checks run another way still fix it: after cd, chained, or through npm run', () => {
+    const fixes = (failed: string, passed: string) => storyOf([prompt('x'), check(failed, 'failed'), check(passed)])[0]!.fixes
+    expect(fixes('npx vitest run', 'cd app && npx vitest run')).toBe(1)
+    expect(fixes('npm test', 'npm test && npm run lint')).toBe(1)
+    expect(fixes('npm test', 'npm run test')).toBe(1)
+    expect(fixes('pnpm run test', 'pnpm test')).toBe(1)
+    expect(fixes('npx vitest run lib/a.test.ts', 'pnpm exec vitest run')).toBe(1)
+    expect(fixes('cd app && npm test -- lib/a.test.ts', 'cd app && npm test')).toBe(1)
+  })
+  test('quoted text still tells two runs apart', () => {
+    const c = storyOf([prompt('x'), check('npx vitest run -t "checkout total"', 'failed'), check('npx vitest run -t "login"')])[0]!
+    expect(c.fixes).toBe(0)
+  })
   test('a narrower or different run does not fix a broader failure', () => {
-    const c = storyOf([prompt('x'), check('npx vitest run', 'failed'), check('npx vitest run lib/a.test.ts'), check('npm run lint')])[0]!
+    const c = storyOf([prompt('x'), check('npx vitest run', 'failed'), check('npx vitest run lib/a.test.ts'), check('npm run lint', 'failed')])[0]!
     expect(c.fixes).toBe(0)
     expect(c.outcome).toBe('failing')
   })
-  test('an interrupted run is never a fix', () => {
-    const c = storyOf([prompt('x'), check('npm test', 'failed'), check('npm test', 'interrupted')])[0]!
+  test('an interrupted or stopped run is never a fix', () => {
+    const c = storyOf([prompt('x'), check('npm test', 'failed'), check('npm test', 'interrupted'), stoppedCheck('npm test')])[0]!
     expect(c.fixes).toBe(0)
+    expect(c.outcome).toBe('failing')
   })
   test('a fix in one chapter never reaches back into another', () => {
     const story = storyOf([prompt('a'), check('npm test', 'failed'), prompt('b'), check('npm test')])
@@ -95,6 +111,16 @@ describe('outcome', () => {
     expect(out([check('npm test', 'failed'), edit('/p/a.ts')])).toBe('failing')
     expect(out([edit('/p/a.ts', 'failed'), read()])).toBe('failing')
     expect(out([edit('/p/a.ts', 'failed'), edit('/p/a.ts')])).toBe('good')
+  })
+  test('the last finished check decides, as the readout does: a different run that passes leaves nothing failing', () => {
+    expect(out([check('npm test', 'failed'), edit('/p/a.ts'), check('npx vitest run')])).toBe('good')
+    expect(out([check('npx vitest run', 'failed'), check('npx vitest run lib/a.test.ts')])).toBe('good')
+    expect(out([check('npm test', 'failed'), check('npx vitest run'), check('npm test', 'failed')])).toBe('failing')
+  })
+  test('a run that was stopped says nothing about the checks', () => {
+    expect(out([check('npm test'), stoppedCheck('npm test')])).toBe('stopped')
+    expect(out([check('npm test'), stoppedCheck('npm test'), read()])).toBe('good')
+    expect(out([check('npm test', 'failed'), stoppedCheck('npm test')])).toBe('failing')
   })
   test('stopped when cut short, good otherwise', () => {
     expect(out([write('/p/a.ts'), step('Bash', 'run', { command: 'npm run dev' }, 'interrupted')])).toBe('stopped')
