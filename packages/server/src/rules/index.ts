@@ -66,6 +66,9 @@ const NOT_ONLY_LOOKING = new RegExp([
 /** A shell command that names a .env file: handled like the Read tool on one, as secrets, never as a quick look. */
 const ENV_FILE = /(^|[\s/'"=])\.env(\.[\w.-]+)?(?=$|[\s'";|&>)])/
 
+/** What runs before the command itself: env assignments, and `sudo`, `env`, `time` or `exec` with their flags. */
+const PREFIX = /^\s*(?:(?:\w+=(?:"[^"]*"|'[^']*'|\$\([^)]*\)|`[^`]*`|[^\s"'`])*|(?:sudo|env)(?:\s+-[uCgS]\s+\S+|\s+-\S+)*|time|exec)\s+)*/
+
 /** Where the heredoc bodies starting at `from` end: at the newline after the last delimiter line, or the end of the command. */
 function heredocEnd(cmd: string, from: number, words: string[]): number {
   let next = from
@@ -166,7 +169,7 @@ export function segments(cmd: string, o: { raw?: boolean } = {}): string[] {
   cut()
   return out.flatMap((s) => {
     const end = s.blank.trimEnd().length
-    const start = s.blank.slice(0, end).match(/^\s*(?:\w+=(?:"[^"]*"|'[^']*'|\$\([^)]*\)|`[^`]*`|[^\s"'`])*\s+)*(?:(?:sudo|time|exec)\s+)?\s*/)![0].length
+    const start = s.blank.slice(0, end).match(PREFIX)![0].length
     if (start >= end) return []
     return [o.raw ? s.raw.slice(start, end).replaceAll('\0', '').trim() : s.blank.slice(start, end)]
   })
