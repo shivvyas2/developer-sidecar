@@ -68,6 +68,10 @@ describe('what a session touched', () => {
   test('quoted package names count by name, without their quotes or version', () => {
     expect(flat([bash(`pip install "django>=4" 'requests==2.31'`, 'install')])).toEqual([['blocks', 'django'], ['blocks', 'requests']])
   })
+  test('requirement files, editable folders and local paths are not building blocks', () => {
+    const installs = ['pip install -r requirements.txt', 'pip install -e .', 'go get -u ./...', 'npm i ../local-pkg']
+    expect(flat(installs.map((c) => bash(c, 'install')))).toEqual([])
+  })
   test('only the install part of a chained command counts, and quoted words never do', () => {
     expect(flat([bash('cd app && npm i -D vitest && git commit -m "add stripe"', 'install')])).toEqual([['blocks', 'vitest']])
   })

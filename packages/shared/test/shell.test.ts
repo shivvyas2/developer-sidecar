@@ -83,6 +83,11 @@ describe('packagesIn', () => {
     ['pip install --index-url https://x.example -i https://y.example requests', ['requests']],
     ['npm install stripe # add payments', ['stripe']],
     ['pip install django==4.2', ['django==4.2']],
+    ['pip install -e .', []],
+    ['pip install --editable ./lib requests', ['requests']],
+    ['go get -u ./...', []],
+    ['npm i ../local-pkg', []],
+    ['npm i ./vendor/x.tgz ~/pkgs/y /tmp/z file:../w zod', ['zod']],
   ])('%s', (cmd, want) => {
     expect(packagesIn(cmd)).toEqual(want)
   })

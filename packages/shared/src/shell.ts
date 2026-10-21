@@ -122,9 +122,11 @@ export function segments(cmd: string, o: { raw?: boolean } = {}): string[] {
 }
 
 /** Flags whose value is a file, a folder, a url or a workspace, never a package: `pip install -r requirements.txt`. */
-const VALUE_FLAGS = new Set(['-r', '--requirement', '-c', '--constraint', '--prefix', '--registry', '-i', '--index-url', '--extra-index-url', '-w', '--workspace', '--filter'])
+const VALUE_FLAGS = new Set(['-r', '--requirement', '-c', '--constraint', '-e', '--editable', '--prefix', '--registry', '-i', '--index-url', '--extra-index-url', '-w', '--workspace', '--filter'])
+/** A local folder or file, not a package: `.`, `./...`, `../local-pkg`, `/tmp/x`, `~/x`, `file:../x`. */
+const LOCAL_PATH = /^(\.{1,2}(\/|$)|[/~]|(file|link):)/
 
-/** The packages an install command names, with flags, flag values, env assignments (FOO=1) and a trailing comment left out. */
+/** The packages an install command names, with flags, flag values, local paths, env assignments (FOO=1) and a trailing comment left out. */
 export function packagesIn(command: string): string[] {
   const m = command.match(/\b(?:i|install|add|get)\b(.*)$/)
   const pkgs: string[] = []
@@ -133,7 +135,7 @@ export function packagesIn(command: string): string[] {
     const t = tokens[i]!
     if (t.startsWith('#')) break
     if (VALUE_FLAGS.has(t)) i++
-    else if (t && !t.startsWith('-') && !/^\w+=(?!=)/.test(t)) pkgs.push(t)
+    else if (t && !t.startsWith('-') && !/^\w+=(?!=)/.test(t) && !LOCAL_PATH.test(t)) pkgs.push(t)
   }
   return pkgs
 }
