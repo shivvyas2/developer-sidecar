@@ -1,5 +1,5 @@
 import { isRecord } from './hook-payload'
-import { INSTALL, packagesIn, segments } from './shell'
+import { envFilesIn, INSTALL, packagesIn, segments } from './shell'
 import type { FeedStep } from './step'
 import { detectVendor } from './vendors'
 
@@ -46,8 +46,6 @@ const DATA = /(^|\/)(schema\.prisma|schema\.[cm]?[jt]s|models?\.py|db\.[cm]?[jt]
 const BACKEND = /(^|\/)(app|src\/app)\/(.+\/)?api\/|(^|\/)pages\/api\/|(^|\/)(server|api|backend|functions)\/|(^|\/)route\.[cm]?[jt]s$|(^|\/)\+server\.[jt]s$/
 const PAGE = /(^|\/)(app|src\/app)\/(.+\/)?(page|layout)\.[jt]sx?$|(^|\/)(pages|src\/routes|routes|screens|views|components)\/|\.(html|vue|svelte|astro)$|\.[jt]sx$|\.css$/
 const CODE = /\.(c|m)?[jt]sx?$|\.(py|rb|go|rs|php|java|kt|swift)$/
-
-const ENV_IN_COMMAND = /(?:^|[\s/'"=])(\.env(?:\.[\w.-]+)?)(?=$|[\s'";|&>)])/
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
 const basename = (p: string) => p.split('/').pop() ?? p
@@ -165,8 +163,7 @@ export function projectMap(steps: readonly MapStep[], cwd?: string): ProjectMap 
           if (vendor) touch('service', vendor, vendor, step)
         }
       }
-      const env = command.match(ENV_IN_COMMAND)?.[1]
-      if (env) touch('secrets', env, env, step)
+      for (const env of envFilesIn(command)) touch('secrets', env, env, step)
     }
     const url = str(input.url)
     const vendor = url ? detectVendor(url) : undefined

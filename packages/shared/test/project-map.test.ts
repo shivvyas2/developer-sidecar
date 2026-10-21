@@ -88,6 +88,9 @@ describe('what a session touched', () => {
     const map = projectMap([bash('cat .env.example', 'external')], '/p')
     expect(map.sections).toEqual([{ kind: 'secrets', title: 'Secret settings', items: [expect.objectContaining({ name: '.env.example', state: 'seen' })] }])
   })
+  test('every env file a command names is on the map', () => {
+    expect(flat([bash('cp .env.example .env.local', 'external')])).toEqual([['secrets', '.env.example'], ['secrets', '.env.local']])
+  })
   test('web fetches name the service', () => {
     expect(flat([step('WebFetch', 'external', { url: 'https://docs.stripe.com/api' })])).toEqual([['service', 'Stripe']])
   })

@@ -1,5 +1,13 @@
 // Reading shell commands: shared by the server's rules and the project map.
 
+/** A .env file a shell command names (the name in group 1), like `cat .env.local`; never `.envrc` or `environment.ts`. */
+export const ENV_FILE = /(?:^|[\s/'"=])(\.env(?:\.[\w.-]+)?)(?=$|[\s'";|&>)])/
+
+/** Every .env file a shell command names, once each: `cp .env.example .env.local` names both. */
+export function envFilesIn(command: string): string[] {
+  return [...new Set([...command.matchAll(new RegExp(ENV_FILE.source, 'g'))].map((m) => m[1]!))]
+}
+
 /** Install commands, matched against one simple command from its start (see segments). */
 export const INSTALL = /^(npm|pnpm|yarn|bun)\s+(i|install|add)\b|^(pip3?|uv\s+pip|poetry)\s+(install|add)\b|^python3?\s+-m\s+pip\s+install\b|^uv\s+add\b|^cargo\s+add\b|^go\s+get\b/
 

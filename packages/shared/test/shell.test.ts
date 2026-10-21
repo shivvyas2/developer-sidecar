@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { packagesIn, segments } from '../src/shell'
+import { envFilesIn, packagesIn, segments } from '../src/shell'
 
 describe('segments', () => {
   test.each<[string, string[]]>([
@@ -90,5 +90,19 @@ describe('packagesIn', () => {
     ['npm i ./vendor/x.tgz ~/pkgs/y /tmp/z file:../w zod', ['zod']],
   ])('%s', (cmd, want) => {
     expect(packagesIn(cmd)).toEqual(want)
+  })
+})
+
+describe('envFilesIn', () => {
+  test.each<[string, string[]]>([
+    ['cat .env', ['.env']],
+    ['cp .env.example .env.local', ['.env.example', '.env.local']],
+    ['source apps/web/.env.production && npm run build', ['.env.production']],
+    ['vercel env pull .env.local', ['.env.local']],
+    ['cat .env.local .env.local', ['.env.local']],
+    ['cat .envrc environment.ts', []],
+    ['ls', []],
+  ])('%s', (cmd, want) => {
+    expect(envFilesIn(cmd)).toEqual(want)
   })
 })
