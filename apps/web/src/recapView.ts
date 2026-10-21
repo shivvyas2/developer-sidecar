@@ -17,12 +17,20 @@ export const MAX_PARTS = 8
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
 /**
- * The request to copy into Claude Code while something still fails: the AI recap's, which knows the
- * whole turn, else the rule-based one naming the failed step. Null when nothing fails.
+ * A done AI recap that covers the turn only up to an older step than `newestStepId`, the turn's newest:
+ * Claude went on since (a continued turn), so the card shows it as how things stood, not how they stand.
  */
-export function recapAsk(ai: RecapEntry | undefined, ruleAsk: string | null): string | null {
+export const isStale = (ai: RecapEntry | undefined, newestStepId: string | undefined): boolean =>
+  ai?.status === 'done' && !!newestStepId && ai.lastStepId !== newestStepId
+
+/**
+ * The request to copy into Claude Code while something still fails: the AI recap's, which knows the
+ * whole turn, else the rule-based one naming the failed step. Null when nothing fails. A stale recap's
+ * ask may be about a failure already fixed, so the rule-based one stands in for it.
+ */
+export function recapAsk(ai: RecapEntry | undefined, ruleAsk: string | null, newestStepId?: string): string | null {
   if (!ruleAsk) return null
-  return (ai?.status === 'done' && ai.ai?.next) || ruleAsk
+  return (ai?.status === 'done' && !isStale(ai, newestStepId) && ai.ai?.next) || ruleAsk
 }
 
 /** The recap card's words: plain sentences, no tool names. */

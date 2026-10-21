@@ -10,7 +10,7 @@ import { formatElapsed, stepKind } from './format'
 import { nextAsk } from './next'
 import { NextStep } from './NextStep'
 import { RecapCard } from './RecapCard'
-import { cardAsks, recapAsk } from './recapView'
+import { cardAsks, isStale, recapAsk } from './recapView'
 import { initialSelection, selectedId, selectionReducer, stepNumber } from './selection'
 import { initialStage, replayAdvance, stageReducer, type Replay } from './stage'
 import { StoryDrawer } from './StoryDrawer'
@@ -84,7 +84,10 @@ export function StageTab({ sessionId, loaded, steps, explanations, recaps, proje
   const shownRecap = live ? recap : null
   const ai = recap ? recaps[recap.turnId] : undefined
   const failing = recap?.failingId ? steps.find((s) => s.id === recap.failingId) : undefined
-  const ask = recapAsk(ai, failing ? nextAsk(failing, explanations[failing.id]) : null)
+  // the turn's newest step: a recap written before it is out of date while Claude goes on with the turn
+  const newest = recap ? chapters.find((c) => c.id === recap.turnId)?.stepIds.at(-1) : undefined
+  const stale = isStale(ai, newest)
+  const ask = recapAsk(ai, failing ? nextAsk(failing, explanations[failing.id]) : null, newest)
   const framed = useFramed()
   const count = steps.length
   // Built from primitives so the SVG only re-renders when a number on the frame changes.
@@ -134,7 +137,7 @@ export function StageTab({ sessionId, loaded, steps, explanations, recaps, proje
       </div>
       <div className="stagetab__main">
         {/* how the last thing you asked stands, first on screen while following live */}
-        {shownRecap ? <RecapCard recap={shownRecap} ask={ask} {...(ai ? { ai } : {})} /> : null}
+        {shownRecap ? <RecapCard recap={shownRecap} ask={ask} stale={stale} {...(ai ? { ai } : {})} /> : null}
         {!framed && shown ? (
           <ReadoutPanel label="Stage readout" fields={readoutFields(readout)} note={`${tag ?? (live ? 'LIVE' : 'REPLAY')} · ${now}`} />
         ) : null}

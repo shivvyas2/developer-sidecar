@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { RuleRecap } from '@sidecar/shared'
-import { cardAsks, MAX_PARTS, recapAsk, recapText } from '../src/recapView'
+import { cardAsks, isStale, MAX_PARTS, recapAsk, recapText } from '../src/recapView'
 
 const base: RuleRecap = { turnId: 'p', asked: 'Add checkout', state: 'done', outcome: 'good', built: [], packages: 0, changed: false, checks: 'none', fixes: 0 }
 let n = 0
@@ -59,5 +59,14 @@ describe('recapAsk', () => {
     expect(recapAsk(undefined, 'The last step failed')).toBe('The last step failed')
     expect(recapAsk(entry('pending'), 'The last step failed')).toBe('The last step failed')
     expect(recapAsk(entry('done'), 'The last step failed')).toBe('The last step failed')
+  })
+  test('a recap written before Claude went on is stale, and its old ask is not offered', () => {
+    // the entry covers the turn up to step x
+    expect(isStale(entry('done', 'Fix the total'), 'x')).toBe(false)
+    expect(isStale(entry('done', 'Fix the total'), 'y')).toBe(true)
+    expect(isStale(entry('pending'), 'y')).toBe(false)
+    expect(isStale(undefined, 'y')).toBe(false)
+    expect(recapAsk(entry('done', 'Fix the total'), 'The last step failed', 'y')).toBe('The last step failed')
+    expect(recapAsk(entry('done', 'Fix the total'), 'The last step failed', 'x')).toBe('Fix the total')
   })
 })
