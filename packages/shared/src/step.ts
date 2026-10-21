@@ -66,8 +66,11 @@ export type ServerMessage =
   | { type: 'decision'; decision: DecisionEntry }
   | { type: 'concept'; concept: GlossaryEntry }
   | { type: 'explainer'; state: ExplainerState }
-  /** Claude's turn ended (the Stop hook); open steps were closed first. */
-  | { type: 'turn_end'; sessionId: string; at: number }
+  /**
+   * Claude's turn ended (the Stop hook); open steps were closed first. `lastStepId` is the turn's newest step
+   * as of the Stop, so a prompt you queued, stored before the Stop, does not stand in for the turn that ended.
+   */
+  | { type: 'turn_end'; sessionId: string; at: number; lastStepId?: string }
   | { type: 'recap'; recap: RecapEntry }
   | { type: 'session_deleted'; id: string }
   | { type: 'reset' }

@@ -66,11 +66,24 @@ describe('closing open steps', () => {
     const types = got.map((m) => m.type)
     expect(types.filter((t) => t === 'turn_end')).toHaveLength(1)
     expect(types.lastIndexOf('step')).toBeLessThan(types.indexOf('turn_end'))
-    expect(got.find((m) => m.type === 'turn_end')).toEqual({ type: 'turn_end', sessionId: 's1', at: 1200 })
+    expect(got.find((m) => m.type === 'turn_end')).toEqual({ type: 'turn_end', sessionId: 's1', at: 1200, lastStepId: 'u' })
     expect(seenSteps).toEqual(['interrupted'])
     // a repeated Stop event (same id) is not announced again
     p.ingest(ev('b', 'turn_end', { ts: 1200 }))
     expect(got.filter((m) => m.type === 'turn_end')).toHaveLength(1)
+  })
+  test('turn_end names the turn’s newest step, even when the next prompt was stored before the Stop', () => {
+    const { got, p } = setup()
+    p.ingest(ev('a', 'prompt', { prompt: 'Add checkout', ts: 900 }))
+    p.ingest(ev('b', 'tool_end', { ts: 1000, tool: { name: 'Write', useId: 'w', input: { file_path: '/p/a.ts', content: 'x' }, ok: true } }))
+    // a message you queued, sent the moment the turn ended, reaches Sidecar first
+    p.ingest(ev('c', 'prompt', { prompt: 'Now add emails', ts: 1300 }))
+    p.ingest(ev('d', 'turn_end', { ts: 1200 }))
+    expect(got.find((m) => m.type === 'turn_end')).toEqual({ type: 'turn_end', sessionId: 's1', at: 1200, lastStepId: 'w' })
+    // a Stop with no step before it names none
+    const empty = setup()
+    empty.p.ingest(ev('a', 'turn_end'))
+    expect(empty.got.find((m) => m.type === 'turn_end')).toEqual({ type: 'turn_end', sessionId: 's1', at: 1000 })
   })
   test('other events never announce a turn end', () => {
     const { got, p } = setup()

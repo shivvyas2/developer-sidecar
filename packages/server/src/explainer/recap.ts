@@ -173,9 +173,13 @@ export function createRecapper(o: RecapperOptions): Explainer {
       o.log?.(`recap failed: ${err instanceof Error ? err.message : String(err)}`)
     })
   }
-  /** Queues the turn that just ended: which turn is read now, since a new one may start before the call. */
-  const schedule = (sessionId: string) => {
-    const turnId = storyOf(o.store.stepsForSession(sessionId)).at(-1)?.id
+  /**
+   * Queues the turn that just ended: the one holding the Stop's last step, read now, since a new turn may
+   * start before the call (or its prompt may even be stored before the Stop). Without one, the newest turn.
+   */
+  const schedule = (sessionId: string, lastStepId?: string) => {
+    const chapters = storyOf(o.store.stepsForSession(sessionId))
+    const turnId = (lastStepId ? chapters.find((c) => c.stepIds.includes(lastStepId)) : chapters.at(-1))?.id
     if (turnId) queue(sessionId, turnId)
   }
   const started = now()
@@ -189,7 +193,7 @@ export function createRecapper(o: RecapperOptions): Explainer {
   for (const r of o.store.failPendingRecaps(RESTARTED, now())) o.hub.publish({ type: 'recap', recap: r })
 
   const unsubscribe = o.hub.subscribe((m: ServerMessage) => {
-    if (m.type === 'turn_end') schedule(m.sessionId)
+    if (m.type === 'turn_end') schedule(m.sessionId, m.lastStepId)
     else if (m.type === 'session_deleted') {
       sessionEpochs.set(m.id, (sessionEpochs.get(m.id) ?? 0) + 1)
       for (const k of waiting) if (k.startsWith(`${m.id}\n`)) waiting.delete(k)

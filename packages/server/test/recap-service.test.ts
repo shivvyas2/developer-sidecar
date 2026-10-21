@@ -326,6 +326,19 @@ describe('cancelled mid-flight', () => {
     expect(t.store.listRecaps('b').map((r) => r.turnId)).toEqual([asked.id])
   })
 
+  test('the turn the Stop closed is recapped, even when the next prompt was stored first', async () => {
+    const f = fake()
+    const t = setup(f.provider)
+    const asked = t.add('s1', 'UserPrompt', { prompt: 'Add checkout' })
+    const last = t.add('s1', 'Write', { file_path: '/work/shop/app/a.ts', content: 'x' })
+    // a message you queued reaches Sidecar before the Stop that ended the turn
+    t.add('s1', 'UserPrompt', { prompt: 'Now add emails' })
+    t.hub.publish({ type: 'turn_end', sessionId: 's1', at: seq, lastStepId: last.id })
+    await t.settle()
+    expect(f.tasks).toHaveLength(1)
+    expect(t.store.listRecaps('s1')).toEqual([expect.objectContaining({ turnId: asked.id, lastStepId: last.id, status: 'done' })])
+  })
+
   test('stop() ends it: no more calls or writes', async () => {
     const f = fake()
     const t = setup(f.provider)

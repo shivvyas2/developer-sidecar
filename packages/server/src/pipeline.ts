@@ -62,7 +62,12 @@ export function createPipeline(o: { store: Store; tracker?: StepTracker; hub: Hu
       const step = tracker.apply(e)
       if (step) publishStep(step, seq)
       // after the open steps are closed, so whoever hears this sees the finished turn in the store
-      if (e.kind === 'turn_end') o.hub.publish({ type: 'turn_end', sessionId: e.sessionId, at: e.ts })
+      if (e.kind === 'turn_end') {
+        // Stop and the next UserPromptSubmit come from separate hook processes, so a prompt you queued can be
+        // stored first: the turn that ended is the one holding the newest step that started before the Stop
+        const lastStepId = o.store.stepsForSession(e.sessionId).filter((s) => s.startedAt <= e.ts).at(-1)?.id
+        o.hub.publish({ type: 'turn_end', sessionId: e.sessionId, at: e.ts, ...(lastStepId ? { lastStepId } : {}) })
+      }
       return { seq }
     },
     sweep() {
