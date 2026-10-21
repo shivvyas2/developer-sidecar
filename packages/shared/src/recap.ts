@@ -1,6 +1,9 @@
 import { z } from 'zod'
-import { projectMap, type MapKind } from './project-map'
-import type { Attention, FeedStep } from './step'
+import { isRecord } from './hook-payload'
+import { str } from './input'
+import { makesChange, projectMap, type MapKind } from './project-map'
+import { startsDevServer } from './shell'
+import { checksOf, isStopped, type Attention, type FeedStep } from './step'
 import { storyOf, type ChapterOutcome, type StoryStep } from './story'
 
 /**
@@ -8,7 +11,8 @@ import { storyOf, type ChapterOutcome, type StoryStep } from './story'
  * to open the app and what Claude needs. Built from steps alone, with no model.
  */
 
-export interface RecapPart { kind: MapKind; name: string; failed: boolean }
+/** A part made or changed. `id` is the map item's (`kind:key`): unique, where two parts can share a name. */
+export interface RecapPart { id: string; kind: MapKind; name: string; failed: boolean }
 
 export interface RuleRecap {
   /** The turn (story chapter) this recap is about: its prompt's id, or its first step's when there was no prompt. */
@@ -20,6 +24,8 @@ export interface RuleRecap {
   /** Parts made or changed in this turn, in map order. Packages are counted, not listed. */
   built: RecapPart[]
   packages: number
+  /** A create, edit or install finished in this turn, including on files the map does not name (README.md). */
+  changed: boolean
   checks: 'pass' | 'fail' | 'none'
   fixes: number
   /** The local address a dev server printed, if one is running. */
@@ -30,40 +36,66 @@ export interface RuleRecap {
 
 export type RecapStep = StoryStep & Pick<FeedStep, 'output'>
 
-const LOCAL_URL = /\bhttps?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):(\d{2,5})(\/[\w\-./~%]*)?/
+const LOCAL_URL = /\b(https?):\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):(\d{2,5})(\/[\w\-./~%]*)?/
 
-/** The first local address in a step's output, with 0.0.0.0 and [::1] read as localhost. Other hosts never count. */
+/**
+ * The first local address in a step's output, with 0.0.0.0 and [::1] read as localhost. Other hosts never count.
+ * The scheme is kept, since an https dev server does not answer http.
+ */
 export function localUrl(output: unknown): string | undefined {
   const text = typeof output === 'string' ? output : output === undefined ? '' : JSON.stringify(output)
   const m = text.match(LOCAL_URL)
   if (!m) return undefined
-  const port = Number(m[1])
+  const port = Number(m[2])
   if (port < 1 || port > 65535) return undefined
-  const path = (m[2] ?? '').replace(/\.+$/, '')
-  return `http://localhost:${port}${path === '/' ? '' : path}`
+  const path = (m[3] ?? '').replace(/\.+$/, '')
+  return `${m[1]}://localhost:${port}${path === '/' ? '' : path}`
 }
 
-/** Tools that read or stop a background command (Claude Code runs a dev server in the background and polls it). */
-const READS_BACKGROUND = new Set(['BashOutput'])
-const STOPS_BACKGROUND = new Set(['KillShell', 'KillBash'])
+/**
+ * Claude Code's tools for a command running in the background (it runs a dev server that way and polls it),
+ * by their old and new names: reading its output, and stopping it.
+ */
+const BACKGROUND_TOOLS: { reads: ReadonlySet<string>; stops: ReadonlySet<string> } = {
+  reads: new Set(['BashOutput', 'TaskOutput']),
+  stops: new Set(['KillShell', 'KillBash', 'TaskStop']),
+}
+
+/** The background command a step names (`bash_id`, `shell_id`, `task_id`), or the one a run started. */
+function shellOf(s: RecapStep): string | undefined {
+  const named = isRecord(s.input) ? str(s.input.bash_id) || str(s.input.shell_id) || str(s.input.task_id) : ''
+  if (named) return named
+  if (isRecord(s.output) && str(s.output.backgroundTaskId)) return str(s.output.backgroundTaskId)
+  const text = typeof s.output === 'string' ? s.output : isRecord(s.output) ? str(s.output.stdout) : ''
+  return text.match(/running in background with ID: (\S+)/)?.[1]
+}
 
 /**
  * A dev server that is still up: the newest local address printed by a run step that finished well,
- * or by polling a background command, unless a later run was cut short or failed, or a background
- * command was stopped.
+ * or by polling a background command. It is gone once a dev server command (or the command that
+ * printed it) was cut short or failed, or its own background command was stopped. Another command
+ * failing, such as `npm run build`, leaves it up.
  */
 function serverUrl(steps: readonly RecapStep[]): string | undefined {
-  for (let i = steps.length - 1; i >= 0; i--) {
-    const s = steps[i]!
-    if (STOPS_BACKGROUND.has(s.toolName)) return undefined
+  let up: { url: string; command: string; shell?: string } | undefined
+  for (const s of steps) {
+    if (BACKGROUND_TOOLS.stops.has(s.toolName)) {
+      if (up?.shell && shellOf(s) === up.shell) up = undefined
+      continue
+    }
     const run = s.category === 'run'
-    if (run && (s.status === 'interrupted' || s.status === 'failed')) return undefined
-    if ((run || READS_BACKGROUND.has(s.toolName)) && s.status === 'ok') {
+    const command = isRecord(s.input) ? str(s.input.command) : ''
+    if (run && (s.status === 'failed' || isStopped(s))) {
+      if (startsDevServer(command) || (command && command === up?.command)) up = undefined
+      continue
+    }
+    if ((run || BACKGROUND_TOOLS.reads.has(s.toolName)) && s.status === 'ok') {
       const url = localUrl(s.output)
-      if (url) return url
+      const shell = shellOf(s)
+      if (url) up = { url, command, ...(shell ? { shell } : {}) }
     }
   }
-  return undefined
+  return up?.url
 }
 
 /**
@@ -79,14 +111,17 @@ export function buildRecap(steps: readonly RecapStep[], opts: { attention?: Atte
   const map = projectMap(turnSteps, opts.cwd)
   const built = map.sections
     .filter((s) => s.kind !== 'blocks')
-    .flatMap((s) => s.items.filter((i) => i.state !== 'seen').map((i) => ({ kind: s.kind, name: i.name, failed: i.state === 'failed' })))
+    .flatMap((s) => s.items.filter((i) => i.state !== 'seen').map((i) => ({ id: i.id, kind: s.kind, name: i.name, failed: i.state === 'failed' })))
   const packages = map.sections.find((s) => s.kind === 'blocks')?.items.filter((i) => i.state !== 'seen').length ?? 0
   const byId = new Map(turnSteps.map((s) => [s.id, s]))
-  const ran = turnSteps.some((s) => s.category === 'test' && (s.status === 'ok' || s.status === 'failed'))
+  const ran = checksOf(turnSteps) !== 'none'
   // a failed check run that no later run covered (see storyOf) is still failing
-  const broken = last.beats.some((b) => b.type === 'step' && !b.fixedBy && byId.get(b.id)?.category === 'test' && byId.get(b.id)?.status === 'failed')
+  const broken = last.beats.some((b) => {
+    const s = b.type === 'step' && !b.fixedBy ? byId.get(b.id) : undefined
+    return s?.category === 'test' && s.status === 'failed' && !isStopped(s)
+  })
   const failing = last.outcome === 'failing'
-    ? [...turnSteps].reverse().find((s) => s.status === 'failed' && s.category !== 'read')
+    ? [...turnSteps].reverse().find((s) => s.status === 'failed' && s.category !== 'read' && !isStopped(s))
     : undefined
   const url = serverUrl(steps)
   return {
@@ -96,7 +131,9 @@ export function buildRecap(steps: readonly RecapStep[], opts: { attention?: Atte
     outcome: last.outcome,
     built,
     packages,
-    checks: ran ? (broken ? 'fail' : 'pass') : 'none',
+    changed: turnSteps.some((s) => s.status === 'ok' && makesChange(s)),
+    // a turn that ran no checks reads the session's last ones, so the card and the status light agree
+    checks: ran ? (broken ? 'fail' : 'pass') : checksOf(steps),
     fixes: last.fixes,
     ...(url ? { url } : {}),
     ...(failing ? { failingId: failing.id } : {}),
@@ -112,8 +149,8 @@ export const AiRecapSchema = z.object({
 export type AiRecap = z.infer<typeof AiRecapSchema>
 
 /**
- * pending: the model is writing it. done: it's in `ai`. unavailable: the call failed or recaps are
- * paused (see `reason`). A turn that needed no call (recaps off, nothing changed) has no entry at all.
+ * pending: the model is writing it. done: it's in `ai`. unavailable: the call failed, recaps are
+ * paused or no model was found yet (see `reason`); a done recap is only ever replaced by a newer done one. A turn that needed no call (recaps off, nothing changed) has no entry at all.
  */
 export type RecapStatus = 'pending' | 'done' | 'unavailable'
 

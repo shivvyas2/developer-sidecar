@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { basename } from 'node:path'
 import { buildRecap, storyOf, type ExplainerState, type RecapEntry, type ServerMessage } from '@sidecar/shared'
 import type { Hub } from '../hub'
@@ -43,6 +44,10 @@ export interface RecapperOptions {
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
+/** A decision's id from the step it cites and what was chosen, however the model words or orders it otherwise. */
+export const decisionId = (stepId: string, choice: string) =>
+  `${stepId}:decision:${createHash('sha256').update(choice.trim().toLowerCase().replace(/\s+/g, ' ')).digest('hex').slice(0, 12)}`
+
 /**
  * One AI recap per Claude turn, when the turn ends (the Stop hook), instead of an explanation per
  * step. Calls run one at a time across sessions; a turn waits in line at most once, and its recap
@@ -61,6 +66,9 @@ export function createRecapper(o: RecapperOptions): Explainer {
   let epoch = 0 // bumped on reset
   const sessionEpochs = new Map<string, number>() // bumped on session_deleted
   const waiting = new Set<string>() // turns in line, not yet started (see key)
+  // per session, a turn with a done recap that went on while no call could be made (paused, no provider);
+  // its recap stays as it was, and catchUp recaps the rest
+  const missed = new Map<string, string>()
   let stopped = false
 
   const level = () => (o.disabledReason ? 'off' : o.settings.get().explanations)
@@ -85,7 +93,7 @@ export function createRecapper(o: RecapperOptions): Explainer {
     const stale = () => at.epoch !== epoch || at.session !== (sessionEpochs.get(sessionId) ?? 0)
     const lvl = level()
     const provider = current
-    if (stopped || stale() || lvl === 'off' || !provider) return
+    if (stopped || stale() || lvl === 'off') return
 
     const all = o.store.stepsForSession(sessionId)
     const turn = storyOf(all).find((c) => c.id === turnId)
@@ -103,17 +111,27 @@ export function createRecapper(o: RecapperOptions): Explainer {
     if (existing && (same || existing.count >= MAX_RECAPS_PER_TURN)) return
 
     const entry = { sessionId, turnId: turn.id, lastStepId }
-    if (paused) { save({ ...entry, at: now(), status: 'unavailable', reason: paused }); return }
+    // A done recap stays on the card until a new done one replaces it: a continuation's call that
+    // fails, or can't be made, never turns a good summary into "pending" or "unavailable".
+    const done = existing?.status === 'done'
+    if (!provider || paused) {
+      // saved, so catchUp recaps it once recaps are back (a provider found late, or the pause cleared)
+      if (done) missed.set(sessionId, turn.id)
+      else { missed.delete(sessionId); save({ ...entry, at: now(), status: 'unavailable', reason: paused ?? UNAVAILABLE_REASON }) }
+      return
+    }
+    if (missed.get(sessionId) === turn.id) missed.delete(sessionId)
 
     const session = o.store.getSession(sessionId)
     const cwd = session?.cwd || undefined
     const rule = buildRecap(steps, { attention: 'done', ...(cwd ? { cwd } : {}) })!
     const { user, labels } = encodeTurn({ project: cwd ? basename(cwd) : 'this project', asked: turn.asked, rule, ...(cwd ? { cwd } : {}) }, turnSteps)
     const task = { system: RECAP_SYSTEM_PROMPT, user, schema: RecapOutputSchema, maxTokens: RECAP_MAX_TOKENS, shape: RECAP_SHAPE }
-    save({ ...entry, at: now(), status: 'pending' })
-    // from here on the recap must end done or unavailable, even if something throws
+    if (done) o.store.countRecapCall(turn.id)
+    else save({ ...entry, at: now(), status: 'pending' })
+    // from here on the recap must end done or unavailable, even if something throws; a done one is only replaced by done
     let ended = false
-    const end = (r: RecapEntry) => { save(r); ended = true }
+    const end = (r: RecapEntry) => { ended = true; if (r.status === 'done' || !done) save(r) }
     try {
       // switched off, stopped, reset or session deleted since this recap was queued: no more calls or writes
       const cancelled = () => stopped || level() === 'off' || stale()
@@ -141,11 +159,11 @@ export function createRecapper(o: RecapperOptions): Explainer {
         failures = 0
         end({ ...entry, at: now(), status: 'done', ai: recap.ai })
         const t = now()
-        for (const [i, d] of recap.decisions.entries()) {
-          // a recap may cite one step for two decisions
-          const decision = { ...d, id: `${d.stepId}:decision:${i}`, sessionId, at: t }
-          o.store.addDecision(decision)
-          o.hub.publish({ type: 'decision', decision })
+        for (const d of recap.decisions) {
+          // keyed by the step and the choice, not the place in the answer: a second recap of the turn that
+          // names it again adds nothing, and one recap may cite one step for two decisions
+          const decision = { ...d, id: decisionId(d.stepId, d.choice), sessionId, at: t }
+          if (o.store.addDecision(decision)) o.hub.publish({ type: 'decision', decision })
         }
         for (const c of recap.concepts) {
           const concept = { ...c, sessionId, at: t }
@@ -160,7 +178,7 @@ export function createRecapper(o: RecapperOptions): Explainer {
       publishState()
     } finally {
       // something threw after pending was saved: say so rather than leave the card waiting forever
-      if (!ended && !stopped && !stale()) save({ ...entry, at: now(), status: 'unavailable', reason: INTERRUPTED })
+      if (!ended && !stopped && !stale()) end({ ...entry, at: now(), status: 'unavailable', reason: INTERRUPTED })
     }
   }
 
@@ -173,28 +191,38 @@ export function createRecapper(o: RecapperOptions): Explainer {
       o.log?.(`recap failed: ${err instanceof Error ? err.message : String(err)}`)
     })
   }
-  /** Queues the turn that just ended: which turn is read now, since a new one may start before the call. */
-  const schedule = (sessionId: string) => {
-    const turnId = storyOf(o.store.stepsForSession(sessionId)).at(-1)?.id
+  /**
+   * Queues the turn that just ended: the one holding the Stop's last step, read now, since a new turn may
+   * start before the call (or its prompt may even be stored before the Stop). Without one, the newest turn.
+   */
+  const schedule = (sessionId: string, lastStepId?: string) => {
+    const chapters = storyOf(o.store.stepsForSession(sessionId))
+    const turnId = (lastStepId ? chapters.find((c) => c.stepIds.includes(lastStepId)) : chapters.at(-1))?.id
     if (turnId) queue(sessionId, turnId)
   }
   const started = now()
-  /** Back from a pause: the turns that ended while paused since this start, one per session, get their call now. */
+  /**
+   * Back from a pause, or a provider found: the turns that ended meanwhile since this start, one per session,
+   * get their call now, and so does a recapped turn that went on meanwhile.
+   */
   const catchUp = () => {
     if (state().status !== 'ready') return
     for (const r of o.store.unavailableRecaps()) if (r.at >= started) queue(r.sessionId, r.turnId)
+    for (const [sessionId, turnId] of missed) queue(sessionId, turnId)
+    missed.clear()
   }
 
   // calls in flight when the server last stopped can never finish
   for (const r of o.store.failPendingRecaps(RESTARTED, now())) o.hub.publish({ type: 'recap', recap: r })
 
   const unsubscribe = o.hub.subscribe((m: ServerMessage) => {
-    if (m.type === 'turn_end') schedule(m.sessionId)
+    if (m.type === 'turn_end') schedule(m.sessionId, m.lastStepId)
     else if (m.type === 'session_deleted') {
       sessionEpochs.set(m.id, (sessionEpochs.get(m.id) ?? 0) + 1)
+      missed.delete(m.id)
       for (const k of waiting) if (k.startsWith(`${m.id}\n`)) waiting.delete(k)
     }
-    else if (m.type === 'reset') { epoch++; waiting.clear() }
+    else if (m.type === 'reset') { epoch++; waiting.clear(); missed.clear() }
   })
 
   return {

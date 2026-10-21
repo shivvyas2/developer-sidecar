@@ -28,9 +28,12 @@ function emit(payload: object) {
 test('the failed test step says what to do next', async ({ page }) => {
   await page.goto(url())
   await page.locator('select.hdr__session').selectOption('smoke-1')
-  const next = page.locator('.ds-pulled .detail__next')
+  // while following live the recap above the stage holds the failed step's ask, so it shows once, not on its card too;
+  // the turn has ended, so it is the AI recap's ask
+  const next = page.locator('.detail__next')
+  await expect(next).toHaveCount(1)
   await expect(next).toContainText('WHAT TO DO NEXT')
-  await expect(next).toContainText('npm test')
+  await expect(next).toContainText('Fix the failing checks, fake edition')
   await expect(next).toContainText('/rewind')
 })
 
@@ -190,6 +193,12 @@ test('the drawer tells the session as a story: chapters, a fixed problem, folded
   await ruler.press('Home')
   for (let i = 0; i < 13; i++) await ruler.press('ArrowRight')
   await expect(edits).toHaveAttribute('aria-expanded', 'true')
+  // folded again by hand, moving to the next step inside it opens it again, so the picked card shows
+  await edits.click()
+  await expect(edits).toHaveAttribute('aria-expanded', 'false')
+  await ruler.press('ArrowRight')
+  await expect(edits).toHaveAttribute('aria-expanded', 'true')
+  await expect(edits.locator('xpath=..').locator('button.ds-step[aria-pressed="true"]')).toHaveCount(1)
   // the prompt header picks the prompt step
   await drawer.locator('.story__head').last().click()
   await expect(drawer.locator('.story__head').last()).toHaveAttribute('aria-pressed', 'true')
@@ -206,8 +215,12 @@ test('the basic session opens on where things stand: a failure still in the way,
   await expect(recap).toContainText('Something still needs a fix.')
   await expect(recap).toContainText('Checks fail')
   await expect(recap.getByRole('list', { name: 'Made or changed' })).toContainText('Checkout')
+  // the ask is on screen once, on the recap, though the failed step's own card is pulled out below it;
   // the AI recap's ask, which knows the whole turn, replaces the rule-based one
-  await expect(recap.locator('.detail__next')).toContainText('Fix the failing checks, fake edition')
+  const next = page.locator('.detail__next')
+  await expect(next).toHaveCount(1)
+  await expect(recap.locator('.detail__next')).toHaveCount(1)
+  await expect(next).toContainText('Fix the failing checks, fake edition')
 })
 
 test('a dev server that is up gets an Open your app button', async ({ page }) => {

@@ -21,8 +21,9 @@ export function StoryDrawer({ steps, chapters, selectedId, following, onPick }: 
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
   // A step picked elsewhere (the ruler, a decision, the Whiteboard) opens the folded beat that holds it.
   // While following live the newest step is the selected one, and opening its beat would undo the folding.
+  // Keyed on the step too, so moving to another step inside a beat the person folded opens it again.
   const holder = following ? null : foldedBeatOf(chapters, selectedId)
-  useEffect(() => { if (holder) setOpen((o) => (o.has(holder) ? o : new Set([...o, holder]))) }, [holder])
+  useEffect(() => { if (holder) setOpen((o) => (o.has(holder) ? o : new Set([...o, holder]))) }, [holder, selectedId])
   const toggle = (key: string) => setOpen((o) => { const n = new Set(o); if (n.has(key)) n.delete(key); else n.add(key); return n })
 
   const card = (id: string, badge?: string) => {

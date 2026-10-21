@@ -12,7 +12,7 @@ const read = (p: string) => step('Read', { file_path: `/p/${p}` }, 'ok', { file:
 const write = (p: string, content = 'export const x = 1') => step('Write', { file_path: `/p/${p}`, content })
 const edit = (p: string) => step('Edit', { file_path: `/p/${p}`, old_string: 'a', new_string: 'b' }, 'ok', { originalFile: 'WHOLE ORIGINAL FILE' })
 const bash = (command: string, status: FeedStep['status'] = 'ok', output?: unknown) => step('Bash', { command }, status, output)
-const rule: RuleRecap = { turnId: 'p', asked: 'Add checkout', state: 'done', outcome: 'good', built: [{ kind: 'backend', name: 'Checkout', failed: false }], packages: 1, checks: 'pass', fixes: 0 }
+const rule: RuleRecap = { turnId: 'p', asked: 'Add checkout', state: 'done', outcome: 'good', built: [{ id: 'backend:checkout', kind: 'backend', name: 'Checkout', failed: false }], packages: 1, changed: true, checks: 'pass', fixes: 0 }
 const ctx = { project: 'shop', asked: 'Add checkout', rule, cwd: '/p' }
 
 describe('encodeTurn', () => {
@@ -35,6 +35,12 @@ describe('encodeTurn', () => {
     for (const never of ['SECRET FILE BODY', 'BODY OF THE NEW FILE', 'WHOLE ORIGINAL FILE', 'Tests 3 passed']) expect(user).not.toContain(never)
     expect(labels.size).toBe(5)
     expect([...labels.keys()]).toEqual(['s1', 's2', 's3', 's4', 's5'])
+  })
+
+  test('a turn that changed files the map leaves out does not read as nothing changed', () => {
+    const facts = (rule: RuleRecap) => encodeTurn({ ...ctx, rule }, [edit('README.md')]).user.split('\n').find((l) => l.startsWith('Facts:'))
+    expect(facts({ ...rule, built: [], packages: 0, changed: true })).toContain('Facts: changed files;')
+    expect(facts({ ...rule, built: [], packages: 0, changed: false })).toContain('Facts: nothing built or changed;')
   })
 
   test('a 150-step turn stays inside the caps: 30 lines, every failure kept, the rest counted', () => {
@@ -92,6 +98,24 @@ describe('encodeTurn', () => {
     expect(user).toContain('checks still FAIL')
     expect(user).toContain('the app runs at http://localhost:3000')
     expect(user.indexOf('Facts:')).toBeLessThan(user.indexOf('Steps:'))
+  })
+
+  test('a long turn over the length cap keeps its newest failure and the end of its output; older lines give way', () => {
+    // 40 writes to long paths fill far more than the room, and four failing checks come last
+    const long = (i: number) => `src/${'deep/'.repeat(36)}file${i}.ts`
+    const steps = [
+      ...Array.from({ length: 40 }, (_, i) => write(long(i))),
+      ...Array.from({ length: 4 }, (_, i) => bash(`npx vitest run part${i}`, 'failed', `${'x'.repeat(500)} ERROR-${i}-END`)),
+    ]
+    const { user, labels } = encodeTurn({ ...ctx, rule: { ...rule, checks: 'fail', outcome: 'failing' } }, steps)
+    expect(user.length).toBeLessThanOrEqual(RECAP_CAPS.userChars)
+    // the newest failure, its tail and the lines after the steps all survive
+    expect(user).toMatch(/s\d+ ran checks `npx vitest run part3` FAILED :: …x+ ERROR-3-END\n/)
+    for (const i of [1, 2]) expect(user).toContain(`ERROR-${i}-END`)
+    expect(user).toMatch(/…and \d+ more steps/)
+    // the oldest writes gave way, and a label the request no longer shows cannot be cited
+    expect(user).not.toContain('file0.ts')
+    for (const label of labels.keys()) expect(user).toMatch(new RegExp(`^${label} `, 'm'))
   })
 
   test('quoted package names are named, not their quotes', () => {

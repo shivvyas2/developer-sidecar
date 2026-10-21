@@ -15,13 +15,16 @@ export interface Store {
   revision(sessionId: string): string
   saveExplanation(sessionId: string, stepId: string, e: StepExplanation, at: number): void
   hasExplanation(stepId: string): boolean
-  addDecision(d: DecisionEntry): void
+  /** False when a decision with its id is already stored, so it was not added. */
+  addDecision(d: DecisionEntry): boolean
   listDecisions(sessionId: string): DecisionEntry[]
   addConcept(c: GlossaryEntry): boolean
   listGlossary(sessionId: string): GlossaryEntry[]
   /** Replaces the turn's recap and counts it; returns how many times the turn has been recapped. */
   saveRecap(r: RecapEntry): number
   getRecap(turnId: string): (RecapEntry & { count: number }) | undefined
+  /** Counts a call on a turn whose recap stays as stored until the call writes a new one; returns the count, 0 for no recap. */
+  countRecapCall(turnId: string): number
   listRecaps(sessionId: string): RecapEntry[]
   /** Marks every pending recap unavailable (their calls can no longer finish) and returns them. */
   failPendingRecaps(reason: string, at: number): RecapEntry[]
@@ -136,7 +139,8 @@ export function openStore(path: string): Store {
     ON CONFLICT(step_id) DO UPDATE SET at = excluded.at, json = excluded.json`)
   const getExp = db.prepare('SELECT 1 AS x FROM explanations WHERE step_id = ?')
   const insDecision = db.prepare('INSERT OR IGNORE INTO decisions (id, session_id, step_id, at, json) VALUES (?, ?, ?, ?, ?)')
-  const decisionsFor = db.prepare('SELECT json FROM decisions WHERE session_id = ? ORDER BY at ASC, id ASC')
+  // at the same time, in the order they were added (a recap's decisions share its time)
+  const decisionsFor = db.prepare('SELECT json FROM decisions WHERE session_id = ? ORDER BY at ASC, rowid ASC')
   const insConcept = db.prepare('INSERT OR IGNORE INTO concepts (session_id, term_key, at, json) VALUES (?, ?, ?, ?)')
   const conceptsFor = db.prepare('SELECT json FROM concepts WHERE session_id = ? ORDER BY term_key ASC')
   // count goes up only when a call was made (pending), so pending, then done, counts once
@@ -145,6 +149,7 @@ export function openStore(path: string): Store {
     ON CONFLICT(turn_id) DO UPDATE SET at = excluded.at, json = excluded.json, count = recaps.count + excluded.count
     RETURNING count`)
   const getRecapStmt = db.prepare('SELECT json, count FROM recaps WHERE turn_id = ?')
+  const countCall = db.prepare('UPDATE recaps SET count = count + 1 WHERE turn_id = ? RETURNING count')
   const recapsFor = db.prepare('SELECT json FROM recaps WHERE session_id = ? ORDER BY at ASC, turn_id ASC')
   const pendingRecaps = db.prepare(`SELECT json FROM recaps WHERE json_extract(json, '$.status') = 'pending'`)
   const uncalledRecaps = db.prepare(`
@@ -204,7 +209,7 @@ export function openStore(path: string): Store {
       return getExp.get(stepId) !== undefined
     },
     addDecision(d) {
-      insDecision.run(d.id, d.sessionId, d.stepId, d.at, JSON.stringify(d))
+      return insDecision.run(d.id, d.sessionId, d.stepId, d.at, JSON.stringify(d)).changes > 0
     },
     listDecisions(sessionId) {
       return parseJson<DecisionEntry>(decisionsFor.all(sessionId))
@@ -222,6 +227,9 @@ export function openStore(path: string): Store {
     getRecap(turnId) {
       const row = getRecapStmt.get(turnId) as { json: string; count: number } | undefined
       return row ? { ...(JSON.parse(row.json) as RecapEntry), count: row.count } : undefined
+    },
+    countRecapCall(turnId) {
+      return (countCall.get(turnId) as { count: number } | undefined)?.count ?? 0
     },
     listRecaps(sessionId) {
       return parseJson<RecapEntry>(recapsFor.all(sessionId))

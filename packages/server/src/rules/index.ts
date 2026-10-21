@@ -1,4 +1,4 @@
-import { detectVendor, INSTALL, isRecord, packagesIn, segments, type Category, type SceneSpec, type Step, type Translation } from '@sidecar/shared'
+import { detectVendor, ellipsis, ENV_FILE, INSTALL, isRecord, oneOf, packagesIn, segments, TEST, viaRunner, type Category, type SceneSpec, type Step, type Translation } from '@sidecar/shared'
 import { scenes } from '@sidecar/ui-kit/catalog'
 
 export { detectVendor, segments } from '@sidecar/shared'
@@ -23,7 +23,7 @@ interface Rule {
 }
 
 const basename = (p: string) => p.split(/[\\/]/).pop() ?? p
-const short = (s: string, n = 100) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
+const short = (s: string, n = 100) => ellipsis(s, n)
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
 /** The first simple command that matches, so `git add -A && git commit` is a commit and a commit message never matches. */
 const part = (c: Ctx, re: RegExp) => c.parts.find((p) => re.test(p))
@@ -31,19 +31,14 @@ const part = (c: Ctx, re: RegExp) => c.parts.find((p) => re.test(p))
 const rawPart = (c: Ctx, re: RegExp) => c.raw[c.parts.findIndex((p) => re.test(p))]
 
 // Matched against one simple command at a time (see segments), from its start, so words elsewhere never count.
-// INSTALL lives in @sidecar/shared with the project map, which reads installs too.
-/** A test runner in the command's runner position, so `npx playwright install` or `tsc -p tsconfig.test.json` is not a test run. */
-const TEST = new RegExp([
-  /^(npm|pnpm|yarn|bun)\s+(run\s+)?test\b/.source,
-  /^((npx|bunx|npm\s+exec|pnpm(\s+(exec|dlx))?|yarn(\s+dlx)?)\s+(-\S+\s+)*)?(vitest|jest|mocha|playwright\s+test|cypress\s+run)\b/.source,
-  /^((python3?\s+-m|uv\s+run|poetry\s+run)\s+)?pytest\b/.source,
-  /^(cargo|go|deno|make)\s+test\b/.source,
-].join('|'))
-const DEPLOY = /^(npx\s+|bunx\s+)?(vercel|netlify\s+deploy|fly\s+deploy|flyctl\s+deploy|railway\s+up|docker\s+push|wrangler\s+deploy)\b/
-const RUN = /^(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start|build|preview)\b|^(npx\s+)?(next|vite)\s+(dev|build)\b|^python3?\s+\S+\.py\b|^node\s+\S+\.(m?js|ts)\b/
-const BUILD = /^(npm|pnpm|yarn|bun)\s+(run\s+)?build\b|^(npx\s+)?(next|vite)\s+build\b/
+// INSTALL lives in @sidecar/shared with the project map, which reads installs too, and TEST with the story, which
+// matches check runs.
+// vercel deploys with `deploy`, a flag, a folder or nothing after it; `vercel env pull` or `vercel link` does not
+const DEPLOY = viaRunner(/(vercel(?=\s*$|\s+(deploy\b|-|\.|\/|~|\d*>))|netlify\s+deploy|fly\s+deploy|flyctl\s+deploy|railway\s+up|docker\s+push|wrangler\s+deploy)\b/)
+const RUN = oneOf(/^(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start|build|preview)\b/, viaRunner(/(next|vite)\s+(dev|build)\b/), /^python3?\s+\S+\.py\b|^node\s+\S+\.(m?js|ts)\b/)
+const BUILD = oneOf(/^(npm|pnpm|yarn|bun)\s+(run\s+)?build\b/, viaRunner(/(next|vite)\s+build\b/))
 const DATA_FILE = /(schema\.prisma|\/migrations?\/|\.sql$|drizzle|schema\.(ts|js)$|models?\.py$)/i
-const DATA_CMD = /^(npx\s+|bunx\s+|pnpm\s+(exec\s+)?)?(prisma\s+(migrate|db)|drizzle-kit|alembic|knex\s+migrate|supabase\s+db)\b/
+const DATA_CMD = viaRunner(/(prisma\s+(migrate|db)|drizzle-kit|alembic|knex\s+migrate|supabase\s+db)\b/)
 const GIT = /^(git\s+(commit|push|merge|tag|checkout\s+-b|switch\s+-c|branch)|gh\s+pr\s+(create|merge))\b/
 /** One command that only looks. Anything chained (a newline too), piped, redirected or substituted is not read-only. */
 const LOOK = /^\s*(ls|pwd|cat|head|tail|wc|tree|file|stat|which|find|grep|rg|git\s+(status|diff|log|show))\b/
@@ -56,8 +51,8 @@ const NOT_ONLY_LOOKING = new RegExp([
   /^\s*tail\b.*\s(-[a-zA-Z0-9]*[fF]|--follow)\b/.source,
 ].join('|'))
 
-/** A shell command that names a .env file: handled like the Read tool on one, as secrets, never as a quick look. */
-const ENV_FILE = /(^|[\s/'"=])\.env(\.[\w.-]+)?(?=$|[\s'";|&>)])/
+// A shell command that names a .env file (ENV_FILE, shared with the map) is handled like the Read tool on one, as
+// secrets, never as a quick look.
 
 const RULES: Rule[] = [
   {

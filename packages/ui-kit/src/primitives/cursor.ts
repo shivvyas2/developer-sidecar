@@ -1,3 +1,4 @@
+import { ellipsis } from '@sidecar/shared'
 import type { P } from '../iso'
 import { color } from '../tokens'
 import { esc, n } from '../svg'
@@ -15,7 +16,7 @@ const CHAR = 4.2
  */
 export const cursor = (at: P, text: string): string => {
   const t = text.trim()
-  const cut = t.length > MAX ? `${t.slice(0, MAX - 1)}…` : t
+  const cut = ellipsis(t, MAX)
   const ink = color('ink'), card = color('card')
   const w = 10 + cut.length * CHAR, h = 14
   const x = at.x + 6, y = at.y - 11 - 8 - h

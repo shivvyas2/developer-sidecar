@@ -1,5 +1,7 @@
 import { isRecord } from './hook-payload'
-import type { Category, FeedStep } from './step'
+import { fileOf, str } from './input'
+import { testRunsIn } from './shell'
+import { isStopped, type Category, type FeedStep } from './step'
 
 /**
  * A session told as a story: one chapter per thing you asked, its steps grouped into beats. Runs of
@@ -34,7 +36,7 @@ export interface Chapter {
   outcome: ChapterOutcome
 }
 
-export type StoryStep = Pick<FeedStep, 'id' | 'category' | 'status' | 'toolName' | 'input'>
+export type StoryStep = Pick<FeedStep, 'id' | 'category' | 'status' | 'toolName' | 'input'> & Partial<Pick<FeedStep, 'output'>>
 
 const PHASE: Record<Category, StoryPhase> = {
   read: 'looking',
@@ -49,22 +51,31 @@ export const PHASE_TITLE: Record<StoryPhase, string> = {
   looking: 'Looking around', building: 'Building', checking: 'Checking', saving: 'Saving', other: 'Working',
 }
 
-const str = (v: unknown) => (typeof v === 'string' ? v : '')
 const inputOf = (s: StoryStep) => (isRecord(s.input) ? s.input : {})
-const fileOf = (s: StoryStep) => str(inputOf(s).file_path) || str(inputOf(s).notebook_path)
 const commandOf = (s: StoryStep) => str(inputOf(s).command).trim().replace(/\s+/g, ' ')
-const finished = (s: StoryStep) => s.status === 'ok' || s.status === 'failed'
+/** Ran to the end; a step the person stopped did not, whatever its status says. */
+const finished = (s: StoryStep) => (s.status === 'ok' || s.status === 'failed') && !isStopped(s)
 const EDITS = new Set(['Edit', 'MultiEdit', 'NotebookEdit'])
 
-/** A passing run covers a failed one when it runs the same checks or more of them (`vitest run` covers `vitest run a.test.ts`). */
-const covers = (pass: string, failed: string) => failed === pass || failed.startsWith(`${pass} `)
+/**
+ * A passing run covers a failed one when it runs the same checks or more of them: each test run in the failed command
+ * matches a run in the passing one, or a narrower version of it (`vitest run` covers `vitest run a.test.ts`). Only the
+ * test runs count, so `cd app && npx vitest run` covers `npx vitest run`, and `npm test && npm run lint` covers `npm test`.
+ */
+function covers(pass: string, failed: string): boolean {
+  const passes = testRunsIn(pass)
+  const fails = testRunsIn(failed)
+  if (!fails.length) return failed === pass
+  return fails.every((f) => passes.some((p) => f === p || f.startsWith(`${p} `)))
+}
 
 const isLook = (s: StoryStep) => s.category === 'read' && s.status === 'ok'
-const isEdit = (s: StoryStep) => EDITS.has(s.toolName) && s.status === 'ok' && fileOf(s) !== ''
+const isEdit = (s: StoryStep) => EDITS.has(s.toolName) && s.status === 'ok' && fileOf(s.input) !== ''
 
 function beatsOf(steps: readonly StoryStep[]): { beats: StoryBeat[]; fixes: number; broken: number } {
   const beats: StoryBeat[] = []
-  const unresolved: Array<{ beat: Extract<StoryBeat, { type: 'step' }>; command: string }> = []
+  // failed check runs no later run covered; `passedSince` once any check has passed after it
+  const unresolved: Array<{ beat: Extract<StoryBeat, { type: 'step' }>; command: string; passedSince: boolean }> = []
   let fixes = 0
   let prev: StoryStep | undefined
   for (const s of steps) {
@@ -77,17 +88,18 @@ function beatsOf(steps: readonly StoryStep[]): { beats: StoryBeat[]; fixes: numb
       if (single && isLook(single)) { beats[beats.length - 1] = { type: 'looked', ids: [single.id, s.id], phase: 'looking' }; continue }
     }
     if (isEdit(s)) {
-      if (last?.type === 'edits' && last.file === fileOf(s)) { last.ids.push(s.id); continue }
-      if (single && isEdit(single) && fileOf(single) === fileOf(s)) {
-        beats[beats.length - 1] = { type: 'edits', ids: [single.id, s.id], file: fileOf(s), phase: 'building' }
+      if (last?.type === 'edits' && last.file === fileOf(s.input)) { last.ids.push(s.id); continue }
+      if (single && isEdit(single) && fileOf(single.input) === fileOf(s.input)) {
+        beats[beats.length - 1] = { type: 'edits', ids: [single.id, s.id], file: fileOf(s.input), phase: 'building' }
         continue
       }
     }
     const beat: Extract<StoryBeat, { type: 'step' }> = { type: 'step', id: s.id, phase: phaseOf(s.category) }
     if (s.category === 'test' && finished(s)) {
       const command = commandOf(s)
-      if (s.status === 'failed') unresolved.push({ beat, command })
+      if (s.status === 'failed') unresolved.push({ beat, command, passedSince: false })
       else {
+        for (const u of unresolved) u.passedSince = true
         const fixed = unresolved.filter((u) => covers(command, u.command))
         if (fixed.length) {
           fixes++
@@ -98,17 +110,18 @@ function beatsOf(steps: readonly StoryStep[]): { beats: StoryBeat[]; fixes: numb
     }
     beats.push(beat)
   }
-  return { beats, fixes, broken: unresolved.length }
+  // like the readout, the last finished check decides: a failure counts as broken only when no check passed since
+  return { beats, fixes, broken: unresolved.filter((u) => !u.passedSince).length }
 }
 
-/** `broken` counts failed check runs that no later run covered. */
+/** `broken` counts failed check runs with no passing check after them. */
 function outcomeOf(steps: readonly StoryStep[], fixes: number, broken: number, open: boolean): ChapterOutcome {
   if (open || steps.some((s) => s.status === 'running')) return 'working'
   if (broken > 0) return 'failing'
   // the last step that changed something decides; reads and prompts say nothing
   const lastChange = [...steps].reverse().find((s) => finished(s) && s.category !== 'read')
   if (lastChange?.status === 'failed') return 'failing'
-  if (steps.at(-1)?.status === 'interrupted') return 'stopped'
+  if (steps.at(-1) && isStopped(steps.at(-1)!)) return 'stopped'
   return fixes > 0 ? 'fixed' : 'good'
 }
 

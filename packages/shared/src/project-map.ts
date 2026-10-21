@@ -1,5 +1,6 @@
 import { isRecord } from './hook-payload'
-import { INSTALL, packagesIn, segments } from './shell'
+import { basename, fileOf, str } from './input'
+import { envFilesIn, INSTALL, packagesIn, segments } from './shell'
 import type { FeedStep } from './step'
 import { detectVendor } from './vendors'
 
@@ -47,10 +48,6 @@ const BACKEND = /(^|\/)(app|src\/app)\/(.+\/)?api\/|(^|\/)pages\/api\/|(^|\/)(se
 const PAGE = /(^|\/)(app|src\/app)\/(.+\/)?(page|layout)\.[jt]sx?$|(^|\/)(pages|src\/routes|routes|screens|views|components)\/|\.(html|vue|svelte|astro)$|\.[jt]sx$|\.css$/
 const CODE = /\.(c|m)?[jt]sx?$|\.(py|rb|go|rs|php|java|kt|swift)$/
 
-const ENV_IN_COMMAND = /(?:^|[\s/'"=])(\.env(?:\.[\w.-]+)?)(?=$|[\s'";|&>)])/
-
-const str = (v: unknown) => (typeof v === 'string' ? v : '')
-const basename = (p: string) => p.split('/').pop() ?? p
 const stem = (p: string) => basename(p).replace(/\.[^.]+$/, '').replace(/\.(test|spec)$/, '')
 
 /** "BuyButton", "buy-button" and "buy_button" all read "Buy button". */
@@ -98,22 +95,24 @@ function classify(rel: string): { kind: MapKind; key: string; name: string } | n
   return null
 }
 
-/** Table names a schema file declares (Drizzle, Prisma, SQL, Mongoose), from the text Claude wrote. */
+/** Table names a schema file declares (Drizzle, Prisma, SQL, Mongoose), from the text Claude wrote, in its casing. */
 export function tablesIn(text: string): string[] {
-  const out = new Set<string>()
+  // keyed by the lowercase name, so OrderItem and orderitem are one table, named as first written
+  const out = new Map<string, string>()
   const patterns = [
     /\b(?:pg|sqlite|mysql)Table\(\s*['"`]([A-Za-z_]\w*)/g,
     /^\s*model\s+([A-Za-z_]\w*)\s*\{/gm,
-    /\bcreate\s+table\s+(?:if\s+not\s+exists\s+)?["`[]?([A-Za-z_]\w*)/gi,
+    // a schema before the name (public.orders, "public"."orders") is skipped
+    /\bcreate\s+table\s+(?:if\s+not\s+exists\s+)?(?:["`[]?\w+["`\]]?\.)?["`[]?([A-Za-z_]\w*)/gi,
     /\bmodel\(\s*['"`]([A-Za-z_]\w*)/g,
   ]
-  for (const re of patterns) for (const m of text.matchAll(re)) out.add(m[1]!.toLowerCase())
-  return [...out].slice(0, 12)
+  for (const re of patterns) for (const m of text.matchAll(re)) if (!out.has(m[1]!.toLowerCase())) out.set(m[1]!.toLowerCase(), m[1]!)
+  return [...out.values()].slice(0, 12)
 }
 
 const WRITES = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
-/** A step that made or changed something; anything else (a read, cat .env, a search) only looked. */
-const changes = (s: MapStep) => WRITES.has(s.toolName) || s.category === 'install'
+/** A step that made or changed something: a file write or edit, or an install. Anything else (a read, cat .env, a search) only looked. */
+export const makesChange = (s: Pick<FeedStep, 'category' | 'toolName'>): boolean => WRITES.has(s.toolName) || s.category === 'install'
 
 /**
  * The project map for a session's steps. `cwd` (the session's folder) makes paths relative; without
@@ -131,14 +130,14 @@ export function projectMap(steps: readonly MapStep[], cwd?: string): ProjectMap 
     if (file && !item.files.includes(file)) item.files.push(file)
     if (!item.stepIds.includes(step.id)) item.stepIds.push(step.id)
     const finished = step.status === 'ok' || step.status === 'failed'
-    if (finished && changes(step)) item.state = step.status === 'failed' ? 'failed' : 'changed'
+    if (finished && makesChange(step)) item.state = step.status === 'failed' ? 'failed' : 'changed'
     items.set(id, item)
   }
 
   for (const step of steps) {
     if (step.category === 'prompt') continue
     const input = isRecord(step.input) ? step.input : {}
-    const path = str(input.file_path) || str(input.notebook_path)
+    const path = fileOf(input)
     const command = step.toolName === 'Bash' ? str(input.command) : ''
 
     if (path) {
@@ -146,7 +145,7 @@ export function projectMap(steps: readonly MapStep[], cwd?: string): ProjectMap 
       const c = classify(r)
       if (c) touch(c.kind, c.key, c.name, step, r)
       if (c?.kind === 'data' && c.key === 'tables') {
-        for (const t of tablesIn([str(input.content), str(input.new_string)].join('\n'))) touch('data', `table:${t}`, `${humanize(t)} table`, step, r)
+        for (const t of tablesIn([str(input.content), str(input.new_string)].join('\n'))) touch('data', `table:${t.toLowerCase()}`, `${humanize(t)} table`, step, r)
       }
       const vendor = detectVendor(stem(r))
       if (vendor && c?.kind !== 'service' && CODE.test(r)) touch('service', vendor, vendor, step, r)
@@ -163,8 +162,7 @@ export function projectMap(steps: readonly MapStep[], cwd?: string): ProjectMap 
           if (vendor) touch('service', vendor, vendor, step)
         }
       }
-      const env = command.match(ENV_IN_COMMAND)?.[1]
-      if (env) touch('secrets', env, env, step)
+      for (const env of envFilesIn(command)) touch('secrets', env, env, step)
     }
     const url = str(input.url)
     const vendor = url ? detectVendor(url) : undefined

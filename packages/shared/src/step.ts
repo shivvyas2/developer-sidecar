@@ -15,6 +15,24 @@ export interface Step {
   status: StepStatus
 }
 
+/**
+ * A step the person cancelled, such as a dev server stopped with Ctrl-C: interrupted, or reported by the hook as a
+ * failure with `interrupted: true` in its output. Nothing went wrong, so it says nothing about how things stand.
+ */
+export const isStopped = (s: Pick<Step, 'status'> & { output?: unknown }): boolean =>
+  s.status === 'interrupted' || (typeof s.output === 'object' && s.output !== null && (s.output as { interrupted?: unknown }).interrupted === true)
+
+export type Checks = 'pass' | 'fail' | 'none'
+
+/** How the last check run that finished went, or none when Claude hasn't run any. A run that was cut short says nothing. */
+export function checksOf(steps: readonly (Pick<Step, 'status'> & { category: Category; output?: unknown })[]): Checks {
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const s = steps[i]!
+    if (s.category === 'test' && (s.status === 'ok' || s.status === 'failed') && !isStopped(s)) return s.status === 'ok' ? 'pass' : 'fail'
+  }
+  return 'none'
+}
+
 export type Category =
   | 'read' | 'create' | 'edit' | 'install' | 'test' | 'run' | 'external'
   | 'mcp' | 'git' | 'data' | 'deploy' | 'subagent' | 'prompt' | 'fallback'
@@ -48,8 +66,11 @@ export type ServerMessage =
   | { type: 'decision'; decision: DecisionEntry }
   | { type: 'concept'; concept: GlossaryEntry }
   | { type: 'explainer'; state: ExplainerState }
-  /** Claude's turn ended (the Stop hook); open steps were closed first. */
-  | { type: 'turn_end'; sessionId: string; at: number }
+  /**
+   * Claude's turn ended (the Stop hook); open steps were closed first. `lastStepId` is the turn's newest step
+   * as of the Stop, so a prompt you queued, stored before the Stop, does not stand in for the turn that ended.
+   */
+  | { type: 'turn_end'; sessionId: string; at: number; lastStepId?: string }
   | { type: 'recap'; recap: RecapEntry }
   | { type: 'session_deleted'; id: string }
   | { type: 'reset' }

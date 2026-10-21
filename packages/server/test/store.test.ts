@@ -65,7 +65,7 @@ describe('explainer data', () => {
   test('decisions list oldest first and ignore duplicate ids', () => {
     const s = openStore(':memory:')
     const d = (id: string, at: number): DecisionEntry => ({ id, sessionId: 's1', stepId: 'a', at, title: id, choice: 'c', alternatives: [], reason: 'r' })
-    s.addDecision(d('d2', 2)); s.addDecision(d('d1', 1)); s.addDecision(d('d1', 9))
+    expect([s.addDecision(d('d2', 2)), s.addDecision(d('d1', 1)), s.addDecision(d('d1', 9))]).toEqual([true, true, false])
     expect(s.listDecisions('s1').map((x) => [x.id, x.at])).toEqual([['d1', 1], ['d2', 2]])
     expect(s.listDecisions('other')).toEqual([])
   })
@@ -199,6 +199,15 @@ describe('recaps', () => {
     expect(s.saveRecap(recap('p1', 'pending', 3))).toBe(2)
     expect(s.saveRecap(recap('p2', 'unavailable', 4))).toBe(0)
     expect(s.getRecap('nope')).toBeUndefined()
+  })
+
+  test('a call on a turn already recapped is counted without touching its recap', () => {
+    const s = openStore(':memory:')
+    s.saveRecap(recap('p1', 'pending'))
+    s.saveRecap(recap('p1', 'done', 2))
+    expect(s.countRecapCall('p1')).toBe(2)
+    expect(s.getRecap('p1')).toMatchObject({ status: 'done', ai: { summary: 'S' }, at: 2, count: 2 })
+    expect(s.countRecapCall('nope')).toBe(0)
   })
 
   test('pending recaps can all be failed at once, keeping their count', () => {

@@ -22,29 +22,57 @@ All notable changes to Developer Sidecar are recorded here. The format follows
   a short one. Explanations already stored still show on older steps.
   Secrets are scrubbed before anything is shortened, a recap that can't
   finish says so instead of waiting forever, and a turn that ended while
-  recaps were paused gets its recap when they resume.
+  recaps were paused, or before Sidecar found the claude command, gets its
+  recap when they can run. When Claude goes on with a turn, its recap stays
+  until a new one replaces it and reads "So far", without its old request;
+  a recap that fails or can't run never takes the place of a good one. A
+  long turn's request keeps its newest failures and their output, a message
+  you queued never makes Sidecar recap the wrong turn, decisions are not
+  listed twice, and errors name recaps, not explanations.
 - **Where things stand.** The Stage opens with a card that sums up the last
   thing you asked: how it ended, the parts made or changed, building blocks
   added and whether the checks pass. When a dev server is up there is an
   "Open your app" button, and when a failure is still in the way, a request
-  to copy into Claude Code. It reads "So far" while Claude works.
+  to copy into Claude Code, shown once rather than again on the failed
+  step's card. It reads "So far" while Claude works. The button keeps an
+  https dev server's https, stays while the server is up even when another
+  command such as `npm run build` fails, and goes when the server fails or
+  its own background command is stopped (by any of Claude Code's tool
+  names). A turn that only edited files like README.md says "Done.", not
+  that nothing was changed, and a turn that ran no checks reports the last
+  ones, as the status light does.
 - **The steps read as a story.** The step drawer groups steps under each
   thing you asked, with how it ended (done, done after a fix, needs a fix,
-  stopped early). Runs of reading fold into one line like "Read 3 files,
-  searched once", repeat changes to a file into "Changed page.tsx 3 times",
-  and a check run that fixed an earlier failure is marked FIXED.
+  stopped early), and a chapter never says needs a fix while the stage says
+  the last checks passed. Runs of reading fold into one line like "Read 3
+  files, searched once", repeat changes to a file into "Changed page.tsx 3
+  times", and a check run that fixed an earlier failure is marked FIXED, even
+  when Claude spells it another way (after `cd app &&`, chained with lint, or
+  `npm run test` for `npm test`). A run you stopped never counts as a failure
+  or a fix. Moving to a step inside a fold you closed opens it again.
 - **What you're building.** The Whiteboard tab shows a map of the project
   from what Claude has looked at and changed: pages and screens, behind the
   scenes, your data (with table names), outside services, secret settings,
   checks, helpers and building blocks. Each part says whether Claude looked
   at it, made or changed it, or it needs a fix, and a tap lists its files
-  and the steps that touched it. The stage uses the same names: the service
-  reads STRIPE, the database ORDERS, the packages how many were added.
+  and the steps that touched it, and the part Claude is working on right now
+  says so while Claude works. Table names keep their casing (OrderItem reads
+  Order item) and skip a schema (public.orders reads Orders). Requirement
+  files, editable folders and local paths are not counted as packages,
+  `pnpm add -w zod` still names zod, and a command that names two env files
+  records both. The stage uses the same
+  names: the service reads STRIPE, the database ORDERS, the packages how
+  many were added (a failed install is not).
 - **The stage says how things stand, in plain words.** The frame shows a
   status light (all good, needs a fix, needs you, working), how many files
-  Claude has made, and whether the last checks passed. Step cards say what a
-  step is (looking, new file, checks, checkpoint) instead of the tool and its
-  command, which stays under "Show technical".
+  Claude has made, and whether the last checks passed. The light reads needs
+  you whenever the banner does: while Claude waits for permission or for
+  your next message. A command you stop yourself, like a dev server closed
+  with Ctrl-C, is not counted as a failure. Step cards say what a step is
+  (looking, new file, checks, checkpoint) instead of the tool and its
+  command, which stays under "Show technical". The pane and status line
+  inside Claude Code lead with the same words, followed by the command or
+  file.
 - **Claude is waiting for you.** When Claude Code asks for permission, the
   workstation shows a banner with Claude's own words and says to answer in the
   Claude Code window. The tab title starts with "(waiting)", the session picker
@@ -100,6 +128,9 @@ All notable changes to Developer Sidecar are recorded here. The format follows
   pick the scene. Only a real test runner shows the checking scene, so
   `npx playwright install` and `tsc -p tsconfig.test.json` don't, and quoted
   package names (`pip install "django>=4"`) show up in the install caption.
+  The contents of a heredoc or a `$( )` don't pick the scene either. Test
+  runs from .NET, Gradle, Maven, Elixir, Swift, Flutter, Rails and Laravel
+  count, and `vercel env pull` or `vercel link` is no longer a deploy.
 
 ## [0.1.0] - 2026-10-15
 

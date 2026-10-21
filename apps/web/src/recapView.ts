@@ -4,10 +4,12 @@ export interface RecapText {
   kicker: string
   headline: string
   /** Names of what was made or changed, at most MAX_PARTS, then how many more. */
-  parts: Array<{ name: string; failed: boolean }>
+  parts: Array<{ id: string; name: string; failed: boolean }>
   more: number
   packages: string | null
   checks: string
+  /** Where the app is, without its scheme, for the OPEN YOUR APP button. */
+  address: string | null
 }
 
 export const MAX_PARTS = 8
@@ -15,12 +17,20 @@ export const MAX_PARTS = 8
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
 /**
- * The request to copy into Claude Code while something still fails: the AI recap's, which knows the
- * whole turn, else the rule-based one naming the failed step. Null when nothing fails.
+ * A done AI recap that covers the turn only up to an older step than `newestStepId`, the turn's newest:
+ * Claude went on since (a continued turn), so the card shows it as how things stood, not how they stand.
  */
-export function recapAsk(ai: RecapEntry | undefined, ruleAsk: string | null): string | null {
+export const isStale = (ai: RecapEntry | undefined, newestStepId: string | undefined): boolean =>
+  ai?.status === 'done' && !!newestStepId && ai.lastStepId !== newestStepId
+
+/**
+ * The request to copy into Claude Code while something still fails: the AI recap's, which knows the
+ * whole turn, else the rule-based one naming the failed step. Null when nothing fails. A stale recap's
+ * ask may be about a failure already fixed, so the rule-based one stands in for it.
+ */
+export function recapAsk(ai: RecapEntry | undefined, ruleAsk: string | null, newestStepId?: string): string | null {
   if (!ruleAsk) return null
-  return (ai?.status === 'done' && ai.ai?.next) || ruleAsk
+  return (ai?.status === 'done' && !isStale(ai, newestStepId) && ai.ai?.next) || ruleAsk
 }
 
 /** The recap card's words: plain sentences, no tool names. */
@@ -30,7 +40,7 @@ export function recapText(r: RuleRecap): RecapText {
     ? 'Claude is waiting for your answer in Claude Code.'
     : {
         working: 'Claude is working on it.',
-        good: r.built.length || r.packages ? 'Done.' : 'Done. Nothing was changed.',
+        good: r.changed || r.built.length || r.packages ? 'Done.' : 'Done. Nothing was changed.',
         fixed: `Done, after fixing ${plural(r.fixes, 'problem')}.`,
         failing: 'Something still needs a fix.',
         stopped: 'Stopped before finishing.',
@@ -38,9 +48,16 @@ export function recapText(r: RuleRecap): RecapText {
   return {
     kicker,
     headline,
-    parts: r.built.slice(0, MAX_PARTS).map(({ name, failed }) => ({ name, failed })),
+    parts: r.built.slice(0, MAX_PARTS).map(({ id, name, failed }) => ({ id, name, failed })),
     more: Math.max(0, r.built.length - MAX_PARTS),
     packages: r.packages ? `Added ${plural(r.packages, 'building block')}` : null,
     checks: { pass: 'Checks pass', fail: 'Checks fail', none: 'No checks run yet' }[r.checks],
+    address: r.url ? r.url.replace(/^https?:\/\//, '') : null,
   }
 }
+
+/**
+ * Whether the pulled card for `cardId` shows its own "what to do next". The recap on screen (null when it is not,
+ * as in a replay) already asks about its failed step, with the same words, so the card for that step leaves it out.
+ */
+export const cardAsks = (cardId: string, shownRecap: RuleRecap | null): boolean => shownRecap?.failingId !== cardId
