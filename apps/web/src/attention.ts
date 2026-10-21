@@ -24,6 +24,10 @@ export function liveTag(s: SessionSummary | null, offline: boolean): string | un
   return undefined
 }
 
+/** What the session is doing, for the status light; nothing while offline, as the server can't say. */
+export const liveAttention = (s: SessionSummary | null, offline: boolean): Attention | undefined =>
+  offline ? undefined : s?.attention
+
 /** Whether the live stage should jump to the newest step: Claude's turn ended, or it waits on you. */
 export const catchesUp = (attention: Attention | undefined): boolean => attention === 'done' || attentionNeedsYou(attention)
 

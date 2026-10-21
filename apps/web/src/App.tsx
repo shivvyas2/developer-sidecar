@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { saveSettings } from './api'
-import { attentionNotice, liveTag, sessionMark, titleFor } from './attention'
+import { attentionNotice, liveAttention, liveTag, sessionMark, titleFor } from './attention'
 import { SidecarMark } from './brand/Brand'
 import { DecisionsView } from './DecisionsView'
 import { FolderTabs, StatusStrip, ThemeToggle, type FolderTab } from './ds'
@@ -81,6 +81,7 @@ export function App() {
   const project = selectedSession ? projectName(selectedSession.cwd, selectedSession.id) : undefined
   const notice = attentionNotice(selectedSession)
   const tag = liveTag(selectedSession, offline)
+  const attention = liveAttention(selectedSession, offline)
   const fresh = state.sessions.find((x) => x.id === state.newSession) ?? null
   const resume = () => {
     if (!explainer) return
@@ -161,7 +162,7 @@ export function App() {
             readySince={state.readySince}
             pickRequest={pickRequest}
             {...(tag ? { liveTag: tag } : {})}
-            {...(selectedSession?.attention ? { attention: selectedSession.attention } : {})}
+            {...(attention ? { attention } : {})}
             {...(project ? { project } : {})}
           />
         )}
