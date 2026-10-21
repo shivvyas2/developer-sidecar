@@ -36,25 +36,32 @@ export function beatTitle(b: Exclude<StoryBeat, { type: 'step' }>, byId: Readonl
 
 export type DrawerRow = { type: 'phase'; key: string; title: string } | { type: 'beat'; key: string; beat: StoryBeat }
 
+/** A beat's key in the drawer: its chapter and its first step, which stay put as the beat grows. */
+export const beatKey = (chapterId: string, b: StoryBeat): string => `${chapterId}:${beatIds(b)[0]}`
+
 /**
  * A chapter's beats newest first, as the drawer stacks them, with a phase title above each run of
- * beats in the same phase ("Checking", "Building", ...).
+ * beats in the same phase ("Checking", "Building", ...). A title is keyed by the first beat of its
+ * run, so titles keep their keys as beats arrive live.
  */
 export function drawerRows(c: Pick<Chapter, 'id' | 'beats'>): DrawerRow[] {
   const rows: DrawerRow[] = []
-  const beats = [...c.beats].reverse()
-  beats.forEach((b, i) => {
-    if (i === 0 || beats[i - 1]!.phase !== b.phase) rows.push({ type: 'phase', key: `${c.id}:phase:${i}`, title: PHASE_TITLE[b.phase] })
-    rows.push({ type: 'beat', key: `${c.id}:${beatIds(b)[0]}`, beat: b })
+  // walk oldest first so each run knows its first beat, then stack the rows newest first
+  let runStart = ''
+  c.beats.forEach((b, i) => {
+    if (i === 0 || c.beats[i - 1]!.phase !== b.phase) runStart = beatKey(c.id, b)
+    rows.push({ type: 'beat', key: beatKey(c.id, b), beat: b })
+    // the run's newest beat: its title goes above it once the rows are stacked newest first
+    if (i === c.beats.length - 1 || c.beats[i + 1]!.phase !== b.phase) rows.push({ type: 'phase', key: `${runStart}:phase`, title: PHASE_TITLE[b.phase] })
   })
-  return rows
+  return rows.reverse()
 }
 
 /** The key of the folded beat holding this step, so selecting a step inside one opens it. */
 export function foldedBeatOf(chapters: readonly Chapter[], stepId: string | null): string | null {
   if (!stepId) return null
   for (const c of chapters) {
-    for (const b of c.beats) if (b.type !== 'step' && b.ids.includes(stepId)) return `${c.id}:${b.ids[0]}`
+    for (const b of c.beats) if (b.type !== 'step' && b.ids.includes(stepId)) return beatKey(c.id, b)
   }
   return null
 }
