@@ -1,5 +1,6 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { homedir } from 'node:os'
+import { join, parse, resolve } from 'node:path'
 import ignore from 'ignore'
 import type { Baseline, GitInfo } from '@sidecar/shared'
 
@@ -25,11 +26,14 @@ export interface ScanOptions {
   now?: () => number
   /** Reads one of the few files the scan opens; injectable so tests can see what was opened. */
   read?: (path: string) => Promise<string>
+  /** The person's home folder; never scanned. */
+  home?: string
 }
 
 /** owner and name from an https or ssh remote URL, or null when it is not one. */
 export function parseRemote(url: string): GitInfo['remote'] {
-  const m = url.trim().match(/^(?:https?:\/\/(?:[^@/]+@)?|ssh:\/\/(?:[^@/]+@)?|[^@/\s]+@)([^/:\s]+)[/:]([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/)
+  // the owner may be a group path (gitlab.com/group/sub/repo); an ssh:// URL may name a port
+  const m = url.trim().match(/^(?:https?:\/\/(?:[^@/]+@)?|ssh:\/\/(?:[^@/]+@)?|[^@/\s]+@)([^/:\s]+)(?::\d+)?[/:]((?:[^/\s]+\/)*?[^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/)
   return m ? { host: m[1]!.toLowerCase(), owner: m[2]!, name: m[3]! } : null
 }
 
@@ -60,6 +64,9 @@ async function exists(path: string): Promise<boolean> {
 
 export async function scanProject(cwd: string, opts: ScanOptions = {}): Promise<Baseline | null> {
   if (!cwd || !(await isDir(cwd))) return null
+  // a session started in the home folder or at a root would walk someone's personal files: skip it
+  const here = resolve(cwd)
+  if (here === resolve(opts.home ?? homedir()) || here === parse(here).root) return null
   const cap = opts.cap ?? SCAN_CAP
   const read = async (rel: string): Promise<string | null> => {
     try { return await (opts.read ?? ((p: string) => readFile(p, 'utf8')))(join(cwd, rel)) } catch { return null }

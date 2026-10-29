@@ -45,14 +45,22 @@ export type TownInputStep = Pick<FeedStep, 'id' | 'category' | 'status' | 'toolN
 
 const SITE_OFFICE = 'site-office'
 const CONFIG = /(^|\/)(package\.json|pyproject\.toml|requirements\.txt|Gemfile|go\.mod|Cargo\.toml|tsconfig[\w.-]*\.json|(vite|next|astro|svelte|nuxt)\.config\.[cm]?[jt]s)$/
-const BUILD = /\b(build|tsc|compile)\b/
+/** Build commands: a package script named build, the TypeScript compiler, a framework's build, or make. */
+const BUILDS = [
+  /(^|\s)(npm|pnpm|yarn|bun)\s+(run\s+)?build(\s|:|$)/,
+  /(^|\s)(npx\s+|pnpm\s+exec\s+|yarn\s+)?tsc(\s|$)/,
+  /(^|\s)(npx\s+)?(vite|next|nuxt|astro|remix|gatsby|svelte-kit|turbo)\s+build(\s|$)/,
+  /(^|\s)(cargo|go|swift|dotnet|gradle|\.\/gradlew)\s+build(\s|$)/,
+  /^make(\s|$)/,
+]
+export const isBuildCommand = (command: string): boolean => segments(command).some((p) => BUILDS.some((re) => re.test(p.trim())))
 /** Worst first: what a building shows when its parts disagree. */
 const RANK: Finish[] = ['smoking', 'rising', 'unpainted', 'fixed', 'painted', 'built']
 
 const commandOf = (s: TownInputStep) => (s.toolName === 'Bash' && isRecord(s.input) ? str(s.input.command) : '')
 const finished = (s: TownInputStep) => (s.status === 'ok' || s.status === 'failed') && !isStopped(s)
 /** A check: a test run, or a build command run. */
-const isCheck = (s: TownInputStep) => s.category === 'test' || (s.category === 'run' && segments(commandOf(s)).some((p) => BUILD.test(p)))
+const isCheck = (s: TownInputStep) => s.category === 'test' || (s.category === 'run' && isBuildCommand(commandOf(s)))
 
 /** A path the step names that is not inside the project folder, such as ~/.zshrc, /tmp/x.ts or C:\tmp\a.ts. */
 function outside(s: TownInputStep, cwd?: string): boolean {
@@ -75,7 +83,7 @@ const topFolder = (i: Item) => { const f = i.files[0] ?? ''; return f.includes('
 const folderName = (folder: string) => (folder ? humanize(folder) : 'Helpers')
 function groupBy(items: Item[], key: (i: Item) => string): [string, Item[]][] {
   const out = new Map<string, Item[]>()
-  for (const i of items) out.set(key(i), [...(out.get(key(i)) ?? []), i])
+  for (const i of items) { const k = key(i); const list = out.get(k); if (list) list.push(i); else out.set(k, [i]) }
   return [...out]
 }
 
@@ -86,7 +94,7 @@ export function townOf(all: readonly TownInputStep[], opts: { cwd?: string; base
 
   // which parts each step touched, so finishes can follow the steps in order
   const partsOf = new Map<string, string[]>()
-  for (const i of items) for (const id of i.stepIds) partsOf.set(id, [...(partsOf.get(id) ?? []), i.id])
+  for (const i of items) for (const id of i.stepIds) { const list = partsOf.get(id); if (list) list.push(i.id); else partsOf.set(id, [i.id]) }
 
   const parts = new Map<string, Part>(items.map((i) => [i.id, { finish: 'built' }]))
   const inspector: Part = { finish: 'built' }

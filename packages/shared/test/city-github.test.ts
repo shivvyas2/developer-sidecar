@@ -60,3 +60,15 @@ test('copy is plain', () => {
     expect(text).not.toMatch(EMOJI)
   }
 })
+
+describe('review fixes', () => {
+  const ok = (command: string) => ({ category: 'git' as const, status: 'ok' as const, toolName: 'Bash', input: { command } })
+  test('writing .gitignore in the session counts', () => {
+    const steps = [{ category: 'create' as const, status: 'ok' as const, toolName: 'Write', input: { file_path: '/p/.gitignore', content: '.env*' } }]
+    expect(done(githubGuide(none, steps)).gitignore).toBe(true)
+  })
+  test('git remote add to GitHub counts as a GitHub repository', () => {
+    expect(done(githubGuide(none, [ok('git remote add origin git@github.com:o/r.git')])).remote).toBe(true)
+    expect(done(githubGuide(none, [ok('git remote add origin https://gitlab.com/o/r.git')])).remote).toBe(false)
+  })
+})

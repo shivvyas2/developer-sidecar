@@ -145,3 +145,21 @@ describe('a town that stays drawable', () => {
     expect(t.buildings.find((b) => b.name === 'More pages')?.files.length).toBeGreaterThan(0)
   })
 })
+
+describe('review fixes: what counts as a check', () => {
+  test.each(['rm -rf build', 'mkdir -p build', 'cat build.log', 'echo build'])('%s is not a check', (c) => {
+    expect(finish(town([write('app/page.tsx'), bash(c, 'run')]), 'shop:page:page:')).toBe('unpainted')
+  })
+  test.each(['npm run build', 'pnpm build', 'yarn build', 'bun run build', 'npx tsc --noEmit', 'tsc -p .', 'vite build', 'next build', 'cargo build', 'go build ./...', 'make'])('%s is a check', (c) => {
+    expect(finish(town([write('app/page.tsx'), bash(c, 'run')]), 'shop:page:page:')).toBe('painted')
+  })
+  test('a big project builds its town quickly', () => {
+    const files = Array.from({ length: 5000 }, (_, i) => `src/components/c${i}.tsx`)
+    const steps = Array.from({ length: 1500 }, (_, i) => write(`src/components/c${i % 300}.tsx`))
+    town(steps, base({ files }))
+    // linear now (about 15 ms alone, the project map's own cost); the margin is for the suite running in parallel
+    const t0 = performance.now()
+    town(steps, base({ files }))
+    expect(performance.now() - t0).toBeLessThan(50)
+  })
+})

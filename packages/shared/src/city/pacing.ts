@@ -20,7 +20,8 @@ export const initialPacer: PacerState = { playing: null, waiting: null, recent: 
 
 export type PacerAction =
   | { type: 'arrive'; scenes: CityScene[]; t: number }
-  | { type: 'done'; t: number }
+  /** A scene ended. Naming it keeps a scene that already gave way (to a catch-up) from ending the one that replaced it. */
+  | { type: 'done'; t: number; scene?: CityScene }
   | { type: 'catchUp'; scene: CityScene; t: number }
 
 const PLURAL: Partial<Record<SceneKind, (n: number) => string>> = {
@@ -59,6 +60,7 @@ export function pace(s: PacerState, a: PacerAction): PacerState {
       return { playing, waiting, recent: note(s.recent, a.scenes, a.t) }
     }
     case 'done':
+      if (a.scene && a.scene !== s.playing) return s
       return { ...s, playing: s.waiting, waiting: null }
     case 'catchUp':
       return { playing: a.scene, waiting: null, recent: note(s.recent, [a.scene], a.t) }
@@ -69,4 +71,17 @@ export function cameraMode(s: PacerState, t: number): { mode: 'follow'; at: stri
   const spots = [...new Set(s.recent.filter((r) => t - r.t < BURST_WINDOW_MS).map((r) => r.at))]
   if (spots.length >= BURST_SPOTS) return { mode: 'overview', at: spots }
   return { mode: 'follow', at: s.waiting?.at ?? s.playing?.at ?? s.recent.at(-1)?.at ?? 'site-office' }
+}
+
+/** What a shown step looked like when its scene was chosen. */
+export interface SceneKey { id: string; status: string; waiting: boolean }
+
+/**
+ * A step arrives running and finishes later; Claude can start waiting on you after it arrived. When the step on
+ * show turns out to have failed, been stopped, or to be waiting on you, its scene plays again with that overlay.
+ */
+export function needsRescene(prev: SceneKey | null, next: SceneKey): boolean {
+  if (!prev || prev.id !== next.id) return false
+  if (next.waiting && !prev.waiting) return true
+  return prev.status !== next.status && (next.status === 'failed' || next.status === 'interrupted')
 }

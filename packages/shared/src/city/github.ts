@@ -35,11 +35,11 @@ export function githubGuide(git: GitInfo | null, steps: readonly GuideStep[]): G
   return [
     { id: 'repo', done: !!git?.repo || ran(steps, /\bgit\s+init\b/), title: 'The project is a git repository',
       why: 'Without it there are no snapshots to go back to when something breaks.' },
-    { id: 'gitignore', done: !!git && git.ignoresSecrets && git.ignoresDeps, title: 'A .gitignore keeps secrets and clutter out',
+    { id: 'gitignore', done: (!!git && git.ignoresSecrets && git.ignoresDeps) || wrote(steps, /^\.gitignore$/), title: 'A .gitignore keeps secrets and clutter out',
       why: 'Secret keys pushed to GitHub can be copied by anyone who sees the repository, even after you delete them.' },
     { id: 'readme', done: !!git?.readme || wrote(steps, /^readme(\.|$)/i), title: 'A README says what the project is',
       why: 'Future you, and anyone you share it with, will need to know what it is and how to run it.' },
-    { id: 'remote', done: onGitHub || ran(steps, /\bgh\s+repo\s+create\b/), title: 'There is a GitHub repository for it',
+    { id: 'remote', done: onGitHub || ran(steps, /\bgh\s+repo\s+create\b/) || ran(steps, /\bgit\s+remote\s+(add|set-url)\s+\S+\s+\S*github\.com[/:]/), title: 'There is a GitHub repository for it',
       why: otherHost ? `It is connected to ${otherHost}. GitHub is the suggested home, but any host keeps a copy off your computer.` : 'A copy on GitHub keeps your work safe if this computer is lost.' },
     { id: 'pushed', done: steps.some((s) => s.category === 'git' && s.status === 'ok' && s.toolName === 'Bash' && isRecord(s.input) && /\bgit\s+push\b/.test(str(s.input.command))),
       title: 'The work has been pushed', why: 'Commits only reach GitHub when they are pushed.' },

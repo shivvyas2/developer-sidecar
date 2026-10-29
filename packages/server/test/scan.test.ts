@@ -93,3 +93,15 @@ describe('parseRemote', () => {
     ['nonsense', null],
   ])('%s', (url, want) => expect(parseRemote(url)).toEqual(want))
 })
+
+describe('review fixes', () => {
+  test('never scans a home folder or a filesystem root', async () => {
+    const home = folder({ 'Documents/tax.pdf': '' })
+    expect(await scanProject(home, { home })).toBeNull()
+    expect(await scanProject('/')).toBeNull()
+  })
+  test.each([
+    ['https://gitlab.com/group/sub/r.git', { host: 'gitlab.com', owner: 'group/sub', name: 'r' }],
+    ['ssh://git@github.com:22/o/r.git', { host: 'github.com', owner: 'o', name: 'r' }],
+  ])('parseRemote %s', (url, want) => expect(parseRemote(url)).toEqual(want))
+})

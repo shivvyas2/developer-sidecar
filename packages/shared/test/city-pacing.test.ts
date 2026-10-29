@@ -62,3 +62,22 @@ test('merged captions read plainly', () => {
   expect(mergeCaption('inspect', 1, 'Running the tests')).toBe('Running the tests')
   for (const k of ['blueprint', 'bricks', 'scaffold', 'paint', 'delivery', 'toolbox', 'library'] as SceneKind[]) expect(mergeCaption(k, 5, 'x')).not.toMatch(/—/)
 })
+
+describe('review fixes', () => {
+  test('a scene that ends after a catch-up does not cancel the scene caught up to', () => {
+    const old = sc('blueprint'), picked = sc('photo')
+    let s = pace(initialPacer, { type: 'arrive', scenes: [old], t: 0 })
+    s = pace(s, { type: 'catchUp', scene: picked, t: 1 })
+    s = pace(s, { type: 'done', scene: old, t: 2 })
+    expect(s.playing).toBe(picked)
+  })
+  test('needsRescene: a step that finishes badly, or starts waiting on you, plays again', async () => {
+    const { needsRescene } = await import('../src/city/pacing')
+    expect(needsRescene({ id: 'a', status: 'running', waiting: false }, { id: 'a', status: 'failed', waiting: false })).toBe(true)
+    expect(needsRescene({ id: 'a', status: 'running', waiting: false }, { id: 'a', status: 'running', waiting: true })).toBe(true)
+    expect(needsRescene({ id: 'a', status: 'running', waiting: false }, { id: 'a', status: 'interrupted', waiting: false })).toBe(true)
+    expect(needsRescene({ id: 'a', status: 'running', waiting: false }, { id: 'a', status: 'ok', waiting: false })).toBe(false)
+    expect(needsRescene({ id: 'a', status: 'failed', waiting: false }, { id: 'b', status: 'failed', waiting: false })).toBe(false)
+    expect(needsRescene(null, { id: 'a', status: 'failed', waiting: false })).toBe(false)
+  })
+})

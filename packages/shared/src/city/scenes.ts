@@ -3,7 +3,7 @@ import { fileOf, str } from '../input'
 import { localUrl } from '../recap'
 import { segments, startsDevServer } from '../shell'
 import { isStopped, type FeedStep } from '../step'
-import { buildingFor, type CityTown } from './town'
+import { buildingFor, isBuildCommand, type CityTown } from './town'
 
 /** What a step looks like in the town: a short piece of work at the building it touched. */
 
@@ -26,10 +26,8 @@ export interface CityScene {
   count: number
 }
 
-const BUILD = /\b(build|tsc|compile)\b/
-
 function runKind(s: FeedStep, command: string): SceneKind {
-  if (segments(command).some((p) => BUILD.test(p))) return 'pour'
+  if (isBuildCommand(command)) return 'pour'
   if (startsDevServer(command) || localUrl(s.output)) return 'lightsOn'
   return 'toolbox'
 }
