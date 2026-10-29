@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useState } from 'react'
-import { buildRecap, isExplained, projectMap, SceneSpecSchema, storyOf, type Attention, type ProjectMap, type FeedStep, type RecapEntry, type StepExplanation } from '@sidecar/shared'
+import { buildRecap, isExplained, projectMap, SceneSpecSchema, storyOf, type Attention, type ProjectMap, type FeedStep, type PlaceId, type RecapEntry, type StepExplanation } from '@sidecar/shared'
 import { checksOf, HEALTH_LIGHT, HEALTH_WORD, healthOf, nameTown, townFrom, type Readout } from '@sidecar/ui-kit'
 import { forStatus } from '@sidecar/ui-kit/catalog'
 import { Scene } from '@sidecar/ui-kit/react'
@@ -7,6 +7,8 @@ import { Chip, PulledCard, ReadoutPanel, RoundButton, TickRuler } from './ds'
 import { catchesUp } from './attention'
 import { readoutFields, useFramed } from './framed'
 import { formatElapsed, stepKind } from './format'
+import { Legend } from './Legend'
+import { placeAt } from './legendText'
 import { nextAsk } from './next'
 import { NextStep } from './NextStep'
 import { RecapCard } from './RecapCard'
@@ -43,6 +45,7 @@ export function StageTab({ sessionId, loaded, steps, explanations, recaps, proje
   const [stage, dispatch] = useReducer(stageReducer, initialStage)
   const [selection, select] = useReducer(selectionReducer, initialSelection)
   const [replay, setReplay] = useState<Replay | null>(null)
+  const [tapped, setTapped] = useState<PlaceId | null>(null)
   const ids = useMemo(() => steps.map((s) => s.id), [steps])
   const latestId = ids.length > 0 ? ids[ids.length - 1]! : null
 
@@ -141,7 +144,10 @@ export function StageTab({ sessionId, loaded, steps, explanations, recaps, proje
         {!framed && shown ? (
           <ReadoutPanel label="Stage readout" fields={readoutFields(readout)} note={`${tag ?? (live ? 'LIVE' : 'REPLAY')} · ${now}`} />
         ) : null}
-        <section className="stagetab__stage" aria-label="Stage">
+        {/* a tap on a place says what it is; the Legend below lists every place for keyboard and screen reader users.
+            Read on press, not click: a playing scene redraws its SVG every frame, so by the release the shape
+            that was pressed is gone and the click lands on the stage itself. */}
+        <section className="stagetab__stage" aria-label="Stage" onPointerDown={(e) => { const p = placeAt(e.target as Element); if (p) setTapped(p) }}>
           {shown && parsed?.success ? (
             <Scene
               key={`${mode}:${shown.id}`}
@@ -169,6 +175,7 @@ export function StageTab({ sessionId, loaded, steps, explanations, recaps, proje
           <RoundButton label="⏸" title="Pause" onPress={pause} disabled={!!replay && !replay.playing} />
           <RoundButton label="LIVE" title="Back to live" active={live} onPress={goLive} />
         </div>
+        <Legend tapped={tapped} onClear={() => setTapped(null)} />
         {card ? (
           <StepDetail
             key={card.id}

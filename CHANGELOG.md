@@ -8,13 +8,20 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 
 ### Added
 
+- **A first look, before your first session.** With no sessions yet, the
+  Stage plays a sample session, clearly marked SAMPLE, with a line on how to
+  start. It runs in the browser only and costs nothing, and a trip to
+  another tab picks it up where it was. Under the stage, tap anything to see
+  what it is, even while it moves, or open "What am I looking at?" for the
+  whole key in plain words.
 - **AI recaps replace step-by-step explanations.** When Claude finishes a
   turn, one short request writes a plain summary of it, what it means for
   your app, and any decisions and terms worth knowing, shown on the Where
   things stand card. It used to be a request every few seconds while Claude
   worked. On the sample sessions in `bench/explainer` that is 5 requests
-  instead of 9 and about 75% fewer tokens, and a long turn costs no more than
-  a short one. Explanations already stored still show on older steps.
+  instead of 9 and about 75% fewer tokens than the per-step explainer, even
+  after it learned to skip and trim steps, and a long turn costs no more
+  than a short one. Explanations already stored still show on older steps.
   Secrets are scrubbed before anything is shortened, a recap that can't
   finish says so instead of waiting forever, and a turn that ended while
   recaps were paused, or before Sidecar found the claude command, gets its
@@ -55,9 +62,9 @@ All notable changes to Developer Sidecar are recorded here. The format follows
   Order item) and skip a schema (public.orders reads Orders). Requirement
   files, editable folders and local paths are not counted as packages,
   `pnpm add -w zod` still names zod, and a command that names two env files
-  records both. The stage uses the same
-  names: the service reads STRIPE, the database ORDERS, the packages how
-  many were added (a failed install is not).
+  records both. The stage uses the same names: the service reads STRIPE, the
+  database ORDERS, the packages how many were added (a failed install is
+  not).
 - **The stage says how things stand, in plain words.** The frame shows a
   status light (all good, needs a fix, needs you, working), how many files
   Claude has made, and whether the last checks passed. The light reads needs
@@ -74,9 +81,9 @@ All notable changes to Developer Sidecar are recorded here. The format follows
   marks the session, and the stage reads NEEDS YOU, then DONE once Claude's turn
   ends. Older databases gain the new session columns on open.
 - **A next step for every failure.** A failed step now shows "What to do
-  next": a request to copy into Claude Code, suggested by the explainer from
-  the step's output (or a plain one naming the step when explanations are
-  off), and a reminder that Esc twice or /rewind undoes Claude's changes.
+  next": a request to copy into Claude Code (the AI recap's suggestion when
+  its turn has one, else a plain one naming the step), and a reminder that
+  Esc twice or /rewind undoes Claude's changes.
 - **New sessions are offered.** When a Claude Code session starts while you are
   watching another one, a banner names its project with a button to switch.
 - **Clear offline state.** When the workstation loses its server for more than
@@ -91,14 +98,6 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 
 ### Changed
 
-- **Lighter explanations.** The explainer skips steps whose caption already
-  says enough: successful reads and searches, read-only shell commands like
-  `ls` and `git status`, and repeat edits to a file already changed since your
-  last prompt. Failed steps are always explained. What it does send is
-  trimmed: file bodies go as a short preview, successful output keeps only
-  its end, and steps get short labels (s1, s2, ...) instead of long ids. On the sample sessions in `bench/explainer`, that is about 68% fewer
-  input and 57% fewer output tokens. A queued explanation never waits more
-  than 15 seconds.
 - **Read-only commands look like reading.** `ls`, `cat`, `grep`, `find`,
   `git status` and similar show the bookshelf scene with a plain caption
   instead of "Running a command".

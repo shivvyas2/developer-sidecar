@@ -2,6 +2,8 @@ import type { DecisionEntry, ExplainerState, FeedStep, GlossaryEntry, RecapEntry
 
 export interface FeedState {
   sessions: SessionSummary[]
+  /** The session list has arrived at least once, so an empty list really means there are none. */
+  listed: boolean
   selected: string | null
   steps: Record<string, FeedStep[]>
   lastSeq: number
@@ -26,7 +28,7 @@ export type FeedAction =
   | { type: 'glossary'; sessionId: string; entries: GlossaryEntry[] }
   | { type: 'recaps'; sessionId: string; recaps: RecapEntry[] }
 
-export const initialFeed: FeedState = { sessions: [], selected: null, steps: {}, lastSeq: 0, loaded: {},
+export const initialFeed: FeedState = { sessions: [], listed: false, selected: null, steps: {}, lastSeq: 0, loaded: {},
   explanations: {}, recaps: {}, decisions: {}, glossary: {}, explainer: null, newSession: null,
 }
 
@@ -45,7 +47,7 @@ export function feedReducer(state: FeedState, action: FeedAction): FeedState {
       return { ...state, sessions, selected: state.selected ?? id, newSession: fresh ? id : state.newSession }
     }
     case 'sessions':
-      return { ...state, sessions: [...action.sessions].sort(byLastAt), selected: state.selected ?? action.sessions[0]?.id ?? null }
+      return { ...state, listed: true, sessions: [...action.sessions].sort(byLastAt), selected: state.selected ?? action.sessions[0]?.id ?? null }
     case 'step': {
       const s = action.step
       const list = state.steps[s.sessionId] ?? []
@@ -133,7 +135,7 @@ export function feedReducer(state: FeedState, action: FeedAction): FeedState {
       }
     }
     case 'reset':
-      return { ...initialFeed, explainer: state.explainer }
+      return { ...initialFeed, listed: state.listed, explainer: state.explainer }
     case 'turn_end':
       return state
   }
