@@ -286,6 +286,23 @@ export class CityRenderer {
     }, { passive: false })
   }
 
+  protected readonly ray = new THREE.Raycaster()
+  /** What is under a point on the canvas (CSS pixels): a building, or the scene a step is playing. */
+  pick(x: number, y: number): { building?: string; stepId?: string } | null {
+    const ndc = new THREE.Vector2((x / this.canvas.clientWidth) * 2 - 1, -(y / this.canvas.clientHeight) * 2 + 1)
+    this.ray.setFromCamera(ndc, this.camera)
+    const shown = (o: THREE.Object3D) => { for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) return false; return true }
+    for (const h of this.ray.intersectObjects(this.scene.children, true)) {
+      if (!shown(h.object)) continue
+      const ids = h.object.userData.stepIds as string[] | undefined
+      if (ids?.length) return { stepId: ids.at(-1)! }
+      const b = h.object.userData.buildingId as string | undefined
+      if (b) return { building: b }
+      if (h.object.name === 'ground') return null
+    }
+    return null
+  }
+
   protected spot(id: string): Spot {
     const p = this.placed.get(id) ?? this.placed.get('site-office')
     return p ? { x: p.plot.x, z: p.plot.z, w: p.plot.w, d: p.plot.d, h: p.view.height } : { x: 0, z: 0, w: 4, d: 4, h: 2 }
@@ -297,7 +314,8 @@ export class CityRenderer {
     const at = this.spot(scene.at), site = this.spot('site-office')
     const run = buildScene(scene.kind, scene.overlay, at, site)
     this.scene.add(run.group)
-    run.group.traverse((o) => { if (o instanceof THREE.Mesh) o.castShadow = true })
+    run.group.traverse((o) => { if (o instanceof THREE.Mesh) o.castShadow = true; o.userData.stepIds = scene.stepIds })
+    this.foreman.traverse((o) => { o.userData.stepIds = scene.stepIds })
     this.caption.textContent = scene.caption
     this.captionAt = new THREE.Vector3(at.x, at.h + 1.2, at.z)
     this.captionUntil = Infinity
