@@ -123,3 +123,25 @@ describe('buildingFor', () => {
     [0, 'shop:page:page:'], [1, 'yard'], [2, 'inspector'], [3, 'archive'], [4, 'site-office'],
   ])('step %i plays at %s', (i, id) => expect(buildingFor(steps[i]!, t)).toBe(id))
 })
+
+describe('a town that stays drawable', () => {
+  test('page parts that are not routes share one shop per folder', () => {
+    const t = town([write('app/page.tsx'), write('components/BuyButton.tsx'), write('components/Cart.tsx')])
+    expect(t.buildings.filter((b) => b.kind === 'shop').map((b) => b.name).sort()).toEqual(['Components', 'Home page'])
+  })
+  test('helpers share one workshop per folder', () => {
+    const t = town([write('lib/a.ts'), write('lib/b.ts'), write('scripts/c.ts'), write('d.ts')])
+    expect(t.buildings.filter((b) => b.kind === 'workshop').map((b) => b.name).sort()).toEqual(['Helpers', 'Lib', 'Scripts'])
+  })
+  test('a huge project keeps at most 40 shops and 12 workshops', () => {
+    const files = [
+      ...Array.from({ length: 100 }, (_, i) => `app/r${i}/page.tsx`),
+      ...Array.from({ length: 3000 }, (_, i) => `components/c${i}.tsx`),
+      ...Array.from({ length: 30 }, (_, i) => `pkg${i}/index.ts`),
+    ]
+    const t = town([], base({ files }))
+    expect(t.buildings.filter((b) => b.kind === 'shop').length).toBeLessThanOrEqual(40)
+    expect(t.buildings.filter((b) => b.kind === 'workshop').length).toBeLessThanOrEqual(12)
+    expect(t.buildings.find((b) => b.name === 'More pages')?.files.length).toBeGreaterThan(0)
+  })
+})

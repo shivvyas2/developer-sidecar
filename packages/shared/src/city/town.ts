@@ -1,6 +1,6 @@
 import { isRecord } from '../hook-payload'
 import { fileOf, str } from '../input'
-import { makesChange, projectMap, type MapKind, type MapItem } from '../project-map'
+import { humanize, makesChange, projectMap, type MapKind, type MapItem } from '../project-map'
 import { serverUrl } from '../recap'
 import { segments } from '../shell'
 import { isStopped, type FeedStep } from '../step'
@@ -65,6 +65,20 @@ function outside(s: TownInputStep, cwd?: string): boolean {
 
 interface Part { finish: Finish; failedBy?: string }
 
+/** Most shops and workshops a town draws; the rest share one last building. */
+export const MAX_SHOPS = 40
+export const MAX_WORKSHOPS = 12
+
+type Item = MapItem & { kind: MapKind }
+/** The first folder of an item's first file, or '' for a file at the top of the project. */
+const topFolder = (i: Item) => { const f = i.files[0] ?? ''; return f.includes('/') ? f.split('/')[0]! : '' }
+const folderName = (folder: string) => (folder ? humanize(folder) : 'Helpers')
+function groupBy(items: Item[], key: (i: Item) => string): [string, Item[]][] {
+  const out = new Map<string, Item[]>()
+  for (const i of items) out.set(key(i), [...(out.get(key(i)) ?? []), i])
+  return [...out]
+}
+
 export function townOf(all: readonly TownInputStep[], opts: { cwd?: string; baseline?: Baseline } = {}): CityTown {
   const steps = all.filter((s) => !outside(s, opts.cwd))
   const map = projectMap(steps, opts.cwd, opts.baseline)
@@ -116,7 +130,7 @@ export function townOf(all: readonly TownInputStep[], opts: { cwd?: string; base
   const lit = serverUrl(steps as Parameters<typeof serverUrl>[0]) !== undefined
   const buildings: Building[] = []
   const worst = (fs: Finish[]): Finish => RANK.find((f) => fs.includes(f)) ?? 'built'
-  const one = (id: string, kind: BuildingKind, name: string, group: (MapItem & { kind: MapKind })[], extra: Partial<Building> = {}) => {
+  const one = (id: string, kind: BuildingKind, name: string, group: Item[], extra: Partial<Building> = {}) => {
     if (!group.length) return
     buildings.push({
       id, kind, name, mapId: group[0]!.id,
@@ -125,9 +139,20 @@ export function townOf(all: readonly TownInputStep[], opts: { cwd?: string; base
     })
   }
   const of = (k: MapKind) => items.filter((i) => i.kind === k)
-  for (const i of of('page')) one(`shop:${i.id}`, 'shop', i.name, [i], { lit })
+  // routes get a shop each; other page parts (components, styles) share one per top folder
+  const shops = groupBy(of('page'), (i) => (/^page:(page|layout):/.test(i.id) ? i.id : `group:${topFolder(i)}`))
+  shops.forEach(([key, group], n) => {
+    if (n >= MAX_SHOPS - 1 && shops.length > MAX_SHOPS) return
+    one(`shop:${key}`, 'shop', key.startsWith('group:') ? folderName(key.slice(6)) : group[0]!.name, group, { lit })
+  })
+  if (shops.length > MAX_SHOPS) one('shop:more', 'shop', 'More pages', shops.slice(MAX_SHOPS - 1).flatMap(([, g]) => g), { lit })
   one('office', 'office', 'Behind the scenes', of('backend'))
-  for (const i of of('code')) one(`workshop:${i.id}`, 'workshop', i.name, [i])
+  const workshops = groupBy(of('code'), (i) => topFolder(i))
+  workshops.forEach(([folder, group], n) => {
+    if (n >= MAX_WORKSHOPS - 1 && workshops.length > MAX_WORKSHOPS) return
+    one(`workshop:${folder}`, 'workshop', folderName(folder), group)
+  })
+  if (workshops.length > MAX_WORKSHOPS) one('workshop:more', 'workshop', 'More helpers', workshops.slice(MAX_WORKSHOPS - 1).flatMap(([, g]) => g))
   one('warehouse', 'warehouse', 'Your data', of('data'))
   for (const i of of('service')) one(`service:${i.name}`, 'service', i.name, [i], { vendorKind: vendorKind(i.name) })
   one('vault', 'vault', 'Secret settings', of('secrets'))
