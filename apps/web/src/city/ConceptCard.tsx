@@ -15,6 +15,10 @@ export interface ConceptCardProps {
 /** A card that goes as deep as you like: the analogy first, then what it really is, where it is in your project, and related ideas. */
 export function ConceptCard({ card, name, onPickStep, onConcept, onGlossary, onClose }: ConceptCardProps) {
   const [deep, setDeep] = useState(false)
+  const [all, setAll] = useState(false)
+  const files = all ? card.files : card.files.slice(0, 12)
+  const steps = all ? card.steps : card.steps.slice(-12)
+  const more = card.files.length - files.length + card.steps.length - steps.length
   return (
     <section className="concept" aria-label={`About ${card.city}`}>
       <header className="concept__head">
@@ -31,12 +35,13 @@ export function ConceptCard({ card, name, onPickStep, onConcept, onGlossary, onC
           <p>{card.layer2}</p>
           <h3 className="concept__h">In your project</h3>
           {card.files.length === 0 && card.steps.length === 0 && <p className="concept__none">Nothing in this project yet.</p>}
-          {card.files.length > 0 && <ul className="concept__files">{card.files.slice(0, 12).map((f) => <li key={f}><code>{f}</code></li>)}{card.files.length > 12 && <li>and {card.files.length - 12} more</li>}</ul>}
-          {card.steps.length > 0 && (
+          {files.length > 0 && <ul className="concept__files">{files.map((f) => <li key={f}><code>{f}</code></li>)}</ul>}
+          {steps.length > 0 && (
             <ul className="concept__steps">
-              {card.steps.slice(-8).map((s) => <li key={s.id}><button type="button" onClick={() => onPickStep(s.id)}>{s.caption}</button></li>)}
+              {steps.map((s) => <li key={s.id}><button type="button" onClick={() => onPickStep(s.id)}>{s.caption}</button></li>)}
             </ul>
           )}
+          {more > 0 && <button type="button" className="concept__deeper" onClick={() => setAll(true)}>Show all ({more} more)</button>}
           {card.related.length > 0 && (
             <>
               <h3 className="concept__h">Related</h3>

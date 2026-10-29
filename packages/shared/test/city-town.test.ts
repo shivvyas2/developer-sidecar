@@ -153,13 +153,17 @@ describe('review fixes: what counts as a check', () => {
   test.each(['npm run build', 'pnpm build', 'yarn build', 'bun run build', 'npx tsc --noEmit', 'tsc -p .', 'vite build', 'next build', 'cargo build', 'go build ./...', 'make'])('%s is a check', (c) => {
     expect(finish(town([write('app/page.tsx'), bash(c, 'run')]), 'shop:page:page:')).toBe('painted')
   })
-  test('a big project builds its town quickly', () => {
-    const files = Array.from({ length: 5000 }, (_, i) => `src/components/c${i}.tsx`)
-    const steps = Array.from({ length: 1500 }, (_, i) => write(`src/components/c${i % 300}.tsx`))
-    town(steps, base({ files }))
-    // linear now (about 15 ms alone, the project map's own cost); the margin is for the suite running in parallel
-    const t0 = performance.now()
-    town(steps, base({ files }))
-    expect(performance.now() - t0).toBeLessThan(50)
+  test('a big project builds its town in time that grows with its size, not its square', () => {
+    const time = (n: number) => {
+      const files = Array.from({ length: n }, (_, i) => `src/components/c${i}.tsx`)
+      const steps = Array.from({ length: n / 4 }, (_, i) => write(`src/components/c${i % 300}.tsx`))
+      town(steps, base({ files }))
+      const t0 = performance.now()
+      for (let k = 0; k < 3; k++) town(steps, base({ files }))
+      return (performance.now() - t0) / 3
+    }
+    // eight times the project: about eight times the work when linear, about sixty-four when quadratic
+    expect(time(8000) / time(1000)).toBeLessThan(24)
   })
+
 })

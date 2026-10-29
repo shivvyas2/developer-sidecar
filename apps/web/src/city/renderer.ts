@@ -86,9 +86,9 @@ export class CityRenderer {
     this.caption = document.createElement('div')
     this.caption.className = 'city__caption'
     Object.assign(this.caption.style, {
-      position: 'absolute', transform: 'translate(-50%, -100%)', pointerEvents: 'none', whiteSpace: 'nowrap', opacity: '0',
-      transition: 'opacity .3s', padding: '4px 10px', borderRadius: '999px', background: 'rgba(47,43,38,.9)', color: '#fff',
-      font: '500 13px/1.3 var(--ds-sans, system-ui, sans-serif)', maxWidth: '60vw', overflow: 'hidden', textOverflow: 'ellipsis',
+      position: 'absolute', transform: 'translate(-50%, -100%)', pointerEvents: 'none', opacity: '0', textAlign: 'center',
+      transition: 'opacity .3s', padding: '5px 12px', borderRadius: '12px', background: 'rgba(47,43,38,.92)', color: '#fff',
+      font: '500 13px/1.35 var(--ds-sans, system-ui, sans-serif)', width: 'max-content', maxWidth: 'min(420px, 80%)',
     })
     canvas.parentElement?.append(this.caption)
     this.bindCamera()
