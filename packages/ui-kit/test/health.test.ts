@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import type { FeedStep } from '@sidecar/shared'
+import { storyOf, type FeedStep } from '@sidecar/shared'
 import { checksOf, HEALTH_WORD, healthOf, needsYou } from '../src/health'
 
 type S = Pick<FeedStep, 'category' | 'status' | 'output'>
@@ -54,4 +54,19 @@ describe('healthOf', () => {
   test('every state has a word that fits the frame', () => {
     for (const w of Object.values(HEALTH_WORD)) expect(w.length).toBeLessThanOrEqual(12)
   })
+})
+
+test('a chapter never reads failing while the readout says the checks pass and all is good', () => {
+  let n = 0
+  const at = (toolName: string, category: FeedStep['category'], input: Record<string, unknown>, status: FeedStep['status'] = 'ok') =>
+    ({ id: `h${++n}`, toolName, category, status, input })
+  const steps = [
+    at('UserPrompt', 'prompt', { prompt: 'fix the tests' }),
+    at('Bash', 'test', { command: 'npm test' }, 'failed'),
+    at('Edit', 'edit', { file_path: '/p/a.ts' }),
+    at('Bash', 'test', { command: 'npx vitest run' }),
+  ]
+  expect(checksOf(steps)).toBe('pass')
+  expect(healthOf(steps)).toBe('ok')
+  expect(storyOf(steps)[0]!.outcome).not.toBe('failing')
 })

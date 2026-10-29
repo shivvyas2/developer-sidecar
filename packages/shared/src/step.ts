@@ -14,6 +14,13 @@ export interface Step {
   status: StepStatus
 }
 
+/**
+ * A step the person cancelled, such as a dev server stopped with Ctrl-C: interrupted, or reported by the hook as a
+ * failure with `interrupted: true` in its output. Nothing went wrong, so it says nothing about how things stand.
+ */
+export const isStopped = (s: Pick<Step, 'status'> & { output?: unknown }): boolean =>
+  s.status === 'interrupted' || (typeof s.output === 'object' && s.output !== null && (s.output as { interrupted?: unknown }).interrupted === true)
+
 export type Category =
   | 'read' | 'create' | 'edit' | 'install' | 'test' | 'run' | 'external'
   | 'mcp' | 'git' | 'data' | 'deploy' | 'subagent' | 'prompt' | 'fallback'
