@@ -14,7 +14,7 @@ export const CONCEPT_IDS = [
 ] as const
 export type ConceptId = (typeof CONCEPT_IDS)[number]
 
-export interface Concept {
+export interface CityConcept {
   id: ConceptId
   /** What it looks like in the town. */
   city: string
@@ -25,7 +25,7 @@ export interface Concept {
   glossaryTerm?: string
 }
 
-type Copy = Omit<Concept, 'id'>
+type Copy = Omit<CityConcept, 'id'>
 const COPY: Record<ConceptId, Copy> = {
   reading: {
     city: 'The foreman studying a blueprint',
@@ -245,16 +245,16 @@ const COPY: Record<ConceptId, Copy> = {
   },
 }
 
-export const CONCEPTS: Record<ConceptId, Concept> = Object.fromEntries(
+export const CONCEPTS: Record<ConceptId, CityConcept> = Object.fromEntries(
   CONCEPT_IDS.map((id) => [id, { id, ...COPY[id] }]),
-) as Record<ConceptId, Concept>
+) as Record<ConceptId, CityConcept>
 
 const BY_BUILDING: Record<BuildingKind, ConceptId> = {
   shop: 'pages', office: 'backend', workshop: 'files', warehouse: 'database', service: 'services', vault: 'secrets',
   inspector: 'tests', yard: 'packages', archive: 'repository', siteOffice: 'asking',
 }
 
-export function conceptOfBuilding(b: Pick<Building, 'kind' | 'vendorKind'>): ConceptId {
+export function conceptOfBuilding(b: Building): ConceptId {
   if (b.kind === 'service') {
     if (b.vendorKind === 'hosting') return 'hosting'
     if (b.vendorKind === 'login') return 'login'
