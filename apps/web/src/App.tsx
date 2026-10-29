@@ -15,6 +15,7 @@ import { StageTab } from './StageView'
 import { applyTheme, initialTheme, safeStorage, writeTheme, type ThemePref } from './theme'
 import { useFeed } from './useFeed'
 import { WhiteboardView } from './WhiteboardView'
+import { useOsReducedMotion, useResolvedTheme } from './city/view'
 import { liveStepId } from './whiteboard'
 
 type Tab = 'stage' | 'decisions' | 'glossary' | 'whiteboard' | 'settings'
@@ -75,6 +76,8 @@ export function App() {
   const setTab = (t: Tab) => { setPickRequest(null); setTabRaw(t) }
   const pickStep = (id: string) => { setPickRequest(id); setTabRaw('stage') }
   const [theme, setTheme] = useTheme()
+  const shownTheme = useResolvedTheme(theme)
+  const reducedMotion = useOsReducedMotion()
   const title = titleFor(state.sessions)
   useEffect(() => { document.title = title }, [title])
   const sid = state.selected
@@ -162,7 +165,7 @@ export function App() {
         </StatusStrip>
       ) : null}
       <main className="panel" role="tabpanel" aria-label={TABS.find((t) => t.id === tab)?.label ?? 'Stage'}>
-        {tab === 'stage' && demo && <DemoStage />}
+        {tab === 'stage' && demo && <DemoStage theme={shownTheme} reducedMotion={reducedMotion} />}
         {tab === 'stage' && !demo && (
           <StageTab
             sessionId={sid}
@@ -176,6 +179,10 @@ export function App() {
             {...(cwd ? { cwd } : {})}
             map={map}
             {...(project ? { project } : {})}
+            {...(sid && state.baselines[sid] ? { baseline: state.baselines[sid] } : {})}
+            theme={shownTheme}
+            reducedMotion={reducedMotion}
+            onGlossary={() => setTab('glossary')}
           />
         )}
         {tab === 'decisions' && <div className="panel__narrow"><DecisionsView decisions={sid ? state.decisions[sid] ?? [] : []} status={status} stepIds={steps.map((x) => x.id)} onPick={pickStep} /></div>}

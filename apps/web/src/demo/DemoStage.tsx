@@ -10,7 +10,7 @@ const NO_EXPLANATIONS: Record<string, StepExplanation> = {}
 const NO_RECAPS: Record<string, RecapEntry> = {}
 
 /** The first-run demo: the sample session plays on the Stage, step by step, clearly marked SAMPLE. Browser only. */
-export function DemoStage() {
+export function DemoStage({ theme, reducedMotion }: { theme: 'light' | 'dark'; reducedMotion: boolean }) {
   // the clock outlives this component, so a trip to another tab does not start the sample over
   const [at, setAt] = useState(() => demoAt(demoElapsed(), DEMO.steps.length))
   useEffect(() => {
@@ -37,6 +37,8 @@ export function DemoStage() {
         cwd={DEMO.cwd}
         liveTag="SAMPLE"
         attention={done ? 'done' : 'working'}
+        theme={theme}
+        reducedMotion={reducedMotion}
       />
     </>
   )
