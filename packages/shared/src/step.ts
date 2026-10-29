@@ -1,3 +1,4 @@
+import type { Baseline } from './city/baseline'
 import type { DecisionEntry, ExplainerState, GlossaryEntry, StepExplanation } from './explain'
 import type { RecapEntry } from './recap'
 import type { SceneSpec } from './scene'
@@ -72,5 +73,7 @@ export type ServerMessage =
    */
   | { type: 'turn_end'; sessionId: string; at: number; lastStepId?: string }
   | { type: 'recap'; recap: RecapEntry }
+  /** The project scan for a session, once it is ready. */
+  | { type: 'baseline'; sessionId: string; baseline: Baseline }
   | { type: 'session_deleted'; id: string }
   | { type: 'reset' }

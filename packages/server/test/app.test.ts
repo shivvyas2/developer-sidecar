@@ -165,3 +165,16 @@ test('steps say what the session is waiting on, even when unchanged', async () =
   expect(same.headers.get('x-sidecar-attention')).toBe('permission')
   expect((await app.request(U('/api/sessions/none/steps'), { headers: AUTH })).headers.get('x-sidecar-attention')).toBeNull()
 })
+
+describe('baseline route', () => {
+  test('serves a session scan, 404 when there is none', async () => {
+    const app = make()
+    app.store.saveBaseline('s1', { files: [], packages: [], folders: [], truncated: false, scannedAt: 1,
+      git: { repo: false, remote: null, ignoresSecrets: false, ignoresDeps: false, ignoresBuild: false, readme: false } })
+    const ok = await app.request(U('/api/sessions/s1/baseline'), { headers: AUTH })
+    expect(ok.status).toBe(200)
+    expect((await ok.json()).scannedAt).toBe(1)
+    const none = await app.request(U('/api/sessions/s2/baseline'), { headers: AUTH })
+    expect(none.status).toBe(404)
+  })
+})

@@ -142,3 +142,14 @@ describe('explainer state', () => {
     expect(s.explainer?.status).toBe('ready')
   })
 })
+
+describe('baselines', () => {
+  const b = { files: ['a.ts'], packages: [], folders: [], truncated: false, scannedAt: 1,
+    git: { repo: false, remote: null, ignoresSecrets: false, ignoresDeps: false, ignoresBuild: false, readme: false } }
+  test('a scan is kept by session, and goes with its session', () => {
+    let s = feedReducer(initialFeed, { type: 'baseline', sessionId: 's1', baseline: b })
+    expect(s.baselines).toEqual({ s1: b })
+    s = feedReducer(s, { type: 'session_deleted', id: 's1' })
+    expect(s.baselines).toEqual({})
+  })
+})
