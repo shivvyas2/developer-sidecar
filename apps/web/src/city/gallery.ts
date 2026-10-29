@@ -37,4 +37,17 @@ const show = (i: number) => {
 cuts.forEach(([name], i) => { const b = document.createElement('button'); b.textContent = name; b.onclick = () => show(i); bar.append(b) })
 const ex = document.createElement('button'); ex.textContent = 'existing app'; ex.onclick = () => r.setTown(townOf([], { cwd: '/p', baseline: existing })); bar.append(ex)
 show(Number(params.get('stage') ?? 0))
+if (params.has('scenes')) {
+  const kinds = ['blueprint', 'bricks', 'scaffold', 'paint', 'delivery', 'inspect', 'pour', 'lightsOn', 'lightsOff', 'toolbox', 'library', 'cable',
+    'photo', 'branch', 'pushTruck', 'pullTruck', 'proposal', 'merge', 'forklift', 'ribbon', 'helpers', 'workOrder'] as const
+  const overlays = ['failed', 'stopped', 'fixed', 'waiting'] as const
+  const t = townOf([...steps.slice(0, 10), bash('npm test', 'test')], { cwd: '/p', baseline: existing })
+  r.setTown(t)
+  const at = (k: string) => (k === 'delivery' ? 'yard' : k === 'inspect' ? 'inspector' : ['photo', 'branch', 'pushTruck', 'pullTruck', 'proposal', 'merge'].includes(k) ? 'archive'
+    : k === 'forklift' ? 'warehouse' : t.buildings.find((b) => b.kind === 'shop')!.id)
+  const all = [...kinds.map((k) => ({ kind: k, overlay: 'none' as const })), ...overlays.map((o) => ({ kind: 'inspect' as const, overlay: o }))]
+  const only = params.get('scenes')
+  const list = only ? all.filter((x) => x.kind === only || x.overlay === only) : all
+  ;(async () => { for (let i = 0; ; i = (i + 1) % list.length) { const x = list[i]!; r.setCamera({ mode: 'follow', at: at(x.kind) }); await r.play({ stepIds: [], kind: x.kind, at: at(x.kind), overlay: x.overlay, caption: `${x.kind} ${x.overlay}`, count: 1 }) } })()
+}
 ;(window as unknown as { cityShow: (i: number) => void }).cityShow = show
