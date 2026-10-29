@@ -1,6 +1,7 @@
-import { ellipsis, scrubEvent, type Attention, type SidecarEvent, type Step } from '@sidecar/shared'
+import { ellipsis, scrubEvent, type Attention, type Baseline, type SidecarEvent, type Step } from '@sidecar/shared'
 import type { Hub } from './hub'
 import { translate } from './rules'
+import { scanProject } from './scan'
 import { StepTracker } from './steps'
 import type { Store } from './store'
 
@@ -31,8 +32,25 @@ export function attentionOf(e: SidecarEvent): { state: Attention; text?: string 
   return text ? { state, text } : { state }
 }
 
-export function createPipeline(o: { store: Store; tracker?: StepTracker; hub: Hub; now?: () => number }): Pipeline {
+export function createPipeline(o: {
+  store: Store; tracker?: StepTracker; hub: Hub; now?: () => number
+  /** Looks at the session's folder once; the city draws the project from it. */
+  scan?: (cwd: string) => Promise<Baseline | null>
+}): Pipeline {
   const tracker = o.tracker ?? new StepTracker()
+  const scan = o.scan ?? ((cwd: string) => scanProject(cwd))
+  const scanning = new Set<string>()
+
+  // once per session, off the event's path: a slow or failing scan never holds up the feed
+  const scanOnce = (sessionId: string, cwd: string) => {
+    if (!cwd || scanning.has(sessionId) || o.store.getBaseline(sessionId)) return
+    scanning.add(sessionId)
+    void Promise.resolve().then(() => scan(cwd)).then((baseline) => {
+      if (!baseline || !o.store.getSession(sessionId)) return
+      o.store.saveBaseline(sessionId, baseline)
+      o.hub.publish({ type: 'baseline', sessionId, baseline })
+    }).catch(() => undefined)
+  }
   const now = o.now ?? Date.now
   let last = now()
 
@@ -58,6 +76,7 @@ export function createPipeline(o: { store: Store; tracker?: StepTracker; hub: Hu
       const seq = o.store.insertEvent(e)
       if (seq === null) return { seq: null }
       o.hub.publish({ type: 'session', session: o.store.touchSession(e.sessionId, e.cwd, e.ts, attentionOf(e)) })
+      scanOnce(e.sessionId, e.cwd)
       if (e.kind === 'turn_end' || e.kind === 'prompt') publishInterrupted(tracker.closeSession(e.sessionId, e.ts))
       const step = tracker.apply(e)
       if (step) publishStep(step, seq)

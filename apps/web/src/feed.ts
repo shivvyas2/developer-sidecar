@@ -1,4 +1,4 @@
-import type { DecisionEntry, ExplainerState, FeedStep, GlossaryEntry, RecapEntry, ServerMessage, SessionSummary, StepExplanation } from '@sidecar/shared'
+import type { Baseline, DecisionEntry, ExplainerState, FeedStep, GlossaryEntry, RecapEntry, ServerMessage, SessionSummary, StepExplanation } from '@sidecar/shared'
 
 export interface FeedState {
   sessions: SessionSummary[]
@@ -15,6 +15,8 @@ export interface FeedState {
   decisions: Record<string, DecisionEntry[]>
   glossary: Record<string, GlossaryEntry[]>
   explainer: ExplainerState | null
+  /** Each session's project scan, for the town. */
+  baselines: Record<string, Baseline>
   /** A session that started while another was being watched, offered until the person switches. */
   newSession: string | null
 }
@@ -29,7 +31,7 @@ export type FeedAction =
   | { type: 'recaps'; sessionId: string; recaps: RecapEntry[] }
 
 export const initialFeed: FeedState = { sessions: [], listed: false, selected: null, steps: {}, lastSeq: 0, loaded: {},
-  explanations: {}, recaps: {}, decisions: {}, glossary: {}, explainer: null, newSession: null,
+  explanations: {}, recaps: {}, decisions: {}, glossary: {}, explainer: null, newSession: null, baselines: {},
 }
 
 const byLastAt = (a: SessionSummary, b: SessionSummary) => b.lastAt - a.lastAt
@@ -117,6 +119,8 @@ export function feedReducer(state: FeedState, action: FeedAction): FeedState {
       for (const r of action.recaps) if (!merged[r.turnId] || merged[r.turnId]!.at <= r.at) merged[r.turnId] = r
       return { ...state, recaps: { ...state.recaps, [action.sessionId]: merged } }
     }
+    case 'baseline':
+      return { ...state, baselines: { ...state.baselines, [action.sessionId]: action.baseline } }
     case 'session_deleted': {
       const omit = <T,>(r: Record<string, T>) => Object.fromEntries(Object.entries(r).filter(([k]) => k !== action.id))
       const sessions = state.sessions.filter((x) => x.id !== action.id)
@@ -130,6 +134,7 @@ export function feedReducer(state: FeedState, action: FeedAction): FeedState {
         decisions: omit(state.decisions),
         glossary: omit(state.glossary),
         recaps: omit(state.recaps),
+        baselines: omit(state.baselines),
         loaded: omit(state.loaded),
         explanations: Object.fromEntries(Object.entries(state.explanations).filter(([k]) => !gone.has(k))),
       }

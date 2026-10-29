@@ -16,7 +16,7 @@ export interface BoardItem {
 
 export interface BoardSection { kind: MapKind; title: string; items: BoardItem[] }
 
-export const STATE_TEXT: Record<MapState, string> = { seen: 'looked at', changed: 'made or changed', failed: 'needs a fix' }
+export const STATE_TEXT: Record<MapState, string> = { existing: 'already there', seen: 'looked at', changed: 'made or changed', failed: 'needs a fix' }
 
 /** At most this many step links per part; a part touched by more says how many more. */
 export const MAX_STEP_LINKS = 8

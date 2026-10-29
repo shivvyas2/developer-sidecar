@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite'
 import type {
-  Attention, DecisionEntry, FeedStep, GlossaryEntry, RecapEntry, SessionSummary, SidecarEvent, StepExplanation, TokenUsage,
+  Attention, Baseline, DecisionEntry, FeedStep, GlossaryEntry, RecapEntry, SessionSummary, SidecarEvent, StepExplanation, TokenUsage,
 } from '@sidecar/shared'
 
 export interface Store {
@@ -34,6 +34,9 @@ export interface Store {
   usage(): TokenUsage
   getSession(id: string): SessionSummary | undefined
   lastPrompt(sessionId: string): string | undefined
+  /** The project scan taken when the session began. */
+  saveBaseline(sessionId: string, b: Baseline): void
+  getBaseline(sessionId: string): Baseline | undefined
   deleteSession(id: string): void
   deleteAll(): void
   close(): void
@@ -94,6 +97,7 @@ export function openStore(path: string): Store {
     );
     CREATE INDEX IF NOT EXISTS recaps_session ON recaps(session_id, at);
     CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS baselines (session_id TEXT PRIMARY KEY, json TEXT NOT NULL);
   `)
   const sessionCols = new Set((db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[]).map((c) => c.name))
   for (const [name, type] of SESSION_COLUMNS) {
@@ -162,7 +166,9 @@ export function openStore(path: string): Store {
   const lastPromptStmt = db.prepare(`
     SELECT json FROM steps WHERE session_id = ? AND json_extract(json, '$.category') = 'prompt'
     ORDER BY started_at DESC, seq DESC LIMIT 1`)
-  const SESSION_TABLES = ['events', 'sessions', 'steps', 'explanations', 'decisions', 'concepts', 'recaps'] as const
+  const SESSION_TABLES = ['events', 'sessions', 'steps', 'explanations', 'decisions', 'concepts', 'recaps', 'baselines'] as const
+  const upBaseline = db.prepare('INSERT INTO baselines (session_id, json) VALUES (?, ?) ON CONFLICT(session_id) DO UPDATE SET json = excluded.json')
+  const getBaselineStmt = db.prepare('SELECT json FROM baselines WHERE session_id = ?')
   const delBySession = SESSION_TABLES.map((t) => db.prepare(`DELETE FROM ${t} WHERE ${t === 'sessions' ? 'id' : 'session_id'} = ?`))
   const tx = (fn: () => void) => {
     db.exec('BEGIN')
@@ -261,6 +267,13 @@ export function openStore(path: string): Store {
       if (!row) return undefined
       const prompt = ((JSON.parse(row.json) as FeedStep).input as { prompt?: unknown } | null)?.prompt
       return typeof prompt === 'string' ? prompt : undefined
+    },
+    saveBaseline(sessionId, b) {
+      upBaseline.run(sessionId, JSON.stringify(b))
+    },
+    getBaseline(sessionId) {
+      const row = getBaselineStmt.get(sessionId) as { json: string } | undefined
+      return row ? (JSON.parse(row.json) as Baseline) : undefined
     },
     deleteSession(id) {
       tx(() => { for (const stmt of delBySession) stmt.run(id) })

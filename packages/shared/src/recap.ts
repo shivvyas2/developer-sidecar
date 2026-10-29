@@ -76,7 +76,7 @@ function shellOf(s: RecapStep): string | undefined {
  * printed it) was cut short or failed, or its own background command was stopped. Another command
  * failing, such as `npm run build`, leaves it up.
  */
-function serverUrl(steps: readonly RecapStep[]): string | undefined {
+export function serverUrl(steps: readonly RecapStep[]): string | undefined {
   let up: { url: string; command: string; shell?: string } | undefined
   for (const s of steps) {
     if (BACKGROUND_TOOLS.stops.has(s.toolName)) {
@@ -111,8 +111,8 @@ export function buildRecap(steps: readonly RecapStep[], opts: { attention?: Atte
   const map = projectMap(turnSteps, opts.cwd)
   const built = map.sections
     .filter((s) => s.kind !== 'blocks')
-    .flatMap((s) => s.items.filter((i) => i.state !== 'seen').map((i) => ({ id: i.id, kind: s.kind, name: i.name, failed: i.state === 'failed' })))
-  const packages = map.sections.find((s) => s.kind === 'blocks')?.items.filter((i) => i.state !== 'seen').length ?? 0
+    .flatMap((s) => s.items.filter((i) => i.state === 'changed' || i.state === 'failed').map((i) => ({ id: i.id, kind: s.kind, name: i.name, failed: i.state === 'failed' })))
+  const packages = map.sections.find((s) => s.kind === 'blocks')?.items.filter((i) => i.state === 'changed' || i.state === 'failed').length ?? 0
   const byId = new Map(turnSteps.map((s) => [s.id, s]))
   const ran = checksOf(turnSteps) !== 'none'
   // a failed check run that no later run covered (see storyOf) is still failing

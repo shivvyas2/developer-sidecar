@@ -3,6 +3,7 @@ import type { ExplainLevel, ExplainerState, SessionSummary } from '@sidecar/shar
 import { deleteAllSessions, deleteSession, fetchSettings, saveSettings } from './api'
 import { ReadoutPanel, RotarySelect, type RotaryOption } from './ds'
 import { formatTokens } from './format'
+import type { MotionPref } from './city/motion'
 
 const STATUS_TEXT: Record<ExplainerState['status'], string> = { ready: 'ON', paused: 'PAUSED', off: 'OFF', unavailable: 'N/A' }
 
@@ -17,7 +18,10 @@ const HINTS: Record<ExplainLevel, string> = {
   sonnet: 'Detailed (Sonnet): richer recaps, higher cost.',
 }
 
-export function SettingsView({ explainer, selected, onChanged }: {
+export function SettingsView({ explainer, selected, onChanged, motion, onMotion }: {
+  /** How much the town moves; kept in this browser. */
+  motion?: MotionPref
+  onMotion?: (m: MotionPref) => void
   explainer: ExplainerState | null
   selected: SessionSummary | null
   onChanged: (s: ExplainerState) => void
@@ -70,6 +74,20 @@ export function SettingsView({ explainer, selected, onChanged }: {
         )}
       </div>
       <p className="settings__privacy">Each time Claude finishes, an AI recap sends a short summary of that turn (the steps in a line each, and the end of any failed output), with known secret patterns and .env values removed, to Anthropic directly or through your Claude Code login. File contents are never sent. Everything else stays on this computer.</p>
+      {onMotion ? (
+        <>
+          <h2 className="settings__h">Motion</h2>
+          <fieldset className="settings__motion">
+            <legend className="settings__hint">How much the town moves. Less motion shows each piece of work finished at once, with its caption.</legend>
+            {(['auto', 'reduce', 'full'] as const).map((m) => (
+              <label key={m}>
+                <input type="radio" name="motion" value={m} checked={motion === m} onChange={() => onMotion(m)} />
+                {m === 'auto' ? ' Follow my computer' : m === 'reduce' ? ' Less motion' : ' Full motion'}
+              </label>
+            ))}
+          </fieldset>
+        </>
+      ) : null}
       <h2 className="settings__h">Data</h2>
       <div className="settings__danger">
         <button type="button" className="settings__btn" onClick={removeSession} disabled={!selected}>Delete this session</button>

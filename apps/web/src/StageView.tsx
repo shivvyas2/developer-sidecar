@@ -1,23 +1,18 @@
-import { useEffect, useMemo, useReducer, useState } from 'react'
-import { buildRecap, isExplained, projectMap, SceneSpecSchema, storyOf, type Attention, type ProjectMap, type FeedStep, type PlaceId, type RecapEntry, type StepExplanation } from '@sidecar/shared'
-import { checksOf, HEALTH_LIGHT, HEALTH_WORD, healthOf, nameTown, townFrom, type Readout } from '@sidecar/ui-kit'
-import { forStatus } from '@sidecar/ui-kit/catalog'
-import { Scene } from '@sidecar/ui-kit/react'
-import { Chip, PulledCard, ReadoutPanel, RoundButton, TickRuler } from './ds'
-import { catchesUp } from './attention'
-import { readoutFields, useFramed } from './framed'
+import { lazy, Suspense, useEffect, useMemo, useReducer, useState } from 'react'
+import { buildRecap, isExplained, storyOf, townOf, type Attention, type Baseline, type ConceptId, type FeedStep, type ProjectMap, type RecapEntry, type StepExplanation } from '@sidecar/shared'
+import { checksOf, HEALTH_LIGHT, HEALTH_WORD, healthOf, type Readout } from '@sidecar/ui-kit'
+import { Chip, PulledCard, ReadoutPanel } from './ds'
+import { ConceptCard } from './city/ConceptCard'
+import { cardFor, conceptAt } from './city/conceptView'
+import { GithubGuide } from './city/GithubGuide'
+import { readoutFields } from './framed'
 import { formatElapsed, stepKind } from './format'
-import { Legend } from './Legend'
-import { placeAt } from './legendText'
 import { nextAsk } from './next'
 import { NextStep } from './NextStep'
 import { RecapCard } from './RecapCard'
 import { cardAsks, isStale, recapAsk } from './recapView'
-import { initialSelection, selectedId, selectionReducer, stepNumber } from './selection'
-import { initialStage, replayAdvance, stageReducer, type Replay } from './stage'
-import { StoryDrawer } from './StoryDrawer'
-
-const END = Number.MAX_SAFE_INTEGER
+import { initialSelection, selectedId, selectionReducer } from './selection'
+import { Timeline } from './Timeline'
 
 export interface StageTabProps {
   sessionId: string | null
@@ -36,89 +31,71 @@ export interface StageTabProps {
   attention?: Attention
   /** The session's folder, so the town can name parts from paths relative to it. */
   cwd?: string
-  /** The project map for all of `steps`, so the stage need not rebuild it while it shows the newest step. */
+  /** The project map for all of `steps` (kept for callers; the town builds its own). */
   map?: ProjectMap
+  /** The project folder as it stood when the session began. */
+  baseline?: Baseline
+  theme: 'light' | 'dark'
+  reducedMotion: boolean
+  /** Open the Glossary at a term. */
+  onGlossary?: (term: string) => void
 }
 
-/** Layout B: the step drawer on the left; the framed stage, replay ruler and pulled-out card on the right. */
-export function StageTab({ sessionId, loaded, steps, explanations, recaps, project, pickRequest, liveTag, attention, cwd, map }: StageTabProps) {
-  const [stage, dispatch] = useReducer(stageReducer, initialStage)
+type Picked = { building?: string; stepId?: string; concept?: ConceptId }
+
+// three.js is most of the page's weight, so the town loads in its own chunk
+const CityStage = lazy(() => import('./city/CityStage').then((m) => ({ default: m.CityStage })))
+
+/** Layout C: the town fills the stage, cards on the right, the story as a timeline along the bottom. */
+export function StageTab({ sessionId, loaded, steps, explanations, recaps, project, pickRequest, liveTag, attention, cwd, baseline, theme, reducedMotion, onGlossary }: StageTabProps) {
   const [selection, select] = useReducer(selectionReducer, initialSelection)
-  const [replay, setReplay] = useState<Replay | null>(null)
-  const [tapped, setTapped] = useState<PlaceId | null>(null)
+  const [replay, setReplay] = useState<number | null>(null)
+  const [picked, setPicked] = useState<Picked | null>(null)
   const ids = useMemo(() => steps.map((s) => s.id), [steps])
   const latestId = ids.length > 0 ? ids[ids.length - 1]! : null
 
-  // A new session or its first snapshot: show the latest step as a still and don't replay history.
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- ids are read on purpose but must not retrigger a reset
-  useEffect(() => { dispatch({ type: 'reset', ids }); setReplay(null); select({ type: 'reset' }) }, [sessionId, loaded])
-  useEffect(() => { dispatch({ type: 'sync', ids }) }, [ids])
-  // When Claude stops or needs you, the stage shows where things ended, not a scene still in line.
-  // Keyed on attention, not the tag's words, so rewording a label can't switch it off.
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new attention should catch up
-  useEffect(() => { if (catchesUp(attention)) dispatch({ type: 'catchUp', ids }) }, [attention])
+  // a new session or its first snapshot starts live
+  useEffect(() => { setReplay(null); select({ type: 'reset' }); setPicked(null) }, [sessionId, loaded])
   // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new request should pick
-  useEffect(() => { if (pickRequest && ids.includes(pickRequest)) select({ type: 'pick', id: pickRequest, latestId }) }, [pickRequest])
+  useEffect(() => { if (pickRequest && ids.includes(pickRequest)) { setReplay(ids.indexOf(pickRequest)); select({ type: 'pick', id: pickRequest, latestId }) } }, [pickRequest])
 
-  const picked = selectedId(selection, latestId)
-  const pickedIndex = picked ? ids.indexOf(picked) : -1
-  const liveIndex = stage.current ? ids.indexOf(stage.current) : -1
-  // Replay drives the stage; otherwise an older pick does; otherwise the live queue.
-  const index = replay
-    ? Math.min(replay.index, steps.length - 1)
-    : !selection.follow && pickedIndex >= 0 ? pickedIndex : liveIndex
+  const live = replay === null
+  const index = live ? steps.length - 1 : Math.min(replay, steps.length - 1)
   const shown = index >= 0 ? steps[index] : undefined
-  const cardIndex = replay ? index : pickedIndex
-  const card = cardIndex >= 0 ? steps[cardIndex] : undefined
+  const pickedStep = selectedId(selection, latestId)
+  const card = !selection.follow && pickedStep ? steps.find((s) => s.id === pickedStep) : undefined
 
   const chapters = useMemo(() => storyOf(steps, attention === 'working'), [steps, attention])
   const recap = useMemo(() => buildRecap(steps, { ...(attention ? { attention } : {}), ...(cwd ? { cwd } : {}) }), [steps, attention, cwd])
-
   const upTo = useMemo(() => steps.slice(0, index + 1), [steps, index])
-  // the whole session's map serves the newest step; only an older step or a replay builds its own
-  const town = useMemo(() => nameTown(townFrom(upTo), map && upTo.length === steps.length ? map : projectMap(upTo, cwd)), [upTo, steps.length, map, cwd])
+  const town = useMemo(() => townOf(upTo, { ...(cwd ? { cwd } : {}), ...(baseline ? { baseline } : {}) }), [upTo, cwd, baseline])
+
   const files = useMemo(() => upTo.filter((s) => s.category === 'create' && s.status === 'ok').length, [upTo])
   const checks = useMemo(() => checksOf(upTo), [upTo])
   const now = shown ? stepKind(shown) : ''
-  const firstAt = steps[0]?.startedAt ?? 0
-  const elapsed = shown ? formatElapsed(shown.startedAt - firstAt) : '00:00'
-  // LIVE only while following the newest step; a replay or an older pick reads REPLAY.
-  const live = !replay && selection.follow
+  const elapsed = shown ? formatElapsed(shown.startedAt - (steps[0]?.startedAt ?? 0)) : '00:00'
   const shownRecap = live ? recap : null
   const ai = recap ? recaps[recap.turnId] : undefined
   const failing = recap?.failingId ? steps.find((s) => s.id === recap.failingId) : undefined
-  // the turn's newest step: a recap written before it is out of date while Claude goes on with the turn
   const newest = recap ? chapters.find((c) => c.id === recap.turnId)?.stepIds.at(-1) : undefined
   const stale = isStale(ai, newest)
   const ask = recapAsk(ai, failing ? nextAsk(failing, explanations[failing.id]) : null, newest)
-  const framed = useFramed()
-  const count = steps.length
-  // Built from primitives so the SVG only re-renders when a number on the frame changes.
   const tag = live ? liveTag : undefined
-  // Only the live moment knows what Claude is doing now; a replay or an older pick shows how things stood then.
   const health = useMemo(() => healthOf(upTo, live ? attention : undefined), [upTo, live, attention])
   const readout = useMemo<Readout>(() => ({
     step: index + 1, files, checks, status: HEALTH_WORD[health], light: HEALTH_LIGHT[health], now, elapsed, live,
-    session: count > 0 ? (index + 1) / count : 0,
+    session: steps.length > 0 ? (index + 1) / steps.length : 0,
     ...(project ? { project } : {}),
     ...(tag ? { tag } : {}),
-  }), [index, files, checks, health, now, elapsed, live, count, project, tag])
+  }), [index, files, checks, health, now, elapsed, live, steps.length, project, tag])
 
-  const goLive = () => { dispatch({ type: 'reset', ids }); setReplay(null); select({ type: 'live' }) }
-  const pick = (id: string) => {
-    select({ type: 'pick', id, latestId })
-    if (replay) setReplay({ index: ids.indexOf(id), playing: false })
-  }
-  const play = () => {
-    if (replay) setReplay({ ...replay, playing: true })
-    else setReplay({ index: !selection.follow && pickedIndex >= 0 ? pickedIndex : 0, playing: true })
-  }
-  const pause = () => {
-    if (replay) setReplay({ ...replay, playing: false })
-    else if (shown) setReplay({ index, playing: false })
-  }
+  const seek = (i: number) => { setReplay(i); select({ type: 'pick', id: ids[i]!, latestId }) }
+  const goLive = () => { setReplay(null); select({ type: 'live' }) }
+  const concept = picked ? picked.concept ?? conceptAt(picked, town, steps) : null
+  const pickedBuilding = picked?.building ? town.buildings.find((b) => b.id === picked.building) : undefined
+  const githubHere = pickedBuilding?.kind === 'archive' || (pickedBuilding?.kind === 'service' && pickedBuilding.vendorKind === 'code') || concept === 'github' || concept === 'repository'
 
-  if (steps.length === 0) {
+  if (steps.length === 0 && !baseline) {
     return (
       <div className="stagetab stagetab--empty">
         <p className="empty">Waiting for Claude to do something. Start a Claude Code session with the plugin enabled.</p>
@@ -126,65 +103,32 @@ export function StageTab({ sessionId, loaded, steps, explanations, recaps, proje
     )
   }
 
-  const parsed = shown ? SceneSpecSchema.safeParse(forStatus(shown.scene, shown.status)) : undefined
-  const onDone = replay
-    ? () => setReplay((r) => (r ? replayAdvance(r, steps.length) : r))
-    : selection.follow ? () => dispatch({ type: 'done' }) : undefined
-  const still = replay ? !replay.playing : selection.follow ? !stage.playing : false
-  const mode = replay ? 'replay' : selection.follow ? 'live' : 'pick'
-
   return (
-    <div className="stagetab">
-      <div className="stagetab__drawer">
-        <StoryDrawer steps={steps} chapters={chapters} selectedId={cardIndex >= 0 ? steps[cardIndex]!.id : null} following={live} onPick={pick} />
-      </div>
-      <div className="stagetab__main">
-        {/* how the last thing you asked stands, first on screen while following live */}
-        {shownRecap ? <RecapCard recap={shownRecap} ask={ask} stale={stale} {...(ai ? { ai } : {})} /> : null}
-        {!framed && shown ? (
-          <ReadoutPanel label="Stage readout" fields={readoutFields(readout)} note={`${tag ?? (live ? 'LIVE' : 'REPLAY')} · ${now}`} />
+    <div className="stagetab stagetab--city">
+      <section className="stagetab__town" aria-label="Stage">
+        <Suspense fallback={<p className="stagetab__placeholder">Drawing the town...</p>}>
+        <CityStage key={sessionId ?? 'none'} steps={steps} upTo={index} live={live} town={town} chapters={chapters} theme={theme} reducedMotion={reducedMotion}
+          onPick={(t) => { setPicked(t); if (t.stepId) { const i = ids.indexOf(t.stepId); if (i >= 0 && i !== steps.length - 1) seek(i) } }}
+          {...(baseline ? { baseline } : {})} {...(cwd ? { cwd } : {})} {...(attention ? { attention } : {})} />
+        </Suspense>
+        <p className="sr-only" aria-live="polite">{shown?.caption ?? ''}</p>
+      </section>
+      <aside className="stagetab__side">
+        <ReadoutPanel label="Stage readout" fields={readoutFields(readout)} note={`${tag ?? (live ? 'LIVE' : 'REPLAY')} · ${now}`} />
+        {concept ? (
+          <ConceptCard key={concept + (picked?.building ?? picked?.stepId ?? '')} card={cardFor(concept, town, steps)}
+            {...(pickedBuilding ? { name: pickedBuilding.name } : {})}
+            onPickStep={(id) => { const i = ids.indexOf(id); if (i >= 0) seek(i) }}
+            onConcept={(id) => setPicked({ concept: id })}
+            onGlossary={(term) => onGlossary?.(term)}
+            onClose={() => setPicked(null)} />
         ) : null}
-        {/* a tap on a place says what it is; the Legend below lists every place for keyboard and screen reader users.
-            Read on press, not click: a playing scene redraws its SVG every frame, so by the release the shape
-            that was pressed is gone and the click lands on the stage itself. */}
-        <section className="stagetab__stage" aria-label="Stage" onPointerDown={(e) => { const p = placeAt(e.target as Element); if (p) setTapped(p) }}>
-          {shown && parsed?.success ? (
-            <Scene
-              key={`${mode}:${shown.id}`}
-              spec={parsed.data}
-              town={town}
-              frame={framed}
-              {...(framed ? { readout } : {})}
-              {...(onDone ? { onDone } : {})}
-              {...(still ? { at: END } : {})}
-            />
-          ) : (
-            <p className="stagetab__placeholder">The stage lights up when Claude starts working.</p>
-          )}
-          <p className="sr-only" aria-live="polite">{shown?.caption ?? ''}</p>
-        </section>
-        <div className="replay">
-          <TickRuler
-            value={Math.max(0, index)}
-            max={Math.max(0, steps.length - 1)}
-            valueText={`Step ${index + 1} of ${steps.length}`}
-            onChange={(v) => setReplay({ index: v, playing: false })}
-          />
-          <span className="replay__pos">{stepNumber(Math.max(0, index))}/{stepNumber(steps.length - 1)}</span>
-          <RoundButton label="▶" title={replay ? 'Play' : 'Replay session'} active={!!replay?.playing} onPress={play} />
-          <RoundButton label="⏸" title="Pause" onPress={pause} disabled={!!replay && !replay.playing} />
-          <RoundButton label="LIVE" title="Back to live" active={live} onPress={goLive} />
-        </div>
-        <Legend tapped={tapped} onClear={() => setTapped(null)} />
-        {card ? (
-          <StepDetail
-            key={card.id}
-            step={card}
-            num={cardIndex + 1}
-            explanation={explanations[card.id]}
-            asks={cardAsks(card.id, shownRecap)}
-          />
-        ) : null}
+        {githubHere ? <GithubGuide git={town.git} steps={steps} /> : null}
+        {!concept && shownRecap ? <RecapCard recap={shownRecap} ask={ask} stale={stale} {...(ai ? { ai } : {})} /> : null}
+        {card ? <StepDetail key={card.id} step={card} num={ids.indexOf(card.id) + 1} explanation={explanations[card.id]} asks={cardAsks(card.id, shownRecap)} /> : null}
+      </aside>
+      <div className="stagetab__timeline">
+        <Timeline steps={steps} chapters={chapters} at={index} live={live} onSeek={seek} onLive={goLive} />
       </div>
     </div>
   )

@@ -62,7 +62,7 @@ const EDITS = new Set(['Edit', 'MultiEdit', 'NotebookEdit'])
  * matches a run in the passing one, or a narrower version of it (`vitest run` covers `vitest run a.test.ts`). Only the
  * test runs count, so `cd app && npx vitest run` covers `npx vitest run`, and `npm test && npm run lint` covers `npm test`.
  */
-function covers(pass: string, failed: string): boolean {
+export function covers(pass: string, failed: string): boolean {
   const passes = testRunsIn(pass)
   const fails = testRunsIn(failed)
   if (!fails.length) return failed === pass

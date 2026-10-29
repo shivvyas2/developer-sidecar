@@ -1,4 +1,4 @@
-import type { DecisionEntry, ExplainerState, FeedStep, GlossaryEntry, RecapEntry, SessionSummary, Settings } from '@sidecar/shared'
+import type { Baseline, DecisionEntry, ExplainerState, FeedStep, GlossaryEntry, RecapEntry, SessionSummary, Settings } from '@sidecar/shared'
 
 export const token = document.querySelector<HTMLMetaElement>('meta[name="sidecar-token"]')?.content ?? ''
 
@@ -24,6 +24,7 @@ async function send<T>(method: 'PUT' | 'DELETE', path: string, body?: unknown): 
 export const fetchExplainer = () => get<ExplainerState>('/api/explainer')
 export const fetchDecisions = (id: string) => get<DecisionEntry[]>(`/api/sessions/${encodeURIComponent(id)}/decisions`)
 export const fetchGlossary = (id: string) => get<GlossaryEntry[]>(`/api/sessions/${encodeURIComponent(id)}/glossary`)
+export const fetchBaseline = (id: string) => get<Baseline | null>(`/api/sessions/${encodeURIComponent(id)}/baseline`)
 export const fetchRecaps = (id: string) => get<RecapEntry[]>(`/api/sessions/${encodeURIComponent(id)}/recaps`)
 export const fetchSettings = () => get<Settings>('/api/settings')
 export const saveSettings = (s: Settings) => send<{ settings: Settings; explainer: ExplainerState }>('PUT', '/api/settings', s)

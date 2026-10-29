@@ -113,6 +113,8 @@ export function createApp(o: AppOptions): Hono {
   app.get('/api/sessions/:id/decisions', (c) => c.json(o.store.listDecisions(c.req.param('id'))))
   app.get('/api/sessions/:id/glossary', (c) => c.json(o.store.listGlossary(c.req.param('id'))))
   app.get('/api/sessions/:id/recaps', (c) => c.json(o.store.listRecaps(c.req.param('id'))))
+  // null until the scan is ready, not a 404: the workstation asks for it on every session it opens
+  app.get('/api/sessions/:id/baseline', (c) => c.json(o.store.getBaseline(c.req.param('id')) ?? null))
   app.delete('/api/sessions/:id', (c) => {
     const id = c.req.param('id')
     o.store.deleteSession(id)

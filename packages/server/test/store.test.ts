@@ -258,3 +258,21 @@ describe('recaps', () => {
     s.close()
   })
 })
+
+describe('baselines', () => {
+  const b = { files: ['app/page.tsx'], packages: ['next'], folders: [], truncated: false, scannedAt: 5,
+    git: { repo: true, remote: null, ignoresSecrets: true, ignoresDeps: true, ignoresBuild: false, readme: false } }
+  test('a saved scan comes back for its session only', () => {
+    const s = openStore(':memory:')
+    s.saveBaseline('s1', b)
+    expect(s.getBaseline('s1')).toEqual(b)
+    expect(s.getBaseline('s2')).toBeUndefined()
+  })
+  test('deleting a session deletes its scan', () => {
+    const s = openStore(':memory:')
+    s.touchSession('s1', '/p', 1)
+    s.saveBaseline('s1', b)
+    s.deleteSession('s1')
+    expect(s.getBaseline('s1')).toBeUndefined()
+  })
+})

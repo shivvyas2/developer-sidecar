@@ -8,12 +8,51 @@ All notable changes to Developer Sidecar are recorded here. The format follows
 
 ### Added
 
+- **Your project as a town.** The Stage is now a 3D town, seen from a fixed
+  angle like a city builder, that is your codebase: a shop on the main
+  street for each page, an office for the code that runs behind the scenes,
+  a warehouse for your data, a building for each outside service that fits
+  what it does (a bank for Stripe, a power station for hosting, a guard
+  house for login), a safe for secret settings, a supply yard for building
+  blocks and an archive for your git history. It grows the way a building
+  site does, from an empty lot and a dig to a live town, and only from what
+  really happened: a change stays grey until a test or build passes, a
+  failure smokes until it is fixed, and the shops light up while a dev
+  server runs. It costs no tokens.
+- **Claude's work, played out.** Each step is a short scene at the building
+  it touched, with its caption: the foreman reads a blueprint, lays bricks,
+  puts up scaffolding or paints, a truck delivers packages, the inspector
+  checks, a mixer pours a build, a photographer snaps a commit, a ribbon is
+  cut for a deploy. Smoke and a red flag show a failure, a cone a step you
+  stopped, a repair crew a fix, and a NEEDS YOUR OK sign when Claude waits
+  for you. When Claude moves fast, steps of a kind fold together ("Reading
+  10 files") and the camera pulls back to show every busy building.
+- **Tap anything to learn what it is.** A card explains it with an analogy
+  first, and on Go deeper what it really is, the real files behind it in
+  your project, the steps that touched them, and related ideas, with a link
+  to the Glossary. Every building is also in a list for keyboards and
+  screen readers.
+- **The story as a timeline.** Along the bottom, a band for each thing you
+  asked and a mark for every step (done, failed, fixed, stopped). Tap one,
+  or use the arrow keys, to see the town as it stood then.
+- **Set up GitHub safely.** The archive's card checks that the project is a
+  git repository, that .gitignore keeps secret files and dependencies out,
+  that there is a README, a GitHub repository and a push, says why each
+  matters, and gives a request to copy into Claude Code for whatever is
+  missing. Sidecar never runs it itself.
+- **The project as it stands.** When a session starts, Sidecar looks over
+  the project folder once so the town shows what is already there. It reads
+  file and folder names only, plus package.json, requirements.txt,
+  pyproject.toml, .gitignore and the git remote; it never opens .env or any
+  other file, skips node_modules, build output and ignored paths, and stops
+  at 5000 files.
+- **Less motion.** Settings has a Motion choice: follow your computer, less
+  motion (each scene shown finished at once) or full motion.
+
 - **A first look, before your first session.** With no sessions yet, the
   Stage plays a sample session, clearly marked SAMPLE, with a line on how to
-  start. It runs in the browser only and costs nothing, and a trip to
-  another tab picks it up where it was. Under the stage, tap anything to see
-  what it is, even while it moves, or open "What am I looking at?" for the
-  whole key in plain words.
+  start, in the town. It runs in the browser only and costs nothing, and a
+  trip to another tab picks it up where it was.
 - **AI recaps replace step-by-step explanations.** When Claude finishes a
   turn, one short request writes a plain summary of it, what it means for
   your app, and any decisions and terms worth knowing, shown on the Where
@@ -97,6 +136,10 @@ All notable changes to Developer Sidecar are recorded here. The format follows
   to see it again.
 
 ### Changed
+
+- **Wide screens are used.** The workstation fills the window with 8px
+  gutters instead of stopping at 1440px. The Stage is laid out with the
+  town filling it, cards on the right and the timeline along the bottom.
 
 - **Read-only commands look like reading.** `ls`, `cat`, `grep`, `find`,
   `git status` and similar show the bookshelf scene with a plain caption

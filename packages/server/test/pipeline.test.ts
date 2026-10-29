@@ -146,3 +146,46 @@ describe('attention', () => {
     expect(a?.text).toHaveLength(200)
   })
 })
+
+describe('project scan', () => {
+  const baseline = { files: ['a.ts'], packages: [], folders: [], truncated: false, scannedAt: 1,
+    git: { repo: false, remote: null, ignoresSecrets: false, ignoresDeps: false, ignoresBuild: false, readme: false } }
+  const flush = () => new Promise((r) => setTimeout(r, 0))
+  function scanning(scan: (cwd: string) => Promise<typeof baseline | null>) {
+    const store = openStore(':memory:')
+    const hub = new Hub()
+    const got: ServerMessage[] = []
+    hub.subscribe((m) => got.push(m))
+    return { store, got, p: createPipeline({ store, hub, scan }) }
+  }
+
+  test('scans each session once, saves it and tells the workstation', async () => {
+    const calls: string[] = []
+    const { store, got, p } = scanning(async (cwd) => { calls.push(cwd); return baseline })
+    p.ingest(ev('a', 'prompt', { prompt: 'hi' }))
+    p.ingest(ev('b', 'prompt', { prompt: 'again' }))
+    await flush()
+    p.ingest(ev('c', 'prompt', { prompt: 'third' }))
+    await flush()
+    expect(calls).toEqual(['/p'])
+    expect(store.getBaseline('s1')).toEqual(baseline)
+    expect(got.filter((m) => m.type === 'baseline')).toEqual([{ type: 'baseline', sessionId: 's1', baseline }])
+  })
+
+  test('never scans an empty folder', async () => {
+    const calls: string[] = []
+    const { p } = scanning(async (cwd) => { calls.push(cwd); return baseline })
+    p.ingest(ev('a', 'prompt', { prompt: 'hi', cwd: '' }))
+    await flush()
+    expect(calls).toEqual([])
+  })
+
+  test('a failed scan does not stop events', async () => {
+    const { store, p } = scanning(async () => { throw new Error('boom') })
+    p.ingest(ev('a', 'prompt', { prompt: 'hi' }))
+    await flush()
+    p.ingest(ev('b', 'tool_start', { tool: { name: 'Bash', useId: 'u', input: { command: 'ls' } } }))
+    expect(store.stepsForSession('s1')).toHaveLength(2)
+    expect(store.getBaseline('s1')).toBeUndefined()
+  })
+})
