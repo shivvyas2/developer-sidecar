@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import type { DecisionEntry, FeedStep, GlossaryEntry, SidecarEvent } from '@sidecar/shared'
+import type { DecisionEntry, FeedStep, GlossaryEntry, RecapEntry, SidecarEvent } from '@sidecar/shared'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -65,7 +65,7 @@ describe('explainer data', () => {
   test('decisions list oldest first and ignore duplicate ids', () => {
     const s = openStore(':memory:')
     const d = (id: string, at: number): DecisionEntry => ({ id, sessionId: 's1', stepId: 'a', at, title: id, choice: 'c', alternatives: [], reason: 'r' })
-    s.addDecision(d('d2', 2)); s.addDecision(d('d1', 1)); s.addDecision(d('d1', 9))
+    expect([s.addDecision(d('d2', 2)), s.addDecision(d('d1', 1)), s.addDecision(d('d1', 9))]).toEqual([true, true, false])
     expect(s.listDecisions('s1').map((x) => [x.id, x.at])).toEqual([['d1', 1], ['d2', 2]])
     expect(s.listDecisions('other')).toEqual([])
   })
@@ -184,5 +184,77 @@ describe('session attention', () => {
     expect(s.touchSession('s1', '/a', 3, { state: 'done' }).attention).toBe('done')
     s.close()
     expect(() => openStore(path).close()).not.toThrow()
+  })
+})
+
+describe('recaps', () => {
+  const recap = (turnId: string, status: RecapEntry['status'], at = 1, sessionId = 's1'): RecapEntry =>
+    ({ sessionId, turnId, lastStepId: `${turnId}-last`, at, status, ...(status === 'done' ? { ai: { summary: 'S', meaning: 'M' } } : {}) })
+
+  test('a turn has one recap that is replaced; only a call (pending) is counted', () => {
+    const s = openStore(':memory:')
+    expect(s.saveRecap(recap('p1', 'pending'))).toBe(1)
+    expect(s.saveRecap(recap('p1', 'done', 2))).toBe(1)
+    expect(s.getRecap('p1')).toMatchObject({ status: 'done', ai: { summary: 'S' }, count: 1 })
+    expect(s.saveRecap(recap('p1', 'pending', 3))).toBe(2)
+    expect(s.saveRecap(recap('p2', 'unavailable', 4))).toBe(0)
+    expect(s.getRecap('nope')).toBeUndefined()
+  })
+
+  test('a call on a turn already recapped is counted without touching its recap', () => {
+    const s = openStore(':memory:')
+    s.saveRecap(recap('p1', 'pending'))
+    s.saveRecap(recap('p1', 'done', 2))
+    expect(s.countRecapCall('p1')).toBe(2)
+    expect(s.getRecap('p1')).toMatchObject({ status: 'done', ai: { summary: 'S' }, at: 2, count: 2 })
+    expect(s.countRecapCall('nope')).toBe(0)
+  })
+
+  test('pending recaps can all be failed at once, keeping their count', () => {
+    const s = openStore(':memory:')
+    s.saveRecap(recap('p1', 'pending'))
+    s.saveRecap(recap('p2', 'done'))
+    s.saveRecap(recap('p3', 'pending', 1, 's2'))
+    const failed = s.failPendingRecaps('restarted', 9)
+    expect(failed.map((r) => r.turnId).sort()).toEqual(['p1', 'p3'])
+    expect(failed[0]).toMatchObject({ status: 'unavailable', reason: 'restarted', at: 9 })
+    expect(s.getRecap('p1')).toMatchObject({ status: 'unavailable', reason: 'restarted', lastStepId: 'p1-last', count: 1 })
+    expect(s.getRecap('p2')!.status).toBe('done')
+    expect(s.failPendingRecaps('again', 10)).toEqual([])
+  })
+
+  test('the newest recap of each session that was never called', () => {
+    const s = openStore(':memory:')
+    s.saveRecap(recap('a1', 'unavailable', 1))
+    s.saveRecap(recap('a2', 'unavailable', 2))
+    s.saveRecap(recap('b1', 'unavailable', 1, 's2'))
+    s.saveRecap(recap('b2', 'done', 2, 's2'))
+    s.saveRecap(recap('c1', 'pending', 1, 's3'))
+    s.saveRecap(recap('c1', 'unavailable', 2, 's3'))
+    // s1's newest was never called; s2's newest is done; s3's newest was called once
+    expect(s.unavailableRecaps().map((r) => r.turnId)).toEqual(['a2'])
+  })
+
+  test('listed per session, oldest first, and deleted with the session', () => {
+    const s = openStore(':memory:')
+    s.saveRecap(recap('b', 'done', 5))
+    s.saveRecap(recap('a', 'unavailable', 2))
+    s.saveRecap(recap('x', 'done', 1, 's2'))
+    expect(s.listRecaps('s1').map((r) => r.turnId)).toEqual(['a', 'b'])
+    s.deleteSession('s1')
+    expect(s.listRecaps('s1')).toEqual([])
+    expect(s.listRecaps('s2')).toHaveLength(1)
+    s.deleteAll()
+    expect(s.listRecaps('s2')).toEqual([])
+  })
+
+  test('a database from before recaps gains the table on open', () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'sidecar-store-')), 'old.db')
+    const old = new DatabaseSync(path)
+    old.exec('CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT NOT NULL, started_at INTEGER NOT NULL, last_at INTEGER NOT NULL)')
+    old.close()
+    const s = openStore(path)
+    expect(s.saveRecap(recap('p1', 'pending'))).toBe(1)
+    s.close()
   })
 })

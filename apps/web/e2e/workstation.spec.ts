@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
 
@@ -27,11 +28,12 @@ function emit(payload: object) {
 test('the failed test step says what to do next', async ({ page }) => {
   await page.goto(url())
   await page.locator('select.hdr__session').selectOption('smoke-1')
-  // while following live the recap above the stage holds the failed step's ask, so it shows once, not on its card too
+  // while following live the recap above the stage holds the failed step's ask, so it shows once, not on its card too;
+  // the turn has ended, so it is the AI recap's ask
   const next = page.locator('.detail__next')
   await expect(next).toHaveCount(1)
   await expect(next).toContainText('WHAT TO DO NEXT')
-  await expect(next).toContainText('npm test')
+  await expect(next).toContainText('Fix the failing checks, fake edition')
   await expect(next).toContainText('/rewind')
 })
 
@@ -213,11 +215,12 @@ test('the basic session opens on where things stand: a failure still in the way,
   await expect(recap).toContainText('Something still needs a fix.')
   await expect(recap).toContainText('Checks fail')
   await expect(recap.getByRole('list', { name: 'Made or changed' })).toContainText('Checkout')
-  // the ask is on screen once, on the recap, though the failed step's own card is pulled out below it
+  // the ask is on screen once, on the recap, though the failed step's own card is pulled out below it;
+  // the AI recap's ask, which knows the whole turn, replaces the rule-based one
   const next = page.locator('.detail__next')
   await expect(next).toHaveCount(1)
-  await expect(next).toContainText('npm test')
   await expect(recap.locator('.detail__next')).toHaveCount(1)
+  await expect(next).toContainText('Fix the failing checks, fake edition')
 })
 
 test('a dev server that is up gets an Open your app button', async ({ page }) => {
@@ -234,4 +237,24 @@ test('a dev server that is up gets an Open your app button', async ({ page }) =>
   await expect(open).toHaveAttribute('href', 'http://localhost:3000')
   await expect(open).toHaveAttribute('target', '_blank')
   await expect(open).toHaveAttribute('rel', 'noopener noreferrer')
+})
+
+/** The "Asked:" line of every recap request the fake claude command answered. */
+const claudeCalls = () => readFileSync(process.env.SIDECAR_E2E_CALLS!, 'utf8').split('\n').filter(Boolean)
+
+test('each turn that ended got one AI recap through the claude command, and the header counts its tokens', async ({ page }) => {
+  await expect.poll(() => claudeCalls().filter((a) => a.startsWith('Add Stripe checkout so people can buy')).length).toBe(1)
+  await expect.poll(() => claudeCalls().filter((a) => a.startsWith('Store each order in Postgres')).length).toBe(1)
+  await expect.poll(() => claudeCalls().filter((a) => a.startsWith('Build a Next.js app that takes Stripe payments')).length).toBe(1)
+  await page.goto(url())
+  await expect(page.locator('.hdr__tokens-v')).not.toHaveText('0')
+})
+
+test('the card shows the AI recap of the last turn and what it means, and its term reaches the glossary', async ({ page }) => {
+  await openStripe(page)
+  const recap = page.getByRole('region', { name: 'Where things stand' })
+  await expect(recap.locator('.recap__summary')).toContainText('Fake recap: Claude worked on')
+  await expect(recap).toContainText('WHAT IT MEANS')
+  await page.getByRole('tab', { name: 'Glossary' }).click()
+  await expect(page.locator('main')).toContainText('Fake term')
 })

@@ -1,38 +1,8 @@
 {
-  "build-stripe-app": {
-    "finished": 35,
-    "sent": 35,
-    "batches": 6,
-    "stepChars": 37887,
-    "requestChars": 46418,
-    "estInputTokens": 11605,
-    "estOutputTokens": 3727
-  },
-  "fix-failing-test": {
-    "finished": 19,
-    "sent": 19,
-    "batches": 3,
-    "stepChars": 21969,
-    "requestChars": 26260,
-    "estInputTokens": 6565,
-    "estOutputTokens": 2023
-  },
-  "explore-codebase": {
-    "finished": 25,
-    "sent": 25,
-    "batches": 4,
-    "stepChars": 19001,
-    "requestChars": 24754,
-    "estInputTokens": 6189,
-    "estOutputTokens": 2661
-  },
-  "total": {
-    "finished": 79,
-    "sent": 79,
-    "batches": 13,
-    "stepChars": 78857,
-    "requestChars": 97432,
-    "estInputTokens": 24359,
-    "estOutputTokens": 8411
+  "perStep": {
+    "build-stripe-app": { "calls": 4, "requestChars": 16972, "estInputTokens": 4243, "estOutputTokens": 2051 },
+    "fix-failing-test": { "calls": 3, "requestChars": 10129, "estInputTokens": 2533, "estOutputTokens": 927 },
+    "explore-codebase": { "calls": 2, "requestChars": 5990, "estInputTokens": 1498, "estOutputTokens": 720 },
+    "total": { "calls": 9, "requestChars": 33091, "estInputTokens": 8274, "estOutputTokens": 3698 }
   }
 }

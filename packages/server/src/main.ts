@@ -8,7 +8,7 @@ import {
 import { createApp } from './app'
 import type { Provider } from './explainer/providers'
 import { claudeAvailable, pickProvider } from './explainer/providers'
-import { createExplainer } from './explainer/service'
+import { createRecapper } from './explainer/recap'
 import { Hub } from './hub'
 import { createPipeline } from './pipeline'
 import { fileSettings } from './settings'
@@ -98,14 +98,14 @@ export async function startServer(o: StartOptions): Promise<RunningServer> {
   const given = 'provider' in o
   const envOff = !given && process.env.SIDECAR_EXPLAINER === 'off'
   let settings: ReturnType<typeof fileSettings>
-  let explainer: ReturnType<typeof createExplainer>
+  let explainer: ReturnType<typeof createRecapper>
   let pipeline: ReturnType<typeof createPipeline>
   let app: ReturnType<typeof createApp>
   let server: Server
   let port = o.preferredPort ?? DEFAULT_PORT
   try {
     settings = fileSettings(o.home)
-    explainer = createExplainer({
+    explainer = createRecapper({
       hub, store, settings, provider: given ? o.provider ?? null : null,
       log: (msg) => logLine(o.home, 'server.log', msg),
       ...(envOff ? { disabledReason: 'Turned off by SIDECAR_EXPLAINER=off.' } : {}),

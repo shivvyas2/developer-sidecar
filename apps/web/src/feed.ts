@@ -1,4 +1,4 @@
-import type { DecisionEntry, ExplainerState, FeedStep, GlossaryEntry, ServerMessage, SessionSummary, StepExplanation } from '@sidecar/shared'
+import type { DecisionEntry, ExplainerState, FeedStep, GlossaryEntry, RecapEntry, ServerMessage, SessionSummary, StepExplanation } from '@sidecar/shared'
 
 export interface FeedState {
   sessions: SessionSummary[]
@@ -6,12 +6,13 @@ export interface FeedState {
   steps: Record<string, FeedStep[]>
   lastSeq: number
   loaded: Record<string, boolean>
+  /** Explanations stored before recaps replaced them; they ride along with a session's steps. */
   explanations: Record<string, StepExplanation>
+  /** Each session's AI recaps, by the turn (prompt step id) they sum up. */
+  recaps: Record<string, Record<string, RecapEntry>>
   decisions: Record<string, DecisionEntry[]>
   glossary: Record<string, GlossaryEntry[]>
   explainer: ExplainerState | null
-  /** When (Date.now()) the explainer last became ready in this page; steps that ended earlier may never be explained. */
-  readySince: number
   /** A session that started while another was being watched, offered until the person switches. */
   newSession: string | null
 }
@@ -23,9 +24,10 @@ export type FeedAction =
   | { type: 'steps'; sessionId: string; steps: FeedStep[] }
   | { type: 'decisions'; sessionId: string; decisions: DecisionEntry[] }
   | { type: 'glossary'; sessionId: string; entries: GlossaryEntry[] }
+  | { type: 'recaps'; sessionId: string; recaps: RecapEntry[] }
 
 export const initialFeed: FeedState = { sessions: [], selected: null, steps: {}, lastSeq: 0, loaded: {},
-  explanations: {}, decisions: {}, glossary: {}, explainer: null, readySince: 0, newSession: null,
+  explanations: {}, recaps: {}, decisions: {}, glossary: {}, explainer: null, newSession: null,
 }
 
 const byLastAt = (a: SessionSummary, b: SessionSummary) => b.lastAt - a.lastAt
@@ -78,8 +80,6 @@ export function feedReducer(state: FeedState, action: FeedAction): FeedState {
     }
     case 'select':
       return { ...state, selected: action.id, newSession: null }
-    case 'explanation':
-      return { ...state, explanations: { ...state.explanations, [action.stepId]: action.explanation } }
     case 'decision': {
       const d = action.decision
       const list = (state.decisions[d.sessionId] ?? []).filter((x) => x.id !== d.id)
@@ -103,9 +103,17 @@ export function feedReducer(state: FeedState, action: FeedAction): FeedState {
       for (const e of state.glossary[action.sessionId] ?? []) merged.set(termKey(e.term), e)
       return { ...state, glossary: { ...state.glossary, [action.sessionId]: [...merged.values()].sort(byTerm) } }
     }
-    case 'explainer': {
-      const becameReady = action.state.status === 'ready' && state.explainer?.status !== 'ready'
-      return { ...state, explainer: action.state, readySince: becameReady ? Date.now() : state.readySince }
+    case 'explainer':
+      return { ...state, explainer: action.state }
+    case 'recap': {
+      const r = action.recap
+      return { ...state, recaps: { ...state.recaps, [r.sessionId]: { ...state.recaps[r.sessionId], [r.turnId]: r } } }
+    }
+    case 'recaps': {
+      // merge: a live recap newer than the snapshot wins
+      const merged = { ...state.recaps[action.sessionId] }
+      for (const r of action.recaps) if (!merged[r.turnId] || merged[r.turnId]!.at <= r.at) merged[r.turnId] = r
+      return { ...state, recaps: { ...state.recaps, [action.sessionId]: merged } }
     }
     case 'session_deleted': {
       const omit = <T,>(r: Record<string, T>) => Object.fromEntries(Object.entries(r).filter(([k]) => k !== action.id))
@@ -119,11 +127,14 @@ export function feedReducer(state: FeedState, action: FeedAction): FeedState {
         steps: omit(state.steps),
         decisions: omit(state.decisions),
         glossary: omit(state.glossary),
+        recaps: omit(state.recaps),
         loaded: omit(state.loaded),
         explanations: Object.fromEntries(Object.entries(state.explanations).filter(([k]) => !gone.has(k))),
       }
     }
     case 'reset':
-      return { ...initialFeed, explainer: state.explainer, readySince: state.readySince }
+      return { ...initialFeed, explainer: state.explainer }
+    case 'turn_end':
+      return state
   }
 }

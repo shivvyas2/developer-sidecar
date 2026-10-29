@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite'
 import type {
-  Attention, DecisionEntry, FeedStep, GlossaryEntry, SessionSummary, SidecarEvent, StepExplanation, TokenUsage,
+  Attention, DecisionEntry, FeedStep, GlossaryEntry, RecapEntry, SessionSummary, SidecarEvent, StepExplanation, TokenUsage,
 } from '@sidecar/shared'
 
 export interface Store {
@@ -15,10 +15,21 @@ export interface Store {
   revision(sessionId: string): string
   saveExplanation(sessionId: string, stepId: string, e: StepExplanation, at: number): void
   hasExplanation(stepId: string): boolean
-  addDecision(d: DecisionEntry): void
+  /** False when a decision with its id is already stored, so it was not added. */
+  addDecision(d: DecisionEntry): boolean
   listDecisions(sessionId: string): DecisionEntry[]
   addConcept(c: GlossaryEntry): boolean
   listGlossary(sessionId: string): GlossaryEntry[]
+  /** Replaces the turn's recap and counts it; returns how many times the turn has been recapped. */
+  saveRecap(r: RecapEntry): number
+  getRecap(turnId: string): (RecapEntry & { count: number }) | undefined
+  /** Counts a call on a turn whose recap stays as stored until the call writes a new one; returns the count, 0 for no recap. */
+  countRecapCall(turnId: string): number
+  listRecaps(sessionId: string): RecapEntry[]
+  /** Marks every pending recap unavailable (their calls can no longer finish) and returns them. */
+  failPendingRecaps(reason: string, at: number): RecapEntry[]
+  /** Each session's newest recap when it is unavailable and no call was ever made for it (recaps were paused). */
+  unavailableRecaps(): RecapEntry[]
   addUsage(u: TokenUsage): TokenUsage
   usage(): TokenUsage
   getSession(id: string): SessionSummary | undefined
@@ -78,6 +89,10 @@ export function openStore(path: string): Store {
       session_id TEXT NOT NULL, term_key TEXT NOT NULL, at INTEGER NOT NULL, json TEXT NOT NULL,
       PRIMARY KEY (session_id, term_key)
     );
+    CREATE TABLE IF NOT EXISTS recaps (
+      turn_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, at INTEGER NOT NULL, count INTEGER NOT NULL DEFAULT 0, json TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS recaps_session ON recaps(session_id, at);
     CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
   `)
   const sessionCols = new Set((db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[]).map((c) => c.name))
@@ -124,15 +139,30 @@ export function openStore(path: string): Store {
     ON CONFLICT(step_id) DO UPDATE SET at = excluded.at, json = excluded.json`)
   const getExp = db.prepare('SELECT 1 AS x FROM explanations WHERE step_id = ?')
   const insDecision = db.prepare('INSERT OR IGNORE INTO decisions (id, session_id, step_id, at, json) VALUES (?, ?, ?, ?, ?)')
-  const decisionsFor = db.prepare('SELECT json FROM decisions WHERE session_id = ? ORDER BY at ASC, id ASC')
+  // at the same time, in the order they were added (a recap's decisions share its time)
+  const decisionsFor = db.prepare('SELECT json FROM decisions WHERE session_id = ? ORDER BY at ASC, rowid ASC')
   const insConcept = db.prepare('INSERT OR IGNORE INTO concepts (session_id, term_key, at, json) VALUES (?, ?, ?, ?)')
   const conceptsFor = db.prepare('SELECT json FROM concepts WHERE session_id = ? ORDER BY term_key ASC')
+  // count goes up only when a call was made (pending), so pending, then done, counts once
+  const upRecap = db.prepare(`
+    INSERT INTO recaps (turn_id, session_id, at, count, json) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(turn_id) DO UPDATE SET at = excluded.at, json = excluded.json, count = recaps.count + excluded.count
+    RETURNING count`)
+  const getRecapStmt = db.prepare('SELECT json, count FROM recaps WHERE turn_id = ?')
+  const countCall = db.prepare('UPDATE recaps SET count = count + 1 WHERE turn_id = ? RETURNING count')
+  const recapsFor = db.prepare('SELECT json FROM recaps WHERE session_id = ? ORDER BY at ASC, turn_id ASC')
+  const pendingRecaps = db.prepare(`SELECT json FROM recaps WHERE json_extract(json, '$.status') = 'pending'`)
+  const uncalledRecaps = db.prepare(`
+    SELECT json FROM recaps r WHERE count = 0 AND json_extract(json, '$.status') = 'unavailable'
+      AND NOT EXISTS (SELECT 1 FROM recaps n WHERE n.session_id = r.session_id AND (n.at > r.at OR (n.at = r.at AND n.turn_id > r.turn_id)))
+    ORDER BY session_id`)
+  const setRecapJson = db.prepare('UPDATE recaps SET at = ?, json = ? WHERE turn_id = ?')
   const getMeta = db.prepare('SELECT value FROM meta WHERE key = ?')
   const upMeta = db.prepare('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
   const lastPromptStmt = db.prepare(`
     SELECT json FROM steps WHERE session_id = ? AND json_extract(json, '$.category') = 'prompt'
     ORDER BY started_at DESC, seq DESC LIMIT 1`)
-  const SESSION_TABLES = ['events', 'sessions', 'steps', 'explanations', 'decisions', 'concepts'] as const
+  const SESSION_TABLES = ['events', 'sessions', 'steps', 'explanations', 'decisions', 'concepts', 'recaps'] as const
   const delBySession = SESSION_TABLES.map((t) => db.prepare(`DELETE FROM ${t} WHERE ${t === 'sessions' ? 'id' : 'session_id'} = ?`))
   const tx = (fn: () => void) => {
     db.exec('BEGIN')
@@ -179,7 +209,7 @@ export function openStore(path: string): Store {
       return getExp.get(stepId) !== undefined
     },
     addDecision(d) {
-      insDecision.run(d.id, d.sessionId, d.stepId, d.at, JSON.stringify(d))
+      return insDecision.run(d.id, d.sessionId, d.stepId, d.at, JSON.stringify(d)).changes > 0
     },
     listDecisions(sessionId) {
       return parseJson<DecisionEntry>(decisionsFor.all(sessionId))
@@ -189,6 +219,28 @@ export function openStore(path: string): Store {
     },
     listGlossary(sessionId) {
       return parseJson<GlossaryEntry>(conceptsFor.all(sessionId))
+    },
+    saveRecap(r) {
+      const row = upRecap.get(r.turnId, r.sessionId, r.at, r.status === 'pending' ? 1 : 0, JSON.stringify(r)) as { count: number }
+      return row.count
+    },
+    getRecap(turnId) {
+      const row = getRecapStmt.get(turnId) as { json: string; count: number } | undefined
+      return row ? { ...(JSON.parse(row.json) as RecapEntry), count: row.count } : undefined
+    },
+    countRecapCall(turnId) {
+      return (countCall.get(turnId) as { count: number } | undefined)?.count ?? 0
+    },
+    listRecaps(sessionId) {
+      return parseJson<RecapEntry>(recapsFor.all(sessionId))
+    },
+    failPendingRecaps(reason, at) {
+      const failed = parseJson<RecapEntry>(pendingRecaps.all()).map((r): RecapEntry => ({ ...r, at, status: 'unavailable', reason }))
+      for (const r of failed) setRecapJson.run(at, JSON.stringify(r), r.turnId)
+      return failed
+    },
+    unavailableRecaps() {
+      return parseJson<RecapEntry>(uncalledRecaps.all())
     },
     usage() {
       const row = getMeta.get('usage') as { value: string } | undefined

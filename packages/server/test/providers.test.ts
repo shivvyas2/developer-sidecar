@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import Anthropic from '@anthropic-ai/sdk'
 import { describe, expect, test } from 'vitest'
 import {
@@ -5,8 +6,11 @@ import {
   type MessagesClient, type Provider, type Runner,
 } from '../src/explainer/providers'
 
-const req = { system: 'SYS', user: 'USER' }
-const output = { items: [{ stepId: 'a', plain: 'p', why: 'w', concept: null, decision: null, next: null }] }
+const output = { items: [{ stepId: 'a', plain: 'p', why: 'w' }] }
+const req = {
+  system: 'SYS', user: 'USER', maxTokens: 8000, shape: 'SHAPE',
+  schema: z.object({ items: z.array(z.object({ stepId: z.string(), plain: z.string(), why: z.string() })) }),
+}
 
 describe('anthropicProvider', () => {
   const client = (impl: (p: Record<string, unknown>) => unknown): MessagesClient => ({ messages: { create: async (p) => impl(p) } })
@@ -18,7 +22,7 @@ describe('anthropicProvider', () => {
       sent = params
       return text(JSON.stringify(output), 'end_turn', { input_tokens: 100, output_tokens: 20, cache_read_input_tokens: 5, cache_creation_input_tokens: 0 })
     }))
-    const r = await p.explain(req, 'haiku')
+    const r = await p.call(req, 'haiku')
     expect(sent.model).toBe(API_MODEL.haiku)
     expect(sent.model).toBe('claude-haiku-5-5')
     expect(sent.output_config?.effort).toBe('low')
@@ -30,32 +34,32 @@ describe('anthropicProvider', () => {
   })
   test('sonnet level uses claude-sonnet-5-5', async () => {
     let model = ''
-    await anthropicProvider(client((params) => { model = String(params.model); return text(JSON.stringify(output)) })).explain(req, 'sonnet')
+    await anthropicProvider(client((params) => { model = String(params.model); return text(JSON.stringify(output)) })).call(req, 'sonnet')
     expect(model).toBe('claude-sonnet-5-5')
   })
   test('a refusal is not retryable and carries the usage spent', async () => {
     const p = anthropicProvider(client(() => text('', 'refusal', { input_tokens: 9, output_tokens: 1 })))
-    await expect(p.explain(req, 'haiku')).rejects.toMatchObject({ retryable: false, usage: { input: 9, output: 1 } })
+    await expect(p.call(req, 'haiku')).rejects.toMatchObject({ retryable: false, usage: { input: 9, output: 1 } })
   })
   test('a truncated answer is retryable and carries the usage spent', async () => {
     const p = anthropicProvider(client(() => text('{"items":[', 'max_tokens', { input_tokens: 9, output_tokens: 8000 })))
-    await expect(p.explain(req, 'haiku')).rejects.toMatchObject({ retryable: true, usage: { input: 9, output: 8000 } })
+    await expect(p.call(req, 'haiku')).rejects.toMatchObject({ retryable: true, usage: { input: 9, output: 8000 } })
   })
   test('malformed text (not JSON, or the wrong shape) is retryable and carries the usage spent', async () => {
     for (const bad of ['not json', '{"items":[{"bad":1}]}']) {
       const p = anthropicProvider(client(() => text(bad, 'end_turn', { input_tokens: 4, output_tokens: 2 })))
-      await expect(p.explain(req, 'haiku')).rejects.toMatchObject({ message: 'The explanation came back malformed.', retryable: true, usage: { input: 4, output: 2 } })
+      await expect(p.call(req, 'haiku')).rejects.toMatchObject({ message: 'The recap came back malformed.', retryable: true, usage: { input: 4, output: 2 } })
     }
     const none = anthropicProvider(client(() => ({ stop_reason: 'end_turn', content: [], usage: { input_tokens: 4, output_tokens: 0 } })))
-    await expect(none.explain(req, 'haiku')).rejects.toMatchObject({ retryable: true, usage: { input: 4, output: 0 } })
+    await expect(none.call(req, 'haiku')).rejects.toMatchObject({ retryable: true, usage: { input: 4, output: 0 } })
   })
   test('a 404 means the key cannot use the model and is not retryable', async () => {
     const p = anthropicProvider(client(() => { throw new Anthropic.NotFoundError(404, { type: 'error' }, 'model not found', new Headers()) }))
-    await expect(p.explain(req, 'haiku')).rejects.toMatchObject({ message: "This API key can't use the explanation model.", retryable: false })
+    await expect(p.call(req, 'haiku')).rejects.toMatchObject({ message: "This API key can't use the recap model.", retryable: false })
   })
   test('unknown thrown errors become retryable ExplainErrors', async () => {
     const p = anthropicProvider(client(() => { throw new Error('socket hang up') }))
-    const err = await p.explain(req, 'haiku').catch((e: unknown) => e)
+    const err = await p.call(req, 'haiku').catch((e: unknown) => e)
     expect(err).toBeInstanceOf(ExplainError)
     expect((err as ExplainError).retryable).toBe(true)
   })
@@ -67,7 +71,7 @@ describe('cliProvider', () => {
   test('runs claude -p with the haiku alias, JSON output and SIDECAR_INTERNAL=1 (Review Focus 4)', async () => {
     let seen: { args: string[]; input: string; env: NodeJS.ProcessEnv } | null = null
     const run: Runner = async (args, input, o) => { seen = { args, input, env: o.env }; return ok(args, input, o) }
-    const r = await cliProvider(run, { PATH: '/bin', ANTHROPIC_API_KEY: '' }).explain(req, 'haiku')
+    const r = await cliProvider(run, { PATH: '/bin', ANTHROPIC_API_KEY: '' }).call(req, 'haiku')
     expect(seen!.args).toEqual(CLI_ARGS('haiku', 'SYS'))
     expect(seen!.args.slice(0, 5)).toEqual(['-p', '--model', 'haiku', '--output-format', 'json'])
     expect(seen!.env.SIDECAR_INTERNAL).toBe('1')
@@ -78,19 +82,19 @@ describe('cliProvider', () => {
   test('the child env drops the nested-session markers (final fix 10)', async () => {
     let env: NodeJS.ProcessEnv = {}
     const run: Runner = async (args, input, o) => { env = o.env; return ok(args, input, o) }
-    await cliProvider(run, { PATH: '/bin', CLAUDECODE: '1', CLAUDE_CODE_ENTRYPOINT: 'cli' }).explain(req, 'haiku')
+    await cliProvider(run, { PATH: '/bin', CLAUDECODE: '1', CLAUDE_CODE_ENTRYPOINT: 'cli' }).call(req, 'haiku')
     expect(env).not.toHaveProperty('CLAUDECODE')
     expect(env).not.toHaveProperty('CLAUDE_CODE_ENTRYPOINT')
     expect(env).toMatchObject({ PATH: '/bin', SIDECAR_INTERNAL: '1' })
   })
   test('failures are ExplainErrors; a missing binary is not retryable', async () => {
-    await expect(cliProvider(async () => ({ code: 1, stdout: '', stderr: 'boom' })).explain(req, 'haiku')).rejects.toMatchObject({ retryable: true })
-    await expect(cliProvider(async () => ({ code: 0, stdout: 'not json', stderr: '' })).explain(req, 'haiku')).rejects.toMatchObject({ retryable: true })
-    await expect(cliProvider(async () => ({ code: 0, stdout: JSON.stringify({ is_error: false, result: '{"items":[{"bad":1}]}' }), stderr: '' })).explain(req, 'haiku')).rejects.toMatchObject({ retryable: true })
-    await expect(cliProvider(async () => { throw Object.assign(new Error('spawn claude ENOENT'), { code: 'ENOENT' }) }).explain(req, 'haiku')).rejects.toMatchObject({ retryable: false })
+    await expect(cliProvider(async () => ({ code: 1, stdout: '', stderr: 'boom' })).call(req, 'haiku')).rejects.toMatchObject({ retryable: true })
+    await expect(cliProvider(async () => ({ code: 0, stdout: 'not json', stderr: '' })).call(req, 'haiku')).rejects.toMatchObject({ retryable: true })
+    await expect(cliProvider(async () => ({ code: 0, stdout: JSON.stringify({ is_error: false, result: '{"items":[{"bad":1}]}' }), stderr: '' })).call(req, 'haiku')).rejects.toMatchObject({ retryable: true })
+    await expect(cliProvider(async () => { throw Object.assign(new Error('spawn claude ENOENT'), { code: 'ENOENT' }) }).call(req, 'haiku')).rejects.toMatchObject({ retryable: false })
   })
   test('a timed-out run is labelled as such and is retryable', async () => {
-    const err = await cliProvider(async () => ({ code: null, stdout: '', stderr: '', timedOut: true })).explain(req, 'haiku').catch((e: unknown) => e)
+    const err = await cliProvider(async () => ({ code: null, stdout: '', stderr: '', timedOut: true })).call(req, 'haiku').catch((e: unknown) => e)
     expect(err).toBeInstanceOf(ExplainError)
     expect(err).toMatchObject({ message: 'claude took too long to answer.', retryable: true })
   })
@@ -100,14 +104,57 @@ describe('cliProvider', () => {
   })
 })
 
+describe('error wording', () => {
+  test('the errors a person can see on the card or the PAUSED strip speak of recaps, not explanations', async () => {
+    const api = (impl: () => unknown) => anthropicProvider({ messages: { create: async () => impl() } })
+    const reply = (t: string, stop_reason = 'end_turn') => ({ stop_reason, content: [{ type: 'text', text: t }], usage: { input_tokens: 1, output_tokens: 1 } })
+    const failing: Array<Promise<unknown>> = [
+      api(() => reply('', 'refusal')).call(req, 'haiku'),
+      api(() => reply('{"items":[', 'max_tokens')).call(req, 'haiku'),
+      api(() => reply('not json')).call(req, 'haiku'),
+      api(() => { throw new Anthropic.NotFoundError(404, { type: 'error' }, 'model not found', new Headers()) }).call(req, 'haiku'),
+      api(() => { throw new Anthropic.BadRequestError(400, { type: 'error' }, 'too long', new Headers()) }).call(req, 'haiku'),
+      cliProvider(async () => ({ code: 0, stdout: JSON.stringify({ is_error: false, result: '{"items":[{"bad":1}]}' }), stderr: '' })).call(req, 'haiku'),
+    ]
+    const messages = await Promise.all(failing.map((p) => p.then(() => '', (e: unknown) => (e as Error).message)))
+    for (const m of messages) {
+      expect(m).not.toMatch(/explain/i)
+      expect(m).not.toBe('')
+    }
+    expect(messages.filter((m) => /recap/.test(m))).toHaveLength(messages.length)
+  })
+})
+
 describe('pickProvider', () => {
-  const api: Provider = { id: 'api', explain: async () => { throw new Error('unused') } }
-  const cli: Provider = { id: 'cli', explain: async () => { throw new Error('unused') } }
+  const api: Provider = { id: 'api', call: async () => { throw new Error('unused') } }
+  const cli: Provider = { id: 'cli', call: async () => { throw new Error('unused') } }
   const pick = (env: NodeJS.ProcessEnv, has: boolean) => pickProvider({ env, hasClaude: async () => has, api: () => api, cli: () => cli })
   test('API key first, then the claude CLI, then none; SIDECAR_EXPLAINER=off wins', async () => {
     expect(await pick({ ANTHROPIC_API_KEY: 'k' }, true)).toBe(api)
     expect(await pick({}, true)).toBe(cli)
     expect(await pick({}, false)).toBeNull()
     expect(await pick({ ANTHROPIC_API_KEY: 'k', SIDECAR_EXPLAINER: 'off' }, true)).toBeNull()
+  })
+})
+
+describe('a model task', () => {
+  const task = { system: 'S', user: 'U', schema: z.object({ answer: z.string() }), maxTokens: 321, shape: 'SHAPE: {"answer":"…"}' }
+  test('the API gets the task’s token cap and schema, and its answer is checked against that schema', async () => {
+    let sent: Record<string, unknown> & { output_config?: { format?: { schema?: unknown } } } = {}
+    const usage = { input_tokens: 3, output_tokens: 2 }
+    const p = anthropicProvider({ messages: { create: async (params) => { sent = params; return { stop_reason: 'end_turn', content: [{ type: 'text', text: '{"answer":"yes"}' }], usage } } } })
+    expect(await p.call(task, 'haiku')).toEqual({ output: { answer: 'yes' }, usage: { input: 3, output: 2 } })
+    expect(sent.max_tokens).toBe(321)
+    expect(JSON.stringify(sent.output_config?.format)).toContain('answer')
+    const wrong = anthropicProvider({ messages: { create: async () => ({ stop_reason: 'end_turn', content: [{ type: 'text', text: '{"items":[]}' }], usage }) } })
+    await expect(wrong.call(task, 'haiku')).rejects.toMatchObject({ retryable: true })
+  })
+  test('the CLI is told the task’s shape and checks the answer against its schema', async () => {
+    let input = ''
+    const run: Runner = async (_a, i) => { input = i; return { code: 0, stderr: '', stdout: JSON.stringify({ is_error: false, result: '{"answer":"ok"}', usage: { input_tokens: 1, output_tokens: 1 } }) } }
+    expect((await cliProvider(run, {}).call(task, 'haiku')).output).toEqual({ answer: 'ok' })
+    expect(input.startsWith('SHAPE: {"answer":"…"}\n\nU')).toBe(true)
+    const bad: Runner = async () => ({ code: 0, stderr: '', stdout: JSON.stringify({ is_error: false, result: '{"nope":1}' }) })
+    await expect(cliProvider(bad, {}).call(task, 'haiku')).rejects.toMatchObject({ retryable: true })
   })
 })

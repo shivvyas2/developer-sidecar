@@ -7,6 +7,9 @@ const TOKEN_PATTERNS: RegExp[] = [
   /sk-ant-[A-Za-z0-9_-]{10,}/g,
   /sk-[A-Za-z0-9_-]{16,}/g,
   /gh[pousr]_[A-Za-z0-9]{20,}/g,
+  // Stripe secret and restricted keys, and webhook signing secrets
+  /\b[sr]k_(?:live|test)_[A-Za-z0-9]{10,}/g,
+  /\bwhsec_[A-Za-z0-9]{10,}/g,
   /github_pat_[A-Za-z0-9_]{20,}/g,
   /AKIA[0-9A-Z]{16}/g,
   /xox[abposr]-[A-Za-z0-9-]{10,}/g,

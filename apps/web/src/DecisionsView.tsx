@@ -3,9 +3,9 @@ import { SpecCard } from './ds'
 
 const EMPTY: Record<ExplainerState['status'], string> = {
   ready: 'No architecture decisions yet. When Claude picks a library, service, database or approach, it shows up here with the reasons.',
-  off: 'Architecture decisions are collected from plain-English explanations, which are off. Turn them on in Settings.',
-  paused: 'Architecture decisions are collected from plain-English explanations, which are paused. See the banner or Settings.',
-  unavailable: 'Architecture decisions are collected from plain-English explanations, which need an Anthropic API key or the claude command.',
+  off: 'Architecture decisions are collected from AI recaps, which are off. Turn them on in Settings.',
+  paused: 'Architecture decisions are collected from AI recaps, which are paused. See the banner or Settings.',
+  unavailable: 'Architecture decisions are collected from AI recaps, which need an Anthropic API key or the claude command.',
 }
 
 /** `stepIds` is the session's step ids in order, so a decision's step number is its index + 1. */
