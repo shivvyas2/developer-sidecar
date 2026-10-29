@@ -1,6 +1,7 @@
 import { isRecord } from './hook-payload'
 import { basename, fileOf, str } from './input'
 import { envFilesIn, INSTALL, packagesIn, segments } from './shell'
+import type { Baseline } from './city/baseline'
 import type { FeedStep } from './step'
 import { detectVendor } from './vendors'
 
@@ -11,8 +12,11 @@ import { detectVendor } from './vendors'
 
 export type MapKind = 'page' | 'backend' | 'data' | 'service' | 'secrets' | 'checks' | 'code' | 'blocks'
 
-/** seen: Claude only looked at it. changed: Claude made or changed it. failed: the last change to it failed. */
-export type MapState = 'seen' | 'changed' | 'failed'
+/**
+ * existing: it was in the project when the session began and nothing has changed it. seen: Claude only looked at
+ * it. changed: Claude made or changed it. failed: the last change to it failed.
+ */
+export type MapState = 'existing' | 'seen' | 'changed' | 'failed'
 
 export interface MapItem {
   id: string
@@ -63,7 +67,7 @@ function routeName(rel: string): string {
   return folders.map((f) => f.replace(/^\[+\.*|\]+$/g, '')).join(' ')
 }
 
-function classify(rel: string): { kind: MapKind; key: string; name: string } | null {
+export function classify(rel: string): { kind: MapKind; key: string; name: string } | null {
   const file = basename(rel)
   if (SECRETS.test(rel)) return { kind: 'secrets', key: file, name: file }
   if (CHECKS.test(rel)) return { kind: 'checks', key: rel, name: `${humanize(stem(rel) === 'route' ? routeName(rel) || 'route' : stem(rel))} checks` }
@@ -119,7 +123,7 @@ export const makesChange = (s: Pick<FeedStep, 'category' | 'toolName'>): boolean
  * it, paths are matched by the folders in them. Running and interrupted steps count as touching a
  * part but never change its state.
  */
-export function projectMap(steps: readonly MapStep[], cwd?: string): ProjectMap {
+export function projectMap(steps: readonly MapStep[], cwd?: string, baseline?: Baseline): ProjectMap {
   const items = new Map<string, MapItem & { kind: MapKind }>()
   const root = cwd ? cwd.replace(/\/+$/, '') + '/' : ''
   const rel = (p: string) => (root && p.startsWith(root) ? p.slice(root.length) : p.replace(/^\/+/, ''))
@@ -132,6 +136,27 @@ export function projectMap(steps: readonly MapStep[], cwd?: string): ProjectMap 
     const finished = step.status === 'ok' || step.status === 'failed'
     if (finished && makesChange(step)) item.state = step.status === 'failed' ? 'failed' : 'changed'
     items.set(id, item)
+  }
+
+  const seed = (kind: MapKind, key: string, name: string, file?: string) => {
+    const id = `${kind}:${key}`
+    const item = items.get(id) ?? { id, kind, name, files: [], stepIds: [], state: 'existing' as MapState }
+    if (file && !item.files.includes(file)) item.files.push(file)
+    items.set(id, item)
+  }
+  if (baseline) {
+    for (const f of baseline.files) {
+      const c = classify(f)
+      if (c) seed(c.kind, c.key, c.name, f)
+      const vendor = detectVendor(stem(f))
+      if (vendor && c?.kind !== 'service' && CODE.test(f)) seed('service', vendor, vendor, f)
+    }
+    for (const pkg of baseline.packages) {
+      seed('blocks', pkg, pkg)
+      const vendor = detectVendor(pkg)
+      if (vendor) seed('service', vendor, vendor)
+    }
+    for (const folder of baseline.folders) seed('code', `folder:${folder}`, humanize(basename(folder)), folder)
   }
 
   for (const step of steps) {

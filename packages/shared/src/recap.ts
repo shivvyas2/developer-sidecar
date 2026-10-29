@@ -111,8 +111,8 @@ export function buildRecap(steps: readonly RecapStep[], opts: { attention?: Atte
   const map = projectMap(turnSteps, opts.cwd)
   const built = map.sections
     .filter((s) => s.kind !== 'blocks')
-    .flatMap((s) => s.items.filter((i) => i.state !== 'seen').map((i) => ({ id: i.id, kind: s.kind, name: i.name, failed: i.state === 'failed' })))
-  const packages = map.sections.find((s) => s.kind === 'blocks')?.items.filter((i) => i.state !== 'seen').length ?? 0
+    .flatMap((s) => s.items.filter((i) => i.state === 'changed' || i.state === 'failed').map((i) => ({ id: i.id, kind: s.kind, name: i.name, failed: i.state === 'failed' })))
+  const packages = map.sections.find((s) => s.kind === 'blocks')?.items.filter((i) => i.state === 'changed' || i.state === 'failed').length ?? 0
   const byId = new Map(turnSteps.map((s) => [s.id, s]))
   const ran = checksOf(turnSteps) !== 'none'
   // a failed check run that no later run covered (see storyOf) is still failing

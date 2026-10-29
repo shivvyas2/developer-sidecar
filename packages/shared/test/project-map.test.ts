@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { humanize, projectMap, tablesIn, type MapKind } from '../src/project-map'
 import type { FeedStep } from '../src/step'
+import type { Baseline } from '../src/city/baseline'
 
 type S = Pick<FeedStep, 'id' | 'category' | 'status' | 'toolName' | 'input'>
 let n = 0
@@ -147,5 +148,36 @@ describe('helpers', () => {
   })
   test('odd input never throws', () => {
     expect(projectMap([step('Write', 'create', { file_path: 42 }), step('Bash', 'install', { command: null }), step('X', 'fallback', 'nope' as never)]).sections).toEqual([])
+  })
+})
+
+describe('baseline', () => {
+  const git = { repo: false, remote: null, ignoresSecrets: false, ignoresDeps: false, ignoresBuild: false, readme: false }
+  const base = (o: Partial<Baseline> = {}): Baseline => ({ files: [], packages: [], folders: [], truncated: false, git, scannedAt: 0, ...o })
+  const items = (m: ReturnType<typeof projectMap>) => Object.fromEntries(m.sections.flatMap((s) => s.items.map((i) => [i.id, i.state])))
+
+  test('existing files become existing parts', () => {
+    const m = projectMap([], '/p', base({ files: ['app/page.tsx', 'app/cart/page.tsx', 'prisma/schema.prisma', '.env.local'] }))
+    expect(items(m)).toMatchObject({ 'page:page:': 'existing', 'page:page:cart': 'existing', 'data:tables': 'existing', 'secrets:.env.local': 'existing' })
+  })
+
+  test('a read keeps a part existing, an edit makes it changed', () => {
+    const m = projectMap([read('app/page.tsx'), edit('app/cart/page.tsx')], '/p', base({ files: ['app/page.tsx', 'app/cart/page.tsx'] }))
+    expect(items(m)).toMatchObject({ 'page:page:': 'existing', 'page:page:cart': 'changed' })
+  })
+
+  test('baseline packages and their vendors', () => {
+    const m = projectMap([], '/p', base({ packages: ['next', 'stripe'] }))
+    expect(items(m)).toMatchObject({ 'blocks:next': 'existing', 'blocks:stripe': 'existing', 'service:Stripe': 'existing' })
+  })
+
+  test('truncated folders stand in for files', () => {
+    const m = projectMap([], '/p', base({ folders: ['legacy'], truncated: true }))
+    expect(m.sections.find((s) => s.kind === 'code')?.items.map((i) => i.name)).toEqual(['Legacy'])
+  })
+
+  test('no baseline behaves as before', () => {
+    const steps = [write('app/page.tsx'), bash('npm install stripe', 'install')]
+    expect(projectMap(steps, '/p', undefined)).toEqual(projectMap(steps, '/p'))
   })
 })
