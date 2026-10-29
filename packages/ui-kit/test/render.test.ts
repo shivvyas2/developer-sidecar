@@ -5,7 +5,7 @@ import { render, type Readout } from '../src/render'
 import { compile } from '../src/timeline'
 import { wellFormed } from './well-formed'
 
-const READOUT: Readout = { step: 42, files: 6, tokens: 4300, now: 'INSTALL · STRIPE', elapsed: '02:14', live: true, session: 0.64, project: 'shop-app' }
+const READOUT: Readout = { step: 42, files: 6, checks: 'fail', status: 'NEEDS A FIX', light: 'alert', now: 'INSTALL · STRIPE', elapsed: '02:14', live: true, session: 0.64, project: 'shop-app' }
 const sample = (name: string) => SAMPLE_SCENES.find((s) => s.name === name)!.spec
 
 describe('render', () => {

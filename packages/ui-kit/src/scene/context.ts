@@ -9,8 +9,14 @@ import { slotsFor, type Slots } from './layout'
 /** The stage frame's numbers. The caller computes them; render only draws them. */
 export interface Readout {
   step: number
+  /** Files Claude has made so far. */
   files: number
-  tokens: number
+  /** How the last check run went; none before the first. */
+  checks?: 'pass' | 'fail' | 'none'
+  /** One plain word or two for how things stand, beside the status light, e.g. ALL GOOD or NEEDS A FIX. */
+  status?: string
+  /** The light's colour: ok, alert (needs a fix or you) or busy. */
+  light?: 'ok' | 'alert' | 'busy'
   now: string
   elapsed: string
   live: boolean

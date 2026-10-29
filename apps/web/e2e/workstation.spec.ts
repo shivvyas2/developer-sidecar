@@ -90,3 +90,42 @@ test('the header carries the mark and the intro drives off by itself', async ({ 
   await expect(page.locator('.intro')).toHaveCount(0, { timeout: 6000 })
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute('type', 'image/svg+xml')
 })
+
+const STRIPE = 'bench-build-stripe-app'
+const strip = (page: Page) => page.getByRole('region', { name: 'Stage' }).locator('.sk-status-strip')
+
+async function openStripe(page: Page) {
+  await page.goto(url())
+  await page.locator('select.hdr__session').selectOption(STRIPE)
+  await expect(cards(page)).toHaveCount(37)
+}
+
+test('a finished session ends on its newest step, with checks and status in plain words', async ({ page }) => {
+  await openStripe(page)
+  await expect(strip(page)).toContainText('STEP 037')
+  await expect(strip(page)).toContainText('DONE')
+  const frame = page.getByRole('region', { name: 'Stage' }).locator('.sk-readout')
+  await expect(frame).toContainText('MADE')
+  await expect(frame).toContainText('CHECKS')
+  await expect(frame).toContainText('PASS')
+  await expect(page.getByRole('region', { name: 'Stage' })).toContainText('ALL GOOD')
+  await expect(page.getByRole('region', { name: 'Stage' })).not.toContainText('SHEET')
+  await expect(cards(page).first()).toContainText('CHECKS')
+  await expect(cards(page).first()).not.toContainText('npx vitest')
+})
+
+test('a burst followed by Stop ends on the newest step within a few seconds (it lagged about 14 s before)', async ({ page }) => {
+  await openStripe(page)
+  const base = { session_id: STRIPE, cwd: '/Users/sam/shop' }
+  emit({ ...base, hook_event_name: 'UserPromptSubmit', prompt: 'Tidy up and check again' })
+  for (const [i, file] of ['a.ts', 'b.ts', 'c.ts'].entries()) {
+    const id = `toolu_e2e_live_${i}`
+    const input = { file_path: `/Users/sam/shop/lib/${file}`, content: 'export {}' }
+    emit({ ...base, hook_event_name: 'PreToolUse', tool_name: 'Write', tool_use_id: id, tool_input: input })
+    emit({ ...base, hook_event_name: 'PostToolUse', tool_name: 'Write', tool_use_id: id, tool_input: input, tool_response: { type: 'create', filePath: input.file_path, content: 'export {}' } })
+  }
+  emit({ ...base, hook_event_name: 'Stop' })
+  await expect(cards(page)).toHaveCount(41)
+  await expect(strip(page)).toContainText('STEP 041', { timeout: 3000 })
+  await expect(strip(page)).toContainText('DONE')
+})

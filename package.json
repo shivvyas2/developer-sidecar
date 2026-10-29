@@ -39,6 +39,7 @@
     "smoke": "node scripts/smoke.mjs && node scripts/smoke-concurrent.mjs 3",
     "test:mod": "node scripts/test-mod.mjs",
     "e2e": "playwright test -c apps/web/playwright.config.ts",
+    "look": "node --experimental-strip-types --no-warnings scripts/look.mjs",
     "release:tree": "node scripts/release-tree.mjs",
     "release:check": "pnpm build && node scripts/release-tree.mjs && claude plugin validate release-tree/plugin && claude plugin validate ."
   },

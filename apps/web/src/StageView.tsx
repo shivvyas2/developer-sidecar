@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { isExplained, routineIds, SceneSpecSchema, type ExplainerState, type FeedStep, type StepExplanation } from '@sidecar/shared'
-import { townFrom, type Readout } from '@sidecar/ui-kit'
+import { isExplained, routineIds, SceneSpecSchema, type Attention, type ExplainerState, type FeedStep, type StepExplanation } from '@sidecar/shared'
+import { checksOf, HEALTH_LIGHT, HEALTH_WORD, healthOf, townFrom, type Readout } from '@sidecar/ui-kit'
 import { forStatus } from '@sidecar/ui-kit/catalog'
 import { Scene } from '@sidecar/ui-kit/react'
 import { Chip, PulledCard, ReadoutPanel, RoundButton, StepCard, StepDrawer, TickRuler } from './ds'
+import { catchesUp } from './attention'
 import { readoutFields, useFramed } from './framed'
-import { formatElapsed, stepTitle } from './format'
+import { formatElapsed, stepKind } from './format'
 import { nextAsk, UNDO_HINT } from './next'
 import { isPendingExplanation } from './pending'
 import { initialSelection, selectedId, selectionReducer, stepNumber } from './selection'
@@ -25,10 +26,12 @@ export interface StageTabProps {
   pickRequest?: string | null
   /** Shown in place of LIVE while following the newest step, e.g. DONE or NEEDS YOU. */
   liveTag?: string
+  /** What the session is doing now, for the status light while following the newest step. */
+  attention?: Attention
 }
 
 /** Layout B: the step drawer on the left; the framed stage, replay ruler and pulled-out card on the right. */
-export function StageTab({ sessionId, loaded, steps, explanations, explainer, readySince, project, pickRequest, liveTag }: StageTabProps) {
+export function StageTab({ sessionId, loaded, steps, explanations, explainer, readySince, project, pickRequest, liveTag, attention }: StageTabProps) {
   const [stage, dispatch] = useReducer(stageReducer, initialStage)
   const [selection, select] = useReducer(selectionReducer, initialSelection)
   const [replay, setReplay] = useState<Replay | null>(null)
@@ -39,6 +42,10 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
   // eslint-disable-next-line react-hooks/exhaustive-deps -- ids are read on purpose but must not retrigger a reset
   useEffect(() => { dispatch({ type: 'reset', ids }); setReplay(null); select({ type: 'reset' }) }, [sessionId, loaded])
   useEffect(() => { dispatch({ type: 'sync', ids }) }, [ids])
+  // When Claude stops or needs you, the stage shows where things ended, not a scene still in line.
+  // Keyed on attention, not the tag's words, so rewording a label can't switch it off.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new attention should catch up
+  useEffect(() => { if (catchesUp(attention)) dispatch({ type: 'catchUp', ids }) }, [attention])
   // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new request should pick
   useEffect(() => { if (pickRequest && ids.includes(pickRequest)) select({ type: 'pick', id: pickRequest, latestId }) }, [pickRequest])
 
@@ -56,12 +63,10 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
   const town = useMemo(() => townFrom(steps.slice(0, index + 1)), [steps, index])
   const routine = useMemo(() => routineIds(steps), [steps])
 
-  const tokens = explainer ? explainer.tokens.input + explainer.tokens.output : 0
-  const files = useMemo(
-    () => steps.slice(0, index + 1).filter((s) => s.category === 'create' && s.status === 'ok').length,
-    [steps, index],
-  )
-  const now = shown ? stepTitle(shown) : ''
+  const upTo = useMemo(() => steps.slice(0, index + 1), [steps, index])
+  const files = useMemo(() => upTo.filter((s) => s.category === 'create' && s.status === 'ok').length, [upTo])
+  const checks = useMemo(() => checksOf(upTo), [upTo])
+  const now = shown ? stepKind(shown) : ''
   const firstAt = steps[0]?.startedAt ?? 0
   const elapsed = shown ? formatElapsed(shown.startedAt - firstAt) : '00:00'
   // LIVE only while following the newest step; a replay or an older pick reads REPLAY.
@@ -70,12 +75,14 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
   const count = steps.length
   // Built from primitives so the SVG only re-renders when a number on the frame changes.
   const tag = live ? liveTag : undefined
+  // Only the live moment knows what Claude is doing now; a replay or an older pick shows how things stood then.
+  const health = useMemo(() => healthOf(upTo, live ? attention : undefined), [upTo, live, attention])
   const readout = useMemo<Readout>(() => ({
-    step: index + 1, files, tokens, now, elapsed, live,
+    step: index + 1, files, checks, status: HEALTH_WORD[health], light: HEALTH_LIGHT[health], now, elapsed, live,
     session: count > 0 ? (index + 1) / count : 0,
     ...(project ? { project } : {}),
     ...(tag ? { tag } : {}),
-  }), [index, files, tokens, now, elapsed, live, count, project, tag])
+  }), [index, files, checks, health, now, elapsed, live, count, project, tag])
 
   const goLive = () => { dispatch({ type: 'reset', ids }); setReplay(null); select({ type: 'live' }) }
   const pick = (id: string) => {
@@ -116,7 +123,7 @@ export function StageTab({ sessionId, loaded, steps, explanations, explainer, re
               <StepCard
                 key={s.id}
                 num={i + 1}
-                title={stepTitle(s)}
+                title={stepKind(s)}
                 caption={s.caption}
                 status={s.status}
                 selected={i === cardIndex}
@@ -176,7 +183,7 @@ function StepDetail({ step, num, explanation, pending }: { step: FeedStep; num: 
   const [open, setOpen] = useState(false)
   const ask = nextAsk(step, explanation)
   return (
-    <PulledCard num={num} title={stepTitle(step)}>
+    <PulledCard num={num} title={stepKind(step)}>
       <p className="detail__caption">{step.caption}</p>
       {isExplained(explanation) ? (
         <>
