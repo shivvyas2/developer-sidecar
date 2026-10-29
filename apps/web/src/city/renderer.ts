@@ -392,8 +392,12 @@ export class CityRenderer {
     if (!this.captionAt || this.clock > this.captionUntil || !el.textContent) { el.style.opacity = '0'; return }
     const v = this.captionAt.clone().project(this.camera)
     el.style.opacity = '1'
-    el.style.left = `${((v.x + 1) / 2) * this.canvas.clientWidth}px`
-    el.style.top = `${((1 - v.y) / 2) * this.canvas.clientHeight}px`
+    // kept inside the town's frame, so a caption near the edge is never clipped
+    const W = this.canvas.clientWidth, H = this.canvas.clientHeight, half = el.offsetWidth / 2 + 8
+    const x = Math.min(Math.max(((v.x + 1) / 2) * W, half), Math.max(half, W - half))
+    const y = Math.min(Math.max(((1 - v.y) / 2) * H, el.offsetHeight + 8), H - 8)
+    el.style.left = `${x}px`
+    el.style.top = `${y}px`
   }
 
   /** Frees everything: the scene's GPU memory, the shadow map and the WebGL context, and the window listener. */

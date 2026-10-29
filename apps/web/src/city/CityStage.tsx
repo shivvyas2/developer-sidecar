@@ -125,7 +125,7 @@ export function CityStage({ steps, upTo, live, town, chapters, baseline, cwd, at
     <div className="city" ref={wrap} data-stage={town.stage}>
       <canvas ref={canvas} className="city__canvas" onPointerMove={hover} onPointerLeave={() => setTip(null)} onClick={click}
         aria-label={`Your project as a town, ${town.buildings.length} buildings, stage ${town.stage}`} />
-      {tip && <div className="city__tip" style={{ left: tip.x, top: tip.y }}>{tip.text}</div>}
+      {tip && <div className="city__tip" style={{ left: Math.min(Math.max(tip.x, 148), Math.max(148, (wrap.current?.clientWidth ?? 0) - 148)), top: Math.max(tip.y, 60) }}>{tip.text}</div>}
       {/* the town for keyboards and screen readers: every building, each opening its card */}
       <ul className="sr-only" aria-label="Buildings in the town">
         {town.buildings.map((b) => (

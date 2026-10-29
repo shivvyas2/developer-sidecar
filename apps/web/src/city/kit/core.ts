@@ -66,16 +66,38 @@ export function rod(a: [number, number, number], b: [number, number, number], r:
 export const axisZ = <T extends THREE.Object3D>(m: T) => { m.rotation.x = Math.PI / 2; return m }
 export const axisX = <T extends THREE.Object3D>(m: T) => { m.rotation.z = Math.PI / 2; return m }
 
+const FONT = 'Inter Variable, system-ui, sans-serif'
+
+/**
+ * Text on a sign: one line when it fits at a readable size, otherwise two lines split between words.
+ * It is never shortened or cut, only set smaller.
+ */
 export function textTex(text: string, bg: string, fg: string, w = 512, h = 128) {
   return canvasTex(w, h, (g) => {
     g.fillStyle = bg; g.fillRect(0, 0, w, h)
     g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle'
+    const fits = (line: string, size: number) => { g.font = `700 ${size}px ${FONT}`; return g.measureText(line).width <= w * 0.92 }
     let size = h * 0.52
-    g.font = `700 ${size}px Fredoka, Inter Variable, system-ui, sans-serif`
-    while (g.measureText(text).width > w * 0.92 && size > 12) { size -= 2; g.font = `700 ${size}px Fredoka, Inter Variable, system-ui, sans-serif` }
-    g.fillText(text, w / 2, h / 2 + 3)
+    while (size > h * 0.34 && !fits(text, size)) size -= 2
+    if (fits(text, size)) { g.font = `700 ${size}px ${FONT}`; g.fillText(text, w / 2, h / 2 + 3); return }
+    // two lines, split at the space that best balances them
+    const words = text.split(' ')
+    let best: [string, string] = [text, '']
+    let bestWidth = Infinity
+    g.font = `700 ${h * 0.4}px ${FONT}`
+    for (let i = 1; i < words.length; i++) {
+      const pair: [string, string] = [words.slice(0, i).join(' '), words.slice(i).join(' ')]
+      const wide = Math.max(g.measureText(pair[0]).width, g.measureText(pair[1]).width)
+      if (wide < bestWidth) { bestWidth = wide; best = pair }
+    }
+    size = h * 0.42
+    while (size > 8 && !(fits(best[0], size) && fits(best[1], size))) size -= 1
+    g.font = `700 ${size}px ${FONT}`
+    g.fillText(best[0], w / 2, h / 2 - size * 0.55 + 2)
+    g.fillText(best[1], w / 2, h / 2 + size * 0.55 + 2)
   })
 }
+
 /** A sign board facing +z, origin at its bottom centre. */
 export function signBoard(text: string, w: number, h: number, bg: string, fg = '#fff') {
   const side = col(new THREE.Color(bg).getHex())

@@ -21,8 +21,8 @@ const PLASTER = ['#efe4cf', '#ead2c2', '#d9c7a8', '#cfd9d2', '#e8dcc0', '#d8b8a0
 const SIGN = ['#3e6b4c', '#b8432f', '#3d5a73', '#7b5c3e', '#5e4a86']
 const AWNING: [string, string][] = [['#3e6b4c', '#f1ece2'], ['#b8432f', '#f1ece2'], ['#3d5a73', '#f1ece2'], ['#e8b33a', '#f1ece2']]
 const hash = (s: string) => { let h = 7; for (const c of s) h = (h * 31 + c.charCodeAt(0)) | 0; return Math.abs(h) }
-/** Sign text: upper case and short enough to read from afar. */
-const signText = (name: string) => (name.length > 16 ? `${name.slice(0, 15).trim()}.` : name).toUpperCase()
+/** Sign text: the whole name in upper case; a long one goes onto two lines rather than being shortened. */
+const signText = (name: string) => name.toUpperCase()
 
 // ---------------------------------------------------------------------------------------------- kits
 
