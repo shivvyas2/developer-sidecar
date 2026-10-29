@@ -21,6 +21,17 @@ export interface Step {
 export const isStopped = (s: Pick<Step, 'status'> & { output?: unknown }): boolean =>
   s.status === 'interrupted' || (typeof s.output === 'object' && s.output !== null && (s.output as { interrupted?: unknown }).interrupted === true)
 
+export type Checks = 'pass' | 'fail' | 'none'
+
+/** How the last check run that finished went, or none when Claude hasn't run any. A run that was cut short says nothing. */
+export function checksOf(steps: readonly (Pick<Step, 'status'> & { category: Category; output?: unknown })[]): Checks {
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const s = steps[i]!
+    if (s.category === 'test' && (s.status === 'ok' || s.status === 'failed') && !isStopped(s)) return s.status === 'ok' ? 'pass' : 'fail'
+  }
+  return 'none'
+}
+
 export type Category =
   | 'read' | 'create' | 'edit' | 'install' | 'test' | 'run' | 'external'
   | 'mcp' | 'git' | 'data' | 'deploy' | 'subagent' | 'prompt' | 'fallback'

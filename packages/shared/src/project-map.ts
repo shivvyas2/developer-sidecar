@@ -111,8 +111,8 @@ export function tablesIn(text: string): string[] {
 }
 
 const WRITES = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
-/** A step that made or changed something; anything else (a read, cat .env, a search) only looked. */
-const changes = (s: MapStep) => WRITES.has(s.toolName) || s.category === 'install'
+/** A step that made or changed something: a file write or edit, or an install. Anything else (a read, cat .env, a search) only looked. */
+export const makesChange = (s: Pick<FeedStep, 'category' | 'toolName'>): boolean => WRITES.has(s.toolName) || s.category === 'install'
 
 /**
  * The project map for a session's steps. `cwd` (the session's folder) makes paths relative; without
@@ -130,7 +130,7 @@ export function projectMap(steps: readonly MapStep[], cwd?: string): ProjectMap 
     if (file && !item.files.includes(file)) item.files.push(file)
     if (!item.stepIds.includes(step.id)) item.stepIds.push(step.id)
     const finished = step.status === 'ok' || step.status === 'failed'
-    if (finished && changes(step)) item.state = step.status === 'failed' ? 'failed' : 'changed'
+    if (finished && makesChange(step)) item.state = step.status === 'failed' ? 'failed' : 'changed'
     items.set(id, item)
   }
 

@@ -25,6 +25,16 @@ export const TEST = oneOf(
   /^(\.\/)?(bin\/)?(cargo|go|deno|make|dotnet|gradlew|gradle|mvnw|mvn|mix|swift|flutter|rails|php\s+artisan)\s+(-\S+\s+)*test\b/,
 )
 
+/** Dev servers, matched against one simple command from its start: `npm run dev`, `npx next dev`, `flask run`. */
+export const DEV_SERVER = oneOf(
+  /^(npm|pnpm|yarn|bun)\s+(-\S+\s+(\S+\s+)?|workspace\s+\S+\s+)*(run\s+)?(dev|start|serve|preview)\b/,
+  viaRunner(/(next|vite|astro|nuxt|remix)\s+(dev|start|serve|preview)\b/),
+  /^((python3?|uv\s+run|poetry\s+run)\s+)?(\S*manage\.py\s+runserver|flask\s+run|uvicorn|-m\s+http\.server)\b/,
+)
+
+/** Whether a shell line starts a dev server in one of its simple commands. */
+export const startsDevServer = (command: string): boolean => segments(command).some((p) => DEV_SERVER.test(p))
+
 /**
  * The test runs in a shell line, one per simple command that runs tests, spelled one way: `cd app && npx vitest run`
  * gives `vitest run`, and `npm run test` gives `npm test`. Quoted text is kept, so `-t "login"` still tells runs apart.
