@@ -94,14 +94,16 @@ test('the header carries the mark and the intro drives off by itself', async ({ 
 const STRIPE = 'bench-build-stripe-app'
 const strip = (page: Page) => page.getByRole('region', { name: 'Stage' }).locator('.sk-status-strip')
 
+/** Opens the bench session. It has 37 steps, or more once the live test below has added to it. */
 async function openStripe(page: Page) {
   await page.goto(url())
   await page.locator('select.hdr__session').selectOption(STRIPE)
-  await expect(cards(page)).toHaveCount(37)
+  await expect.poll(() => cards(page).count()).toBeGreaterThanOrEqual(37)
 }
 
 test('a finished session ends on its newest step, with checks and status in plain words', async ({ page }) => {
   await openStripe(page)
+  await expect(cards(page)).toHaveCount(37)
   await expect(strip(page)).toContainText('STEP 037')
   await expect(strip(page)).toContainText('DONE')
   const frame = page.getByRole('region', { name: 'Stage' }).locator('.sk-readout')
@@ -128,4 +130,35 @@ test('a burst followed by Stop ends on the newest step within a few seconds (it 
   await expect(cards(page)).toHaveCount(41)
   await expect(strip(page)).toContainText('STEP 041', { timeout: 3000 })
   await expect(strip(page)).toContainText('DONE')
+})
+
+test('the Whiteboard maps what the session built, and a step link opens the Stage', async ({ page }) => {
+  await openStripe(page)
+  await page.getByRole('tab', { name: 'Whiteboard' }).click()
+  const board = page.locator('.board')
+  for (const section of ['Pages and screens', 'Behind the scenes', 'Your data', 'Outside services', 'Secret settings', 'Checks', 'Building blocks']) {
+    await expect(board.getByRole('region', { name: section })).toBeVisible()
+  }
+  await expect(board.getByRole('region', { name: 'Outside services' })).toContainText('Stripe')
+  await expect(board.getByRole('region', { name: 'Your data' })).toContainText('Orders table')
+  const checkout = board.getByRole('button', { name: /Checkout/ }).first()
+  await checkout.click()
+  await expect(checkout).toHaveAttribute('aria-expanded', 'true')
+  await expect(board).toContainText('app/api/checkout/route.ts')
+  await board.locator('.board__step').first().click()
+  await expect(page.getByRole('tab', { name: 'Stage' })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.locator('.ds-step[aria-pressed="true"]')).toHaveCount(1)
+})
+
+test('the stage town names the service and the table', async ({ page }) => {
+  await openStripe(page)
+  const stage = page.getByRole('region', { name: 'Stage' })
+  await expect(stage).toContainText('STRIPE')
+  await expect(stage).toContainText('ORDERS')
+})
+
+test('the basic session maps too, and its fake secret never shows', async ({ page }) => {
+  await page.goto(`${url()}?tab=whiteboard`)
+  await expect(page.locator('.board')).toContainText('Stripe')
+  await expect(page.locator('.board')).not.toContainText('sk-live')
 })

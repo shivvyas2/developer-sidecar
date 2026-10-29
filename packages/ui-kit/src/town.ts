@@ -1,4 +1,4 @@
-import type { Category, PlaceId, SceneSpec, StepStatus } from '@sidecar/shared'
+import type { Category, PlaceId, ProjectMap, SceneSpec, StepStatus } from '@sidecar/shared'
 
 export interface Town {
   places: PlaceId[]
@@ -28,4 +28,32 @@ export function townFrom(steps: readonly TownStep[]): Town {
     }
   }
   return { places, labels, appFloors: Math.min(MAX_FLOORS, 1 + Math.floor(created / FILES_PER_FLOOR)) }
+}
+
+/**
+ * Real names from the project map on the town: the service block reads STRIPE, the database lists
+ * its first table (ORDERS), the packages say how many were added (a failed install was not). A
+ * service, data or packages the map knows about join the town even before a scene used them. A
+ * step's own scene labels still win while it plays (see makeCtx).
+ */
+export function nameTown(town: Town, map: ProjectMap): Town {
+  const items = (kind: string) => map.sections.find((s) => s.kind === kind)?.items ?? []
+  const service = items('service')[0]?.name
+  const table = items('data').find((i) => i.id.startsWith('data:table:'))
+  const blocks = items('blocks').filter((i) => i.state === 'changed').length
+  const places = [...town.places]
+  const labels = { ...town.labels }
+  if (service) {
+    if (!places.includes('service')) places.push('service')
+    labels.service ??= service
+  }
+  if (items('data').length) {
+    if (!places.includes('database')) places.push('database')
+    if (table) labels.database ??= table.name.replace(/ table$/, '')
+  }
+  if (blocks) {
+    if (!places.includes('toolbox')) places.push('toolbox')
+    labels.toolbox ??= `${blocks} ADDED`
+  }
+  return { ...town, places, labels }
 }

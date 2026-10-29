@@ -217,3 +217,26 @@ body {
 @keyframes sc-speed { 0% { transform: translateX(0); } 50% { transform: translateX(-3px); } }
 @keyframes sc-blink { 0% { opacity: 1; } 50% { opacity: 0; } }
 @keyframes sc-blink-b { 0% { opacity: 0; } 50% { opacity: 1; } }
+
+/* ---- whiteboard: the project map ---- */
+.board { max-width: 1100px; margin: 0 auto; }
+.board__intro { margin: 0 0 16px; font: 400 14px/1.5 var(--ds-sans); color: var(--sk-ink2); max-width: 70ch; }
+.board__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; align-items: start; }
+.board__section { background: var(--sk-card); border: 1px solid var(--sk-ink); padding: 12px; }
+.board__title { margin: 0 0 10px; display: flex; justify-content: space-between; }
+.board__count { color: var(--sk-ink2); }
+.board__items { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.board__part { border: 1px solid var(--sk-grid); }
+.board__part[data-state="changed"] { border-color: var(--sk-ink); }
+.board__part[data-state="failed"] { border-color: var(--sk-accent); }
+.board__part[data-live] { outline: 2px solid var(--sk-accent); outline-offset: 1px; }
+.board__name { width: 100%; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; padding: 7px 9px; background: none; border: 0; color: var(--sk-ink); font: 600 13px/1.3 var(--ds-sans); text-align: left; cursor: pointer; }
+.board__name:focus-visible { outline: 2px solid var(--sk-ink); outline-offset: -2px; }
+.board__part[data-state="seen"] .board__name { color: var(--sk-ink2); font-weight: 400; }
+.board__state { flex: none; font: 700 9px/1 var(--ds-mono); letter-spacing: 1px; text-transform: uppercase; color: var(--sk-ink2); }
+.board__part[data-state="failed"] .board__state, .board__part[data-live] .board__state { color: var(--sk-accent); }
+.board__detail { padding: 0 9px 8px; font: 400 12px/1.5 var(--ds-sans); color: var(--sk-ink2); }
+.board__files { list-style: none; margin: 0 0 6px; padding: 0; }
+.board__files code { font: 400 11px/1.5 var(--ds-mono); color: var(--sk-ink); word-break: break-all; }
+.board__steps { margin: 0; }
+.board__step { margin-right: 6px; }
