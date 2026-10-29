@@ -69,6 +69,6 @@ function loadSession(id: string, dispatch: (a: FeedAction) => void) {
   fetchDecisions(id).then((decisions) => dispatch({ type: 'decisions', sessionId: id, decisions })).catch(() => undefined)
   fetchGlossary(id).then((entries) => dispatch({ type: 'glossary', sessionId: id, entries })).catch(() => undefined)
   fetchRecaps(id).then((recaps) => dispatch({ type: 'recaps', sessionId: id, recaps })).catch(() => undefined)
-  // 404 until the scan is ready; it then arrives live as a 'baseline' message
-  fetchBaseline(id).then((baseline) => dispatch({ type: 'baseline', sessionId: id, baseline })).catch(() => undefined)
+  // null until the scan is ready; it then arrives live as a 'baseline' message
+  fetchBaseline(id).then((baseline) => { if (baseline) dispatch({ type: 'baseline', sessionId: id, baseline }) }).catch(() => undefined)
 }

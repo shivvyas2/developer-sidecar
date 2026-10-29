@@ -13,9 +13,14 @@ test.beforeEach(async ({ page }) => {
 })
 test.afterEach(() => { expect(errors).toEqual([]) })
 
-const cards = (page: Page) => page.locator('button.ds-step')
-/** The drawer front's "N STEPS": every step, including prompts (chapter headers) and steps inside folded beats. */
-const stepLabel = (page: Page) => page.locator('.ds-drawer .ds-label')
+const marks = (page: Page) => page.locator('.timeline__mark')
+/** The timeline's "step N of M": M counts every step, prompts included. */
+const stepLabel = (page: Page) => page.locator('.timeline__count')
+const stepTotal = async (page: Page) => parseInt((await stepLabel(page).innerText()).replace(/^.* of /, ''), 10)
+const readout = (page: Page) => page.getByRole('region', { name: 'Stage readout' })
+const building = (page: Page, name: RegExp) => page.getByRole('list', { name: 'Buildings in the town' }).getByRole('button', { name })
+/** The building list is for keyboards and screen readers, so it is used the way they would: focus, then Enter. */
+const open = async (page: Page, name: RegExp) => { await building(page, name).focus(); await page.keyboard.press('Enter') }
 
 /** Sends one hook payload through the plugin's emit script, as Claude Code would. */
 function emit(payload: object) {
@@ -39,35 +44,40 @@ test('the failed test step says what to do next', async ({ page }) => {
 
 test('a permission prompt raises the NEEDS YOU banner and marks the tab', async ({ page }) => {
   await page.goto(url())
-  await expect(stepLabel(page)).toHaveText('4 STEPS')
+  await expect(stepLabel(page)).toContainText('of 4')
   emit({ session_id: 'smoke-1', cwd: '/tmp/demo', hook_event_name: 'Notification', message: 'Claude needs your permission to use Bash', notification_type: 'permission_prompt' })
   await expect(page.locator('.ds-strip', { hasText: 'NEEDS YOU' })).toContainText('Claude needs your permission to use Bash')
   await expect(page).toHaveTitle(/^\(waiting\)/)
 })
 
-test('the stage draws a scene and the drawer holds every step', async ({ page }) => {
+test('the stage draws the town and the timeline holds every step', async ({ page }) => {
   await page.goto(url())
-  await expect(stepLabel(page)).toHaveText('4 STEPS')
-  await expect(page.getByRole('region', { name: 'Stage' }).locator('svg').first()).toBeVisible()
+  await expect(stepLabel(page)).toContainText('of 4')
+  await expect(page.getByRole('region', { name: 'Stage' }).locator('canvas.city__canvas')).toBeVisible()
+  await expect(marks(page)).toHaveCount(4)
 })
 
-test('an older card shows its scene and its technical detail', async ({ page }) => {
+test('an older step shows the town as it was, and its card has the technical detail', async ({ page }) => {
   await page.goto(url())
-  const second = cards(page).nth(1)
-  await second.click()
-  await expect(second).toHaveAttribute('aria-pressed', 'true')
+  await marks(page).nth(1).click()
+  await expect(page.locator('.timeline__replay')).toHaveText('REPLAY')
+  await expect(stepLabel(page)).toContainText('step 2 of 4')
   await page.getByRole('button', { name: 'SHOW TECHNICAL' }).click()
   await expect(page.getByRole('button', { name: 'HIDE TECHNICAL' })).toBeVisible()
+  await page.getByRole('button', { name: 'Back to live' }).click()
+  await expect(page.locator('.timeline__live')).toHaveText('LIVE')
 })
 
-test('the replay scrubber moves through the steps', async ({ page }) => {
+test('the timeline steps through with the keyboard', async ({ page }) => {
   await page.goto(url())
-  const ruler = page.getByRole('slider', { name: 'Replay position' })
-  await ruler.focus()
-  await ruler.press('Home')
-  await expect(ruler).toHaveAttribute('aria-valuetext', /Step 1 of 4/)
-  await ruler.press('ArrowRight')
-  await expect(ruler).toHaveAttribute('aria-valuetext', /Step 2 of 4/)
+  const strip = page.getByRole('group', { name: /Steps; use the arrow keys/ })
+  await strip.focus()
+  await strip.press('Home')
+  await expect(stepLabel(page)).toContainText('step 1 of 4')
+  await strip.press('ArrowRight')
+  await expect(stepLabel(page)).toContainText('step 2 of 4')
+  await strip.press('End')
+  await expect(page.locator('.timeline__live')).toHaveText('LIVE')
 })
 
 test('the theme toggle forces dark and survives a reload', async ({ page }) => {
@@ -99,28 +109,22 @@ test('the header carries the mark and the intro drives off by itself', async ({ 
 })
 
 const STRIPE = 'bench-build-stripe-app'
-const strip = (page: Page) => page.getByRole('region', { name: 'Stage' }).locator('.sk-status-strip')
 
 /** Opens the bench session. It has 37 steps, or more once the live test below has added to it. */
 async function openStripe(page: Page) {
   await page.goto(url())
   await page.locator('select.hdr__session').selectOption(STRIPE)
-  await expect.poll(async () => parseInt(await stepLabel(page).innerText(), 10)).toBeGreaterThanOrEqual(37)
+  await expect.poll(() => stepTotal(page)).toBeGreaterThanOrEqual(37)
 }
 
 test('a finished session ends on its newest step, with checks and status in plain words', async ({ page }) => {
   await openStripe(page)
-  await expect(stepLabel(page)).toHaveText('37 STEPS')
-  await expect(strip(page)).toContainText('STEP 037')
-  await expect(strip(page)).toContainText('DONE')
-  const frame = page.getByRole('region', { name: 'Stage' }).locator('.sk-readout')
-  await expect(frame).toContainText('MADE')
-  await expect(frame).toContainText('CHECKS')
-  await expect(frame).toContainText('PASS')
-  await expect(page.getByRole('region', { name: 'Stage' })).toContainText('ALL GOOD')
-  await expect(page.getByRole('region', { name: 'Stage' })).not.toContainText('SHEET')
-  await expect(cards(page).first()).toContainText('CHECKS')
-  await expect(cards(page).first()).not.toContainText('npx vitest')
+  await expect(stepLabel(page)).toContainText('step 37 of 37')
+  await expect(readout(page)).toContainText('037')
+  await expect(readout(page)).toContainText('DONE')
+  await expect(readout(page)).toContainText('MADE')
+  await expect(readout(page)).toContainText('PASS')
+  await expect(readout(page)).toContainText('ALL GOOD')
 })
 
 test('a burst followed by Stop ends on the newest step within a few seconds (it lagged about 14 s before)', async ({ page }) => {
@@ -134,9 +138,9 @@ test('a burst followed by Stop ends on the newest step within a few seconds (it 
     emit({ ...base, hook_event_name: 'PostToolUse', tool_name: 'Write', tool_use_id: id, tool_input: input, tool_response: { type: 'create', filePath: input.file_path, content: 'export {}' } })
   }
   emit({ ...base, hook_event_name: 'Stop' })
-  await expect(stepLabel(page)).toHaveText('41 STEPS')
-  await expect(strip(page)).toContainText('STEP 041', { timeout: 3000 })
-  await expect(strip(page)).toContainText('DONE')
+  await expect(stepLabel(page)).toContainText('of 41')
+  await expect(readout(page)).toContainText('041', { timeout: 3000 })
+  await expect(readout(page)).toContainText('DONE')
 })
 
 test('the Whiteboard maps what the session built, and a step link opens the Stage', async ({ page }) => {
@@ -154,14 +158,18 @@ test('the Whiteboard maps what the session built, and a step link opens the Stag
   await expect(board).toContainText('app/api/checkout/route.ts')
   await board.locator('.board__step').first().click()
   await expect(page.getByRole('tab', { name: 'Stage' })).toHaveAttribute('aria-selected', 'true')
-  await expect(page.locator('.ds-step[aria-pressed="true"]')).toHaveCount(1)
+  await expect(page.locator('.timeline__replay')).toHaveText('REPLAY')
 })
 
-test('the stage town names the service and the table', async ({ page }) => {
+test('the town has the service and the data, and tapping a building opens its card', async ({ page }) => {
   await openStripe(page)
-  const stage = page.getByRole('region', { name: 'Stage' })
-  await expect(stage).toContainText('STRIPE')
-  await expect(stage).toContainText('ORDERS')
+  await expect(building(page, /^Stripe: /)).toHaveCount(1)
+  await open(page, /^Your data: /)
+  const card = page.getByRole('region', { name: /^About The warehouse/ })
+  await expect(card).toContainText('The warehouse keeps everything on labelled shelves')
+  await card.getByRole('button', { name: 'Go deeper' }).click()
+  await expect(card).toContainText('What it really is')
+  await expect(card).toContainText('schema')
 })
 
 test('the basic session maps too, and its fake secret never shows', async ({ page }) => {
@@ -170,38 +178,27 @@ test('the basic session maps too, and its fake secret never shows', async ({ pag
   await expect(page.locator('.board')).not.toContainText('sk-live')
 })
 
-test('the drawer tells the session as a story: chapters, a fixed problem, folded reading', async ({ page }) => {
+test('the timeline tells the session as a story: what you asked, a failure, and its fix', async ({ page }) => {
   await openStripe(page)
-  const drawer = page.locator('.ds-drawer')
-  const chapters = drawer.locator('.story__chapter')
-  await expect(chapters.first()).toContainText('YOU ASKED')
-  await expect(drawer.getByRole('region', { name: /You asked: Add Stripe checkout/ })).toContainText('fixed 1 problem')
-  await expect(drawer.locator('.ds-step__badge', { hasText: 'FIXED' })).toHaveCount(1)
-  await expect(drawer.locator('.ds-step__badge', { hasText: 'PROBLEM' })).toHaveCount(1)
-  // a run of reading is one folded beat until opened
-  const fold = drawer.locator('.story__fold').filter({ hasText: /^Read \d+ files?/ }).last()
-  await expect(fold).toHaveAttribute('aria-expanded', 'false')
-  await fold.click()
-  await expect(fold).toHaveAttribute('aria-expanded', 'true')
-  await expect(fold.locator('xpath=..').locator('button.ds-step').first()).toBeVisible()
-  // folds stay folded while following live; scrubbing to a step inside one opens it
-  await page.getByRole('button', { name: 'LIVE' }).click()
-  const edits = drawer.locator('.story__fold').filter({ hasText: /^Changed page\.tsx 3 times/ })
-  await expect(edits).toHaveAttribute('aria-expanded', 'false')
-  const ruler = page.getByRole('slider', { name: 'Replay position' })
-  await ruler.focus()
-  await ruler.press('Home')
-  for (let i = 0; i < 13; i++) await ruler.press('ArrowRight')
-  await expect(edits).toHaveAttribute('aria-expanded', 'true')
-  // folded again by hand, moving to the next step inside it opens it again, so the picked card shows
-  await edits.click()
-  await expect(edits).toHaveAttribute('aria-expanded', 'false')
-  await ruler.press('ArrowRight')
-  await expect(edits).toHaveAttribute('aria-expanded', 'true')
-  await expect(edits.locator('xpath=..').locator('button.ds-step[aria-pressed="true"]')).toHaveCount(1)
-  // the prompt header picks the prompt step
-  await drawer.locator('.story__head').last().click()
-  await expect(drawer.locator('.story__head').last()).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.timeline__asked').filter({ hasText: 'You asked: Add Stripe checkout' })).toHaveCount(1)
+  await expect(page.locator('.timeline__mark[data-tone="failed"]')).toHaveCount(1)
+  await expect(page.locator('.timeline__mark[data-tone="fixed"]')).toHaveCount(1)
+})
+
+test('the archive opens the GitHub guide with a request to copy', async ({ page }) => {
+  const base = { session_id: 'e2e-git', cwd: '/Users/sam/notes' }
+  const input = { command: 'git commit -m "first"' }
+  emit({ ...base, hook_event_name: 'UserPromptSubmit', prompt: 'Save my work' })
+  emit({ ...base, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'toolu_e2e_git', tool_input: input })
+  emit({ ...base, hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_use_id: 'toolu_e2e_git', tool_input: input, tool_response: { stdout: '[main 1a2b3c] first', stderr: '', interrupted: false } })
+  emit({ ...base, hook_event_name: 'Stop' })
+  await page.goto(url())
+  await page.locator('select.hdr__session').selectOption('e2e-git')
+  await open(page, /^Archive: /)
+  const guide = page.getByRole('region', { name: 'Set up GitHub safely' })
+  await expect(guide).toContainText('The project is a git repository')
+  await expect(guide).toContainText('private GitHub repository')
+  await expect(guide.getByRole('button', { name: 'Copy request' })).toBeVisible()
 })
 
 test('the basic session opens on where things stand: a failure still in the way, with the ask', async ({ page }) => {
@@ -257,4 +254,14 @@ test('the card shows the AI recap of the last turn and what it means, and its te
   await expect(recap).toContainText('WHAT IT MEANS')
   await page.getByRole('tab', { name: 'Glossary' }).click()
   await expect(page.locator('main')).toContainText('Fake term')
+})
+
+test('less motion can be chosen in Settings, and it is remembered', async ({ page }) => {
+  await page.goto(url())
+  await page.getByRole('tab', { name: 'Settings' }).click()
+  await page.getByRole('radio', { name: 'Less motion' }).check()
+  await page.reload()
+  await page.getByRole('tab', { name: 'Settings' }).click()
+  await expect(page.getByRole('radio', { name: 'Less motion' })).toBeChecked()
+  await page.getByRole('radio', { name: 'Follow my computer' }).check()
 })

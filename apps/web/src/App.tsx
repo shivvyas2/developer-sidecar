@@ -15,6 +15,7 @@ import { StageTab } from './StageView'
 import { applyTheme, initialTheme, safeStorage, writeTheme, type ThemePref } from './theme'
 import { useFeed } from './useFeed'
 import { WhiteboardView } from './WhiteboardView'
+import { readMotion, reduceMotion, writeMotion, type MotionPref } from './city/motion'
 import { useOsReducedMotion, useResolvedTheme } from './city/view'
 import { liveStepId } from './whiteboard'
 
@@ -77,7 +78,9 @@ export function App() {
   const pickStep = (id: string) => { setPickRequest(id); setTabRaw('stage') }
   const [theme, setTheme] = useTheme()
   const shownTheme = useResolvedTheme(theme)
-  const reducedMotion = useOsReducedMotion()
+  const [motion, setMotionRaw] = useState<MotionPref>(() => readMotion(safeStorage()))
+  const setMotion = (m: MotionPref) => { setMotionRaw(m); writeMotion(safeStorage(), m) }
+  const reducedMotion = reduceMotion(motion, useOsReducedMotion())
   const title = titleFor(state.sessions)
   useEffect(() => { document.title = title }, [title])
   const sid = state.selected
@@ -187,7 +190,7 @@ export function App() {
         )}
         {tab === 'decisions' && <div className="panel__narrow"><DecisionsView decisions={sid ? state.decisions[sid] ?? [] : []} status={status} stepIds={steps.map((x) => x.id)} onPick={pickStep} /></div>}
         {tab === 'glossary' && <div className="panel__narrow"><GlossaryView entries={sid ? state.glossary[sid] ?? [] : []} status={status} {...(project ? { project } : {})} /></div>}
-        {tab === 'settings' && <div className="panel__narrow"><SettingsView explainer={explainer} selected={selectedSession} onChanged={(s) => dispatch({ type: 'explainer', state: s })} /></div>}
+        {tab === 'settings' && <div className="panel__narrow"><SettingsView explainer={explainer} selected={selectedSession} onChanged={(s) => dispatch({ type: 'explainer', state: s })} motion={motion} onMotion={setMotion} /></div>}
         {tab === 'whiteboard' && (
           <WhiteboardView map={map} stepIds={steps.map((x) => x.id)} liveId={liveStepId(steps, attention)} onPick={pickStep} />
         )}

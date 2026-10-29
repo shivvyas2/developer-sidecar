@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  cameraMode, CONCEPTS, initialPacer, pace, sceneOf, storyOf, townOf,
+  cameraMode, CONCEPTS, conceptOfBuilding, initialPacer, pace, sceneOf, storyOf, townOf,
   type Attention, type Baseline, type FeedStep, type PacerState,
 } from '@sidecar/shared'
 import { conceptAt } from './conceptView'
@@ -98,6 +98,12 @@ export function CityStage({ steps, upTo, live, baseline, cwd, attention, theme, 
       <canvas ref={canvas} className="city__canvas" onPointerMove={hover} onPointerLeave={() => setTip(null)} onClick={click}
         aria-label={`Your project as a town, ${town.buildings.length} buildings, stage ${town.stage}`} />
       {tip && <div className="city__tip" style={{ left: tip.x, top: tip.y }}>{tip.text}</div>}
+      {/* the town for keyboards and screen readers: every building, each opening its card */}
+      <ul className="sr-only" aria-label="Buildings in the town">
+        {town.buildings.map((b) => (
+          <li key={b.id}><button type="button" onClick={() => onPick({ building: b.id })}>{b.name}: {CONCEPTS[conceptOfBuilding(b)].city}</button></li>
+        ))}
+      </ul>
       {!following && <button type="button" className="city__follow" onClick={() => { renderer.current?.follow(); setFollowing(true) }}>Follow</button>}
     </div>
   )

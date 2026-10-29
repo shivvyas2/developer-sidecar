@@ -368,3 +368,5 @@ body {
 .timeline__mark[data-at="true"] { outline: 2px solid var(--sk-ink); outline-offset: 1px; transform: scaleY(1.25); }
 @keyframes tl-pulse { to { background: var(--sk-ink2); } }
 @media (prefers-reduced-motion: reduce) { .timeline__mark[data-tone="running"] { animation: none; } }
+.settings__motion { display: flex; flex-wrap: wrap; gap: 14px; margin: 0 0 8px; padding: 0; border: 0; font: 400 13px/1.4 var(--ds-sans); }
+.settings__motion legend { width: 100%; margin-bottom: 4px; }
