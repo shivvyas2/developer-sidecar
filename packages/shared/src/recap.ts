@@ -76,7 +76,7 @@ function shellOf(s: RecapStep): string | undefined {
  * printed it) was cut short or failed, or its own background command was stopped. Another command
  * failing, such as `npm run build`, leaves it up.
  */
-function serverUrl(steps: readonly RecapStep[]): string | undefined {
+export function serverUrl(steps: readonly RecapStep[]): string | undefined {
   let up: { url: string; command: string; shell?: string } | undefined
   for (const s of steps) {
     if (BACKGROUND_TOOLS.stops.has(s.toolName)) {
