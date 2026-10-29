@@ -107,7 +107,7 @@ export function StageTab({ sessionId, loaded, steps, explanations, recaps, proje
     <div className="stagetab stagetab--city">
       <section className="stagetab__town" aria-label="Stage">
         <Suspense fallback={<p className="stagetab__placeholder">Drawing the town...</p>}>
-        <CityStage steps={steps} upTo={index} live={live} theme={theme} reducedMotion={reducedMotion}
+        <CityStage key={sessionId ?? 'none'} steps={steps} upTo={index} live={live} town={town} chapters={chapters} theme={theme} reducedMotion={reducedMotion}
           onPick={(t) => { setPicked(t); if (t.stepId) { const i = ids.indexOf(t.stepId); if (i >= 0 && i !== steps.length - 1) seek(i) } }}
           {...(baseline ? { baseline } : {})} {...(cwd ? { cwd } : {})} {...(attention ? { attention } : {})} />
         </Suspense>

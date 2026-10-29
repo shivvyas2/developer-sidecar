@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { canvasTex, col, noise, pick, rand, rep, std } from './core'
+import { cached, canvasTex, col, noise, pick, rand, rep, std } from './core'
 
 /** Painted, textured surfaces in the reference palette: warm, muted, a little grimy. Made once, on first use. */
 
@@ -54,7 +54,9 @@ function make() {
   const rollup = canvasTex(32, 64, (g, w, h) => { for (let y = 0; y < h; y += 4) { g.fillStyle = '#a3a8aa'; g.fillRect(0, y, w, 3); g.fillStyle = '#737a7e'; g.fillRect(0, y + 3, w, 1) } })
   const leaf = canvasTex(64, 64, (g, w, h) => { g.fillStyle = '#62894a'; g.fillRect(0, 0, w, h); noise(g, w, h, 700, ['#557a3f', '#759c58', '#4a6d37', '#86ab66'], 2, 5) })
   const wood = canvasTex(64, 64, (g, w, h) => { g.fillStyle = '#9b7350'; g.fillRect(0, 0, w, h); for (let y = 0; y < h; y += 8) { g.fillStyle = 'rgba(60,40,20,.25)'; g.fillRect(0, y, w, 1) } noise(g, w, h, 200, ['rgba(60,40,20,.15)']) })
-  return { grass, earth, dirt, asphalt, pavers, concrete, brick, corr, tiles, glass, rollup, leaf, wood }
+  const all = { grass, earth, dirt, asphalt, pavers, concrete, brick, corr, tiles, glass, rollup, leaf, wood }
+  for (const t of Object.values(all)) cached(t)
+  return all
 }
 
 let made: ReturnType<typeof make> | null = null
@@ -76,11 +78,11 @@ export function plaster(color: string) {
       g.fillStyle = gg; g.fillRect(x, 0, 1.5 + rand() * 4, h * (0.15 + rand() * 0.4))
     }
   })
-  plasterCache.set(color, t)
+  plasterCache.set(color, cached(t))
   return t
 }
 const plasterMats = new Map<string, THREE.MeshStandardMaterial>()
-export const plasterMat = (color: string) => { if (!plasterMats.has(color)) plasterMats.set(color, std({ map: plaster(color) })); return plasterMats.get(color)! }
+export const plasterMat = (color: string) => { if (!plasterMats.has(color)) plasterMats.set(color, cached(std({ map: plaster(color) }))); return plasterMats.get(color)! }
 
 let mats: ReturnType<typeof makeMats> | null = null
 function makeMats() {
@@ -101,4 +103,10 @@ function makeMats() {
     smoke: col(0x5e5a56),
   }
 }
-export const M = () => (mats ??= makeMats())
+export const M = () => {
+  if (!mats) {
+    mats = makeMats()
+    for (const v of Object.values(mats)) for (const m of Array.isArray(v) ? v : [v]) if (m instanceof THREE.Material) cached(m)
+  }
+  return mats
+}

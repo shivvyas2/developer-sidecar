@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  cameraMode, CONCEPTS, conceptOfBuilding, initialPacer, pace, sceneOf, storyOf, townOf,
-  type Attention, type Baseline, type FeedStep, type PacerState,
+  cameraMode, CONCEPTS, conceptOfBuilding, initialPacer, needsRescene, pace, sceneOf,
+  type Attention, type Baseline, type Chapter, type CityTown, type FeedStep, type PacerState, type SceneKey,
 } from '@sidecar/shared'
 import { conceptAt } from './conceptView'
 import { CityRenderer, type CityTheme } from './renderer'
@@ -11,6 +11,9 @@ export interface CityStageProps {
   /** The step the town is shown at: the newest while live, an older one while replaying. */
   upTo: number
   live: boolean
+  /** The town as it stood at `upTo`, built once by the Stage. */
+  town: CityTown
+  chapters: Chapter[]
   baseline?: Baseline
   cwd?: string
   attention?: Attention
@@ -24,19 +27,19 @@ export interface CityStageProps {
  * The town, drawn by CityRenderer from the session's steps and scan. New steps play as scenes, paced so the
  * town never runs behind; while replaying, the town is rebuilt as it stood at `upTo` and that step plays.
  */
-export function CityStage({ steps, upTo, live, baseline, cwd, attention, theme, reducedMotion, onPick }: CityStageProps) {
+export function CityStage({ steps, upTo, live, town, chapters, baseline, cwd, attention, theme, reducedMotion, onPick }: CityStageProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
   const renderer = useRef<CityRenderer | null>(null)
   const pacer = useRef<PacerState>(initialPacer)
   const playing = useRef(false)
   const shownUpTo = useRef(-1)
+  const shownKey = useRef<SceneKey | null>(null)
+  const chapterCount = useRef(chapters.length)
   const [following, setFollowing] = useState(true)
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null)
 
-  const upToSteps = useMemo(() => steps.slice(0, upTo + 1), [steps, upTo])
-  const town = useMemo(() => townOf(upToSteps, { ...(cwd ? { cwd } : {}), ...(baseline ? { baseline } : {}) }), [upToSteps, cwd, baseline])
-  const fixers = useMemo(() => new Set(storyOf(steps).flatMap((c) => c.beats.flatMap((b) => (b.type === 'step' && b.fixes ? [b.id] : [])))), [steps])
+  const fixers = useMemo(() => new Set(chapters.flatMap((c) => c.beats.flatMap((b) => (b.type === 'step' && b.fixes ? [b.id] : [])))), [chapters])
 
   useEffect(() => {
     const r = new CityRenderer(canvas.current!, { theme, reducedMotion })
@@ -51,17 +54,41 @@ export function CityStage({ steps, upTo, live, baseline, cwd, attention, theme, 
   useEffect(() => { renderer.current?.setReducedMotion(reducedMotion) }, [reducedMotion])
   useEffect(() => { renderer.current?.setTown(town) }, [town])
 
-  // new steps become scenes; a jump (replay, or catching up) plays just the step shown
+  // when Claude stops or turns to you, the town shows where things ended rather than a scene still in line
+  const lastAttention = useRef(attention)
+  useEffect(() => {
+    const was = lastAttention.current
+    lastAttention.current = attention
+    const r = renderer.current, next = pacer.current.waiting
+    if (!r || !next || was !== 'working' || attention === 'working') return
+    pacer.current = pace(pacer.current, { type: 'catchUp', scene: next, t: performance.now() })
+    r.skip()
+  }, [attention])
+
+  // a new thing you asked brings the camera back to following
+  useEffect(() => {
+    if (chapters.length > chapterCount.current) { renderer.current?.follow(); setFollowing(true) }
+    chapterCount.current = chapters.length
+  }, [chapters.length])
+
+  // new steps become scenes; a jump (replay, or catching up) plays just the step shown, and a shown step that
+  // turns out to fail, be stopped, or wait on you plays again with that overlay
   useEffect(() => {
     const r = renderer.current
     if (!r || upTo < 0) return
     const now = performance.now()
-    const waiting = attention === 'permission'
-    const scene = (s: FeedStep) => sceneOf(s, town, { ...(cwd ? { cwd } : {}), fixes: fixers.has(s.id), waiting: waiting && s === steps[upTo] && s.status === 'running' })
+    const waitingOnYou = attention === 'permission'
+    const scene = (s: FeedStep) => sceneOf(s, town, { ...(cwd ? { cwd } : {}), fixes: fixers.has(s.id), waiting: waitingOnYou && s === steps[upTo] && s.status === 'running' })
+    const shown = steps[upTo]!
+    const key: SceneKey = { id: shown.id, status: shown.status, waiting: waitingOnYou && shown.status === 'running' }
     const from = shownUpTo.current
     shownUpTo.current = upTo
-    if (!live || from < 0 || upTo < from || upTo - from > 50) {
-      pacer.current = pace(pacer.current, { type: 'catchUp', scene: scene(steps[upTo]!), t: now })
+    const rescene = needsRescene(shownKey.current, key)
+    shownKey.current = key
+    const jump = !live || from < 0 || upTo < from || upTo - from > 50
+    if (jump || (upTo === from && rescene)) {
+      pacer.current = pace(pacer.current, { type: 'catchUp', scene: scene(shown), t: now })
+      r.skip()
     } else if (upTo > from) {
       pacer.current = pace(pacer.current, { type: 'arrive', scenes: steps.slice(from + 1, upTo + 1).map(scene), t: now })
     } else return
@@ -70,8 +97,9 @@ export function CityStage({ steps, upTo, live, baseline, cwd, attention, theme, 
       if (playing.current) return
       playing.current = true
       while (pacer.current.playing && renderer.current) {
-        await renderer.current.play(pacer.current.playing)
-        pacer.current = pace(pacer.current, { type: 'done', t: performance.now() })
+        const on = pacer.current.playing
+        await renderer.current.play(on)
+        pacer.current = pace(pacer.current, { type: 'done', scene: on, t: performance.now() })
         renderer.current?.setCamera(cameraMode(pacer.current, performance.now()))
       }
       playing.current = false
@@ -104,6 +132,7 @@ export function CityStage({ steps, upTo, live, baseline, cwd, attention, theme, 
           <li key={b.id}><button type="button" onClick={() => onPick({ building: b.id })}>{b.name}: {CONCEPTS[conceptOfBuilding(b)].city}</button></li>
         ))}
       </ul>
+      {baseline?.truncated && <p className="city__note">This project is big, so some folders stand in for the files inside them.</p>}
       {!following && <button type="button" className="city__follow" onClick={() => { renderer.current?.follow(); setFollowing(true) }}>Follow</button>}
     </div>
   )

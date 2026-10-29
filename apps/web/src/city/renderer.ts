@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { GROWTH_STAGES, type CityScene, type CityTown, type GrowthStage, type cameraMode } from '@sidecar/shared'
 import { buildScene, type SceneRun, type Spot } from './actors'
-import { at, bake, box, canvasTex, col, grp, rand, reseed, rep, std, tube } from './kit/core'
+import { at, bake, box, canvasTex, col, disposeTree, grp, rand, reseed, rep, std, tube } from './kit/core'
 import { fillerBuilding, makeBuilding, type BuildingView } from './kit/buildings'
 import { cypress, groundPatch, lamp, pallet, pole, tree, worker } from './kit/props'
 import { M, T } from './kit/textures'
@@ -60,6 +60,7 @@ export class CityRenderer {
   protected readonly caption: HTMLDivElement
   protected captionAt: THREE.Vector3 | null = null
   protected captionUntil = 0
+  protected readonly offWindow: (() => void)[] = []
 
   constructor(readonly canvas: HTMLCanvasElement, opts: CityRendererOptions) {
     this.theme = opts.theme
@@ -143,7 +144,7 @@ export class CityRenderer {
     if (key === this.fillerFor) return
     this.fillerFor = key
     const g = this.dressing.filler
-    for (const c of [...g.children]) g.remove(c)
+    for (const c of [...g.children]) { g.remove(c); disposeTree(c) }
     reseed(97)
     const taken = [...plots.values()]
     const free = (x: number, z: number) => Math.abs(z - ROAD_Z) > ROAD_HALF + 3.2 &&
@@ -166,7 +167,9 @@ export class CityRenderer {
       else { gr.addColorStop(0, '#86b9df'); gr.addColorStop(0.45, '#bcdcef'); gr.addColorStop(0.8, '#f1e6cf'); gr.addColorStop(1, '#ecd7b0') }
       g.fillStyle = gr; g.fillRect(0, 0, 16, 512)
     })
+    const old = this.scene.background
     this.scene.background = sky
+    if (old instanceof THREE.Texture) old.dispose()
     this.hemi.intensity = dark ? 0.55 : 1.05
     this.hemi.color.set(dark ? 0x8a8fc0 : 0xd4e6f5)
     this.sun.color.set(dark ? 0xff9a5c : 0xffe0b5)
@@ -188,7 +191,7 @@ export class CityRenderer {
       seen.add(b.id)
       let p = this.placed.get(b.id)
       if (!p || p.plot.w !== plot.w || p.plot.x !== plot.x || p.plot.z !== plot.z) {
-        if (p) this.scene.remove(p.view.root)
+        if (p) { this.scene.remove(p.view.root); disposeTree(p.view.root) }
         reseed(b.id.length * 131 + 7)
         const view = makeBuilding(b, plot.w, plot.d)
         at(view.root, plot.x, 0, plot.z, plot.ry)
@@ -267,7 +270,9 @@ export class CityRenderer {
     let drag: { x: number; y: number; moved: boolean } | null = null
     const takeOver = () => { if (this.auto) { this.auto = false; for (const cb of this.userCamera) cb() } }
     c.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, moved: false } })
-    addEventListener('pointerup', () => { drag = null })
+    const up = () => { drag = null }
+    addEventListener('pointerup', up)
+    this.offWindow.push(() => removeEventListener('pointerup', up))
     c.addEventListener('pointermove', (e) => {
       if (!drag || !(e.buttons & 1)) return
       const dx = e.clientX - drag.x, dy = e.clientY - drag.y
@@ -328,10 +333,15 @@ export class CityRenderer {
     })
   }
 
+  /** Ends the scene on show now, so the next one can start. */
+  skip() { this.endScene() }
+
   protected endScene() {
     const p = this.playing
     if (!p) return
     this.scene.remove(p.run.group)
+    disposeTree(p.run.group)
+    this.foreman.traverse((o) => { o.userData.stepIds = undefined })
     this.foreman.position.copy(p.to)
     this.playing = null
     this.lastScene = this.clock
@@ -386,9 +396,16 @@ export class CityRenderer {
     el.style.top = `${((1 - v.y) / 2) * this.canvas.clientHeight}px`
   }
 
+  /** Frees everything: the scene's GPU memory, the shadow map and the WebGL context, and the window listener. */
   dispose() {
     cancelAnimationFrame(this.raf)
+    this.endScene()
+    for (const off of this.offWindow) off()
     this.caption.remove()
+    disposeTree(this.scene)
+    if (this.scene.background instanceof THREE.Texture) this.scene.background.dispose()
+    this.sun.shadow.map?.dispose()
     this.renderer.dispose()
+    this.renderer.forceContextLoss()
   }
 }

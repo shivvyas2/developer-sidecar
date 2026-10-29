@@ -16,7 +16,7 @@ export function canvasTex(w: number, h: number, draw: (g: CanvasRenderingContext
   t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); t.anisotropy = 8
   return t
 }
-export const rep = (t: THREE.Texture, rx: number, ry: number) => { const c = t.clone(); c.repeat.set(rx, ry); c.needsUpdate = true; return c }
+export const rep = (t: THREE.Texture, rx: number, ry: number) => { const c = t.clone(); c.userData = {}; c.repeat.set(rx, ry); c.needsUpdate = true; return c }
 export function noise(g: CanvasRenderingContext2D, w: number, h: number, n: number, cols: string[], s0 = 1, s1 = 3) {
   for (let i = 0; i < n; i++) { g.fillStyle = cols[i % cols.length]!; const s = s0 + rand() * (s1 - s0); g.fillRect(rand() * w, rand() * h, s, s) }
 }
@@ -27,10 +27,12 @@ export const shade = (hex: string, k: number) => {
 
 export const std = (o: THREE.MeshStandardMaterialParameters = {}) => new THREE.MeshStandardMaterial({ roughness: 0.88, metalness: 0, ...o })
 const matCache = new Map<number, THREE.MeshStandardMaterial>()
-export const col = (hex: number) => { if (!matCache.has(hex)) matCache.set(hex, std({ color: hex })); return matCache.get(hex)! }
+/** Marks a material or texture as shared, so disposeTree leaves it for the next user. */
+export const cached = <T extends { userData: Record<string, unknown> }>(o: T): T => { o.userData.cached = true; return o }
+export const col = (hex: number) => { if (!matCache.has(hex)) matCache.set(hex, cached(std({ color: hex }))); return matCache.get(hex)! }
 const paintCache = new Map<number, THREE.MeshStandardMaterial>()
 /** Glossy, flat-shaded paint for vehicles and machines. */
-export const paint = (hex: number) => { if (!paintCache.has(hex)) paintCache.set(hex, std({ color: hex, roughness: 0.5, flatShading: true })); return paintCache.get(hex)! }
+export const paint = (hex: number) => { if (!paintCache.has(hex)) paintCache.set(hex, cached(std({ color: hex, roughness: 0.5, flatShading: true }))); return paintCache.get(hex)! }
 
 export function box(w: number, h: number, d: number, m: THREE.Material, r = 0) {
   const g = r ? new RoundedBoxGeometry(w, h, d, 2, r) : new THREE.BoxGeometry(w, h, d)
@@ -106,4 +108,18 @@ export function bake(root: THREE.Object3D): THREE.Group {
   out.position.copy(p); out.quaternion.copy(q); out.scale.copy(s)
   out.traverse((m) => { if (m instanceof THREE.Mesh) { m.castShadow = true; m.receiveShadow = true } })
   return out
+}
+
+/** Frees the GPU memory of everything under `root` that was made for it: geometries, and materials and textures not marked shared. */
+export function disposeTree(root: THREE.Object3D) {
+  root.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return
+    o.geometry.dispose()
+    for (const m of (Array.isArray(o.material) ? o.material : [o.material]) as THREE.Material[]) {
+      if (m.userData.cached) continue
+      const map = (m as THREE.MeshStandardMaterial).map
+      if (map && !map.userData.cached) map.dispose()
+      m.dispose()
+    }
+  })
 }
